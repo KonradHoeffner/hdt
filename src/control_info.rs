@@ -6,7 +6,7 @@ use std::io::BufRead;
 use std::str;
 
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ControlType {
     Unknown = 0,
     Global = 1,
@@ -35,11 +35,11 @@ impl TryFrom<u8> for ControlType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ControlInfo {
     pub control_type: ControlType,
     pub format: String,
-    pub properties: HashMap<String, String>,
+    properties: HashMap<String, String>,
 }
 
 impl ControlInfo {
@@ -51,7 +51,7 @@ impl ControlInfo {
         }
     }
 
-    pub fn load<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;
 
@@ -122,6 +122,10 @@ impl ControlInfo {
             properties,
         })
     }
+
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.properties.get(key).cloned()
+    }
 }
 
 #[cfg(test)]
@@ -130,21 +134,16 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_header() {
-        let header = [
-            0x24, 0x48, 0x44, 0x54, 0x01, 0x3c, 0x68, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x70,
-            0x75, 0x72, 0x6c, 0x2e, 0x6f, 0x72, 0x67, 0x2f, 0x48, 0x44, 0x54, 0x2f, 0x68, 0x64,
-            0x74, 0x23, 0x48, 0x44, 0x54, 0x76, 0x31, 0x3e, 0x00, 0x00, 0x76, 0x35,
-        ];
+    fn read_info() {
+        let info = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00\x00\x76\x35";
+        let mut reader = BufReader::new(&info[..]);
 
-        let mut reader = BufReader::new(&header[..]);
-
-        if let Ok(info) = ControlInfo::load(&mut reader) {
+        if let Ok(info) = ControlInfo::read(&mut reader) {
             assert_eq!(info.control_type, ControlType::Global);
-            assert_eq!(info.format, String::from("<http://purl.org/HDT/hdt#HDTv1>"));
+            assert_eq!(info.format, "<http://purl.org/HDT/hdt#HDTv1>");
             assert!(info.properties.is_empty());
         } else {
-            panic!("Failed to load control info");
+            panic!("Failed to read control info");
         }
     }
 }
