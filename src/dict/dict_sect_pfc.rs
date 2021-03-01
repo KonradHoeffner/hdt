@@ -2,18 +2,10 @@ use std::io;
 use std::io::BufRead;
 
 #[derive(Debug, Clone)]
-pub struct Dictionary {
-    // TODO
-}
+pub struct DictSectPFC {}
 
-impl Dictionary {
-    pub fn new() -> Self {
-        // TODO
-        unimplemented!();
-    }
-
+impl DictSectPFC {
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        // TODO
         unimplemented!();
     }
 }

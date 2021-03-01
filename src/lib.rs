@@ -1,11 +1,11 @@
 #![allow(unused)]
 mod control_info;
-mod dictionary;
+mod dict;
 mod header;
 pub mod rdf;
 
 use control_info::{ControlInfo, ControlType};
-use dictionary::Dictionary;
+use dict::Dict;
 pub use header::Header;
 use rdf::Triple;
 
@@ -17,7 +17,7 @@ pub struct HDTReader<'a, R: BufRead> {
     base_iri: String,
     global: Option<ControlInfo>,
     header: Option<Header>,
-    dictionary: Option<Dictionary>,
+    dictionary: Option<Dict>,
 }
 
 impl<'a, R: BufRead> HDTReader<'a, R> {
@@ -31,7 +31,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    fn read_global(&mut self) -> io::Result<ControlInfo> {
+    pub fn read_global(&mut self) -> io::Result<ControlInfo> {
         if let Some(global) = &self.global {
             Ok(global.clone())
         } else {
@@ -42,6 +42,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
     }
 
     pub fn read_header(&mut self) -> io::Result<Header> {
+        // Ensure the global control information was read.
         if let None = self.global {
             self.read_global();
         }
@@ -55,11 +56,13 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    fn read_dictionary(&mut self) -> io::Result<Dictionary> {
+    pub fn read_dictionary(&mut self) -> io::Result<Dict> {
+        // Ensure the global control information was read.
         if let None = self.global {
             self.read_global();
         }
 
+        // Ensure the dictionary control information was read.
         if let None = self.header {
             self.read_header();
         }
@@ -67,7 +70,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         if let Some(dictionary) = &self.dictionary {
             Ok(dictionary.clone())
         } else {
-            let dictionary = Dictionary::read(&mut self.reader)?;
+            let dictionary = Dict::read(&mut self.reader)?;
             self.dictionary = Some(dictionary.clone());
             Ok(dictionary)
         }
