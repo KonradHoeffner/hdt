@@ -11,3 +11,6 @@ edition = "2018"
 
 [dependencies]
 crc = "2.0.0-RC.1"
+iref = "1.4"
+langtag = "0.2"
+ntriple = "0.1.1"

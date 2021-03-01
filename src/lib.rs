@@ -2,16 +2,19 @@
 mod control_info;
 mod dictionary;
 mod header;
+pub mod rdf;
 
 use control_info::{ControlInfo, ControlType};
 use dictionary::Dictionary;
 pub use header::Header;
+use rdf::Triple;
 
 use std::io;
 use std::io::BufRead;
 
 pub struct HDTReader<'a, R: BufRead> {
     reader: &'a mut R,
+    base_iri: String,
     global: Option<ControlInfo>,
     header: Option<Header>,
     dictionary: Option<Dictionary>,
@@ -21,13 +24,13 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
         HDTReader {
             reader,
+            base_iri: String::new(),
             global: None,
             header: None,
             dictionary: None,
         }
     }
 
-    // TODO: Make generic
     fn read_global(&mut self) -> io::Result<ControlInfo> {
         if let Some(global) = &self.global {
             Ok(global.clone())
@@ -38,7 +41,6 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    // TODO: Make generic
     pub fn read_header(&mut self) -> io::Result<Header> {
         if let None = self.global {
             self.read_global();
@@ -71,11 +73,14 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    // TODO: once we've got a type for Triple data
-    // pub fn triples() -> Iterator<???> {
-    // }
+    // TODO
+    pub fn triples() -> impl Iterator<Item = Triple> {
+        let v: Vec<Triple> = Vec::new();
+        v.into_iter()
+    }
 
-    // TODO: once we've got a type for Triple data
-    // pub fn read_triple() -> ??? {
-    // }
+    // TODO
+    pub fn read_triple() -> io::Result<Triple> {
+        unimplemented!();
+    }
 }
