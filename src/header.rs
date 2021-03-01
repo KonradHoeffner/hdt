@@ -101,7 +101,7 @@ mod tests {
             assert_eq!(header.length, 1891);
             assert_eq!(header.body.len(), 22);
         } else {
-            panic!("Failed to read control info");
+            panic!("Failed to read header");
         }
     }
 }

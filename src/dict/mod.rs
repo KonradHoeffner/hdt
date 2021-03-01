@@ -53,3 +53,25 @@ impl Dict {
         Ok(Dict::FourSectDict(FourSectDict::read(reader)?))
     }
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::Header;
+//     use std::fs::File;
+//     use std::io::BufReader;
+
+//     #[test]
+//     fn read_dict() {
+//         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+//         let mut reader = BufReader::new(file);
+//         ControlInfo::read(&mut reader).expect("error reading control info");
+//         Header::read(&mut reader).expect("error reading header");
+
+//         if let Ok(dict) = Dict::read(&mut reader) {
+//             unimplemented!();
+//         } else {
+//             panic!("Failed to read control info");
+//         }
+//     }
+// }
