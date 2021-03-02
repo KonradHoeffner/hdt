@@ -3,6 +3,8 @@ mod control_info;
 mod dict;
 mod header;
 pub mod rdf;
+mod triple_sect;
+mod vbyte;
 
 use control_info::{ControlInfo, ControlType};
 use dict::Dict;
@@ -31,7 +33,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    pub fn read_global(&mut self) -> io::Result<ControlInfo> {
+    fn read_global(&mut self) -> io::Result<ControlInfo> {
         if let Some(global) = &self.global {
             Ok(global.clone())
         } else {
@@ -56,7 +58,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    pub fn read_dictionary(&mut self) -> io::Result<Dict> {
+    fn read_dictionary(&mut self) -> io::Result<Dict> {
         // Ensure the global control information was read.
         if let None = self.global {
             self.read_global();
@@ -76,14 +78,8 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    // TODO
     pub fn triples() -> impl Iterator<Item = Triple> {
         let v: Vec<Triple> = Vec::new();
         v.into_iter()
-    }
-
-    // TODO
-    pub fn read_triple() -> io::Result<Triple> {
-        unimplemented!();
     }
 }
