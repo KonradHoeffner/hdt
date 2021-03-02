@@ -4,10 +4,10 @@ use std::io::BufRead;
 
 #[derive(Debug, Clone)]
 pub struct FourSectDict {
-    shared: DictSect,
-    subjects: DictSect,
-    predicates: DictSect,
-    objects: DictSect,
+    pub shared: DictSect,
+    pub subjects: DictSect,
+    pub predicates: DictSect,
+    pub objects: DictSect,
 }
 
 impl FourSectDict {

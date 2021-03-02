@@ -17,11 +17,9 @@ impl DictSect {
         use io::Error;
         use io::ErrorKind::InvalidData;
 
-        let mut preamble: [u8; 4] = [0; 4];
+        let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
-        let preamble: u32 = u32::from_be_bytes(preamble);
-
-        if preamble != 2 {
+        if preamble[0] != 2 {
             return Err(Error::new(
                 InvalidData,
                 "Implementation only supports plain front coded dictionary sections.",
@@ -51,5 +49,41 @@ impl Dict {
         }
 
         Ok(Dict::FourSectDict(FourSectDict::read(reader)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ControlInfo, Header};
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::io::Read;
+
+    #[test]
+    fn read_dict() {
+        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader).unwrap();
+        Header::read(&mut reader).unwrap();
+        match Dict::read(&mut reader).unwrap() {
+            Dict::FourSectDict(dict) => {
+                match dict.shared {
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23128),
+                };
+
+                match dict.subjects {
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 182),
+                };
+
+                match dict.predicates {
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 170),
+                };
+
+                match dict.objects {
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 53401),
+                };
+            }
+        };
     }
 }
