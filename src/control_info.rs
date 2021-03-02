@@ -1,4 +1,4 @@
-use crc::{Crc, CRC_16_ARC};
+use crc_any::CRCu16;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::io;
@@ -107,12 +107,14 @@ impl ControlInfo {
         }
 
         // 5. Read the CRC
-        let mut crc_code: [u8; 2] = [0; 2];
+        let mut crc_code = [0_u8; 2];
         reader.read_exact(&mut crc_code)?;
         let crc_code: u16 = u16::from_le_bytes(crc_code);
 
         // 6. Check the CRC
-        if Crc::<u16>::new(&CRC_16_ARC).checksum(&history[..]) != crc_code {
+        let mut crc = CRCu16::crc16();
+        crc.digest(&history[..]);
+        if crc.get_crc() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC16-ANSI checksum"));
         }
 

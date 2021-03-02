@@ -1,5 +1,5 @@
 [package]
-name = "hdt-rust"
+name = "hdt"
 version = "0.1.0"
 repository = "https://github.com/tbaccaer/hdt-rust"
 authors = ["Tim Baccaert <tbaccaer@vub.be>"]
@@ -10,7 +10,7 @@ categories = ["compression", "filesystem", "parsing", "web-programming"]
 edition = "2018"
 
 [dependencies]
-crc = "2.0.0-RC.1"
+crc-any = "2.3"
 iref = "1.4"
-langtag = "0.2"
-ntriple = "0.1.1"
+langtag = "^0.2"
+ntriple = "^0.1.1"

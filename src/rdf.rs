@@ -79,20 +79,20 @@ impl fmt::Debug for Term {
 /// # Examples
 /// ```
 /// // string
-/// use hdt_rust::rdf::Literal;
+/// use hdt::rdf::Literal;
 /// let literal = Literal::new(String::from("hello"));
 /// assert_eq!("\"hello\"", format!("{:?}", literal));
 /// ```
 /// ```
 /// // typed literal
-/// use hdt_rust::rdf::Literal;
+/// use hdt::rdf::Literal;
 /// let type_iri = String::from("http://www.w3.org/2001/XMLSchema#integer");
 /// let typed_literal = Literal::new_typed(String::from("42"), type_iri);
 /// assert_eq!("\"42\"^^http://www.w3.org/2001/XMLSchema#integer", format!("{:?}", typed_literal));
 /// ```
 /// ```
 /// // language tagged string
-/// use hdt_rust::rdf::Literal;
+/// use hdt::rdf::Literal;
 /// let lang_tag = String::from("nl");
 /// let lang_string = Literal::new_lang(String::from("hallo wereld"), lang_tag);
 /// assert_eq!("\"hallo wereld\"@nl", format!("{:?}", lang_string));
