@@ -1,7 +1,9 @@
+use crate::bitmap::Bitmap;
 use crate::sequence::Sequence;
 use crate::vbyte::read_vbyte;
 use crate::ControlInfo;
 use crc_any::{CRCu32, CRCu8};
+use std::collections::BTreeSet;
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
@@ -14,7 +16,7 @@ pub enum TripleSect {
 }
 
 impl TripleSect {
-    fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;
         let triples_ci = ControlInfo::read(reader)?;
@@ -28,6 +30,12 @@ impl TripleSect {
                 "Triples Lists are not supported yet.",
             )),
             _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
+        }
+    }
+
+    pub fn read_all_ids(&mut self) -> BTreeSet<TripleId> {
+        match self {
+            TripleSect::Bitmap(bitmap) => BTreeSet::new(),
         }
     }
 }
@@ -104,16 +112,68 @@ impl TriplesBitmap {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct TripleID {
-    subject_id: u32,
-    predicate_id: u32,
-    object_id: u32,
+impl IntoIterator for TriplesBitmap {
+    type Item = TripleId;
+    type IntoIter = BitmapIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        BitmapIter::new(self)
+    }
 }
 
-impl TripleID {
-    pub fn new(subject_id: u32, predicate_id: u32, object_id: u32) -> Self {
-        TripleID {
+pub struct BitmapIter {
+    // triples data
+    triples: TriplesBitmap,
+    // current position
+    pos_y: usize,
+    pos_z: usize,
+    // maximum
+    max_y: usize,
+    max_z: usize,
+}
+
+impl BitmapIter {
+    pub fn new(triples: TriplesBitmap) -> Self {
+        let pos_z = 0;
+        let pos_y = triples.adjlist_z.find_index(pos_z);
+        let max_y = triples.adjlist_y.sequence.entries;
+        let max_z = triples.adjlist_z.sequence.entries;
+
+        BitmapIter {
+            triples,
+            pos_y,
+            pos_z,
+            max_y,
+            max_z,
+        }
+    }
+}
+
+impl Iterator for BitmapIter {
+    type Item = TripleId;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let subject_id = self.triples.adjlist_z.get(self.pos_z)?;
+        let predicate_id = self.triples.adjlist_y.get(self.pos_y)?;
+        let object_id = self.triples.adjlist_y.find_index(self.pos_y) + 1;
+
+        self.pos_y = self.triples.adjlist_y.last(subject_id - 1) + 1;
+        self.pos_z = self.triples.adjlist_z.last(self.pos_y) + 1;
+
+        Some(TripleId::new(subject_id, predicate_id, object_id))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TripleId {
+    subject_id: usize,
+    predicate_id: usize,
+    object_id: usize,
+}
+
+impl TripleId {
+    pub fn new(subject_id: usize, predicate_id: usize, object_id: usize) -> Self {
+        TripleId {
             subject_id,
             predicate_id,
             object_id,
@@ -125,100 +185,28 @@ impl TripleID {
 pub struct AdjList {
     sequence: Sequence,
     bitmap: Bitmap,
+    subject_id: usize,
 }
 
 impl AdjList {
     fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
-        AdjList { sequence, bitmap }
+        AdjList {
+            sequence,
+            bitmap,
+            subject_id: 0,
+        }
     }
-}
 
-#[derive(Debug, Clone)]
-pub struct Bitmap {
-    num_bits: usize,
-    data: Vec<usize>,
-}
+    fn find_index(&self, global_pos: usize) -> usize {
+        self.bitmap.rank1(global_pos - 1)
+    }
 
-impl Bitmap {
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use std::io::Error;
-        use std::io::ErrorKind::{InvalidData, Other};
+    fn get(&self, pos: usize) -> Option<usize> {
+        self.sequence.get(pos)
+    }
 
-        let mut history: Vec<u8> = Vec::new();
-
-        // read the type
-        let mut bitmap_type = [0u8];
-        reader.read_exact(&mut bitmap_type)?;
-        history.extend_from_slice(&bitmap_type);
-        if bitmap_type[0] != 1 {
-            return Err(Error::new(InvalidData, "no support this type of bitmap"));
-        }
-
-        // read the number of bits
-        let (num_bits, bytes_read) = read_vbyte(reader)?;
-        history.extend_from_slice(&bytes_read);
-
-        // read section CRC8
-        let mut crc_code = [0_u8];
-        reader.read_exact(&mut crc_code)?;
-        let crc_code = crc_code[0];
-
-        // validate section CRC8
-        let mut crc = CRCu8::crc8();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
-        }
-
-        // reset history for CRC32
-        history = Vec::new();
-        let mut data: Vec<usize> = Vec::new();
-
-        // read all but the last word, last word is byte aligned
-        let full_byte_amount = ((num_bits - 1) >> 6) * 8;
-        let mut full_words = vec![0_u8; full_byte_amount];
-        reader.read_exact(&mut full_words)?;
-        history.extend_from_slice(&full_words);
-
-        // turn the raw bytes into usize/u64 values
-        for word in full_words.chunks_exact(size_of::<usize>()) {
-            if let Ok(word_data) = <[u8; 8]>::try_from(word) {
-                data.push(usize::from_le_bytes(word_data));
-            } else {
-                return Err(Error::new(Other, "failed to read usize"));
-            }
-        }
-
-        let mut bits_read = 0;
-        let mut last_value: usize = 0;
-        let last_word_bits = if num_bits == 0 {
-            0
-        } else {
-            ((num_bits - 1) % 64) + 1
-        };
-
-        while bits_read < last_word_bits {
-            let mut buffer = [0u8];
-            reader.read_exact(&mut buffer)?;
-            history.extend_from_slice(&buffer);
-            last_value |= (buffer[0] as usize) << bits_read;
-            bits_read += 8;
-        }
-        data.push(last_value);
-
-        // read entry body CRC32
-        let mut crc_code = [0_u8; 4];
-        reader.read_exact(&mut crc_code)?;
-        let crc_code = u32::from_le_bytes(crc_code);
-
-        // validate entry body CRC32
-        let mut crc = CRCu32::crc32c();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
-        }
-
-        Ok(Bitmap { num_bits, data })
+    fn last(&self, pos: usize) -> usize {
+        self.bitmap.select1(pos + 1)
     }
 }
 

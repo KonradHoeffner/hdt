@@ -1,9 +1,12 @@
 mod dict_sect_pfc;
 mod four_sect_dict;
 
+use crate::rdf::Triple;
+use crate::triple_sect::TripleId;
 use crate::ControlInfo;
 pub use dict_sect_pfc::DictSectPFC;
 pub use four_sect_dict::FourSectDict;
+use std::collections::BTreeSet;
 use std::io;
 use std::io::BufRead;
 
@@ -49,6 +52,10 @@ impl Dict {
         }
 
         Ok(Dict::FourSectDict(FourSectDict::read(reader)?))
+    }
+
+    pub fn translate_all_ids(&mut self, triple_ids: BTreeSet<TripleId>) -> BTreeSet<Triple> {
+        BTreeSet::new()
     }
 }
 

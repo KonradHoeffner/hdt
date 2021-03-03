@@ -12,6 +12,10 @@ pub struct Sequence {
 }
 
 impl Sequence {
+    pub fn get(&self, pos: usize) -> Option<usize> {
+        self.data.get(pos).cloned()
+    }
+
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;

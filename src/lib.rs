@@ -1,4 +1,5 @@
 #![allow(unused)]
+mod bitmap;
 mod control_info;
 mod dict;
 mod header;
@@ -11,76 +12,66 @@ use control_info::{ControlInfo, ControlType};
 use dict::Dict;
 pub use header::Header;
 use rdf::Triple;
+use triple_sect::TripleSect;
 
+use std::collections::BTreeSet;
 use std::io;
 use std::io::BufRead;
 
 pub struct HDTReader<'a, R: BufRead> {
     reader: &'a mut R,
-    base_iri: String,
-    global: Option<ControlInfo>,
+    global_ci: Option<ControlInfo>,
     header: Option<Header>,
-    dictionary: Option<Dict>,
+    dict: Option<Dict>,
 }
 
 impl<'a, R: BufRead> HDTReader<'a, R> {
     pub fn new(reader: &'a mut R) -> Self {
         HDTReader {
             reader,
-            base_iri: String::new(),
-            global: None,
+            global_ci: None,
             header: None,
-            dictionary: None,
+            dict: None,
         }
     }
 
-    fn read_global(&mut self) -> io::Result<ControlInfo> {
-        if let Some(global) = &self.global {
-            Ok(global.clone())
+    fn has_read_meta(&self) -> bool {
+        self.global_ci.is_some() && self.header.is_some() && self.dict.is_some()
+    }
+
+    fn read_meta(&mut self) -> io::Result<()> {
+        if !self.has_read_meta() {
+            self.global_ci = Some(ControlInfo::read(&mut self.reader)?);
+            self.header = Some(Header::read(&mut self.reader)?);
+            self.dict = Some(Dict::read(&mut self.reader)?);
+        }
+
+        Ok(())
+    }
+
+    /// Blocking operation that reads the entire file.
+    pub fn read_all_triples(&mut self) -> io::Result<BTreeSet<Triple>> {
+        use io::Error;
+        use io::ErrorKind::Other;
+
+        self.read_meta()?;
+
+        let mut triple_sect = TripleSect::read(&mut self.reader)?;
+        let triple_ids = triple_sect.read_all_ids();
+
+        if let Some(dict) = &mut self.dict {
+            Ok(dict.translate_all_ids(triple_ids))
         } else {
-            let info = ControlInfo::read(&mut self.reader)?;
-            self.global = Some(info.clone());
-            Ok(info)
+            Err(Error::new(
+                Other,
+                "Something unexpected went wrong when reading the dictionary.",
+            ))
         }
     }
 
-    pub fn read_header(&mut self) -> io::Result<Header> {
-        // Ensure the global control information was read.
-        if let None = self.global {
-            self.read_global();
-        }
-
-        if let Some(header) = &self.header {
-            Ok(header.clone())
-        } else {
-            let header = Header::read(&mut self.reader)?;
-            self.header = Some(header.clone());
-            Ok(header)
-        }
-    }
-
-    fn read_dictionary(&mut self) -> io::Result<Dict> {
-        // Ensure the global control information was read.
-        if let None = self.global {
-            self.read_global();
-        }
-
-        // Ensure the dictionary control information was read.
-        if let None = self.header {
-            self.read_header();
-        }
-
-        if let Some(dictionary) = &self.dictionary {
-            Ok(dictionary.clone())
-        } else {
-            let dictionary = Dict::read(&mut self.reader)?;
-            self.dictionary = Some(dictionary.clone());
-            Ok(dictionary)
-        }
-    }
-
-    pub fn triples() -> impl Iterator<Item = Triple> {
-        let v: Vec<Triple> = Vec::new();
-        v.into_iter()
-    }
+    // (this is going to be an iterator variant that reads on-demand)
+    // pub fn triples() -> impl Iterator<Item = Triple> {
+    //     let v: Vec<Triple> = Vec::new();
+    //     v.into_iter()
+    // }
 }
