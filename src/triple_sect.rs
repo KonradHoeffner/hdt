@@ -1,3 +1,4 @@
+use crate::sequence::Sequence;
 use crate::vbyte::read_vbyte;
 use crate::ControlInfo;
 use crc_any::{CRCu32, CRCu8};
@@ -66,6 +67,8 @@ impl TryFrom<u32> for Order {
 #[derive(Debug, Clone)]
 pub struct TriplesBitmap {
     order: Order,
+    adjlist_y: AdjList,
+    adjlist_z: AdjList,
 }
 
 impl TriplesBitmap {
@@ -73,6 +76,7 @@ impl TriplesBitmap {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
 
+        // read order
         let mut order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
             order = Order::try_from(n)?;
@@ -80,23 +84,52 @@ impl TriplesBitmap {
             return Err(Error::new(InvalidData, "Unrecognized order"));
         }
 
-        // read bitmapY
+        // read bitmaps
         let bitmap_y = Bitmap::read(reader)?;
-
-        // read bitmapZ
         let bitmap_z = Bitmap::read(reader)?;
 
-        // read seqY
-        unimplemented!();
+        // read sequences
+        let sequence_y = Sequence::read(reader)?;
+        let sequence_z = Sequence::read(reader)?;
 
-        // read seqZ
-        unimplemented!();
+        // construct adjacency lists
+        let adjlist_y = AdjList::new(sequence_y, bitmap_y);
+        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
-        // construct adjListY
-        unimplemented!();
+        Ok(TriplesBitmap {
+            order,
+            adjlist_y,
+            adjlist_z,
+        })
+    }
+}
 
-        // construct adjListZ
-        unimplemented!();
+#[derive(Debug, Clone)]
+pub struct TripleID {
+    subject_id: u32,
+    predicate_id: u32,
+    object_id: u32,
+}
+
+impl TripleID {
+    pub fn new(subject_id: u32, predicate_id: u32, object_id: u32) -> Self {
+        TripleID {
+            subject_id,
+            predicate_id,
+            object_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AdjList {
+    sequence: Sequence,
+    bitmap: Bitmap,
+}
+
+impl AdjList {
+    fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
+        AdjList { sequence, bitmap }
     }
 }
 
@@ -196,13 +229,13 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
 
-    // #[test]
-    // fn read_triples() {
-    //     let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-    //     let mut reader = BufReader::new(file);
-    //     ControlInfo::read(&mut reader).unwrap();
-    //     Header::read(&mut reader).unwrap();
-    //     Dict::read(&mut reader).unwrap();
-    //     let triples = TripleSect::read(&mut reader).unwrap();
-    // }
+    #[test]
+    fn read_triples() {
+        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader).unwrap();
+        Header::read(&mut reader).unwrap();
+        Dict::read(&mut reader).unwrap();
+        let triples = TripleSect::read(&mut reader).unwrap();
+    }
 }

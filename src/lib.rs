@@ -3,6 +3,7 @@ mod control_info;
 mod dict;
 mod header;
 pub mod rdf;
+mod sequence;
 mod triple_sect;
 mod vbyte;
 
