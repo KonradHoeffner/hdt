@@ -1,5 +1,5 @@
-use crate::sequence::Sequence;
-use crate::vbyte::read_vbyte;
+use crate::containers::vbyte::read_vbyte;
+use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
 use std::io;
 use std::io::BufRead;

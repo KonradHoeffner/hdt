@@ -1,4 +1,4 @@
-use crate::vbyte::read_vbyte;
+use crate::containers::vbyte::read_vbyte;
 use crc_any::{CRCu32, CRCu8};
 use std::convert::TryFrom;
 use std::io;
@@ -9,77 +9,9 @@ use std::mem::size_of;
 pub struct Bitmap {
     num_bits: usize,
     data: Vec<usize>,
-    super_blocks: Vec<usize>,
-    blocks: Vec<u8>,
-    pop: usize,
 }
 
 impl Bitmap {
-    pub fn update_index(&mut self) {
-        self.super_blocks = vec![0; 1 + (self.data.len() - 1) / 4];
-        self.blocks = vec![0; self.data.len()];
-
-        let mut block_index = 0;
-        let mut block_amt = 0;
-        let mut super_block_index = 0;
-        let mut super_block_amt = 0;
-
-        while block_index < self.data.len() {
-            if block_index % 4 == 0 {
-                super_block_amt += block_amt;
-
-                if super_block_index < self.super_blocks.len() {
-                    self.super_blocks[super_block_index] = super_block_amt;
-                    super_block_index += 1;
-                }
-
-                block_amt = 0;
-            }
-
-            self.blocks[block_index] = (block_amt & 0xFF) as u8;
-            block_amt += self.data[block_index].count_ones() as usize;
-            block_index += 1;
-        }
-
-        self.pop = super_block_amt + block_amt;
-    }
-
-    pub fn rank1(&self, pos: usize) -> usize {
-        if pos >= self.num_bits {
-            return self.pop;
-        }
-
-        let super_block_index = pos / (4 * 64);
-        let mut super_block_rank = self.super_blocks[super_block_index];
-
-        let block_index = pos / 64;
-        let block_rank = 0xFF & self.blocks[super_block_index] as usize;
-
-        let chunk_index = 63 - pos % 64;
-        let chunk_rank = (self.data[block_index] << chunk_index).count_ones() as usize;
-
-        super_block_rank + block_rank + chunk_rank
-    }
-
-    pub fn select1(&self, pos: usize) -> usize {
-        // TODO
-        // if pos > self.pop {
-        //     return self.num_bits;
-        // }
-
-        // if self.num_bits == 0 {
-        //     return 0;
-        // }
-
-        // if let Ok(super_block_index) = self.super_blocks.binary_search(&pos) {
-
-        // } else {
-
-        // }
-
-        0
-    }
-
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::{InvalidData, Other};
@@ -158,15 +90,32 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        let mut bitmap = Bitmap {
-            num_bits,
-            data,
-            super_blocks: Vec::new(),
-            blocks: Vec::new(),
-            pop: 0,
-        };
+        let mut bitmap = Bitmap { num_bits, data };
 
-        bitmap.update_index();
         Ok(bitmap)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::containers::ControlInfo;
+    use crate::dict::Dict;
+    use crate::header::Header;
+    use crate::triples::TriplesBitmap;
+    use std::fs::File;
+    use std::io::BufReader;
+
+    #[test]
+    fn bitmap_test() {
+        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader).unwrap();
+        Header::read(&mut reader).unwrap();
+        Dict::read(&mut reader).unwrap();
+        let triples_ci = ControlInfo::read(&mut reader).unwrap();
+        let triples = TriplesBitmap::read(&mut reader, triples_ci).unwrap();
+
+        // triples.
     }
 }

@@ -1,8 +1,8 @@
 mod dict_sect_pfc;
 mod four_sect_dict;
 
-use crate::rdf::Triple;
-use crate::triple_sect::TripleId;
+use crate::containers::rdf::Triple;
+use crate::triples::TripleId;
 use crate::ControlInfo;
 pub use dict_sect_pfc::DictSectPFC;
 pub use four_sect_dict::FourSectDict;

@@ -1,4 +1,4 @@
-use crate::vbyte::read_vbyte;
+use crate::containers::vbyte::read_vbyte;
 use crc_any::{CRCu32, CRCu8};
 use std::io;
 use std::io::BufRead;

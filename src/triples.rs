@@ -1,6 +1,5 @@
-use crate::bitmap::Bitmap;
-use crate::sequence::Sequence;
-use crate::vbyte::read_vbyte;
+use crate::containers::vbyte::read_vbyte;
+use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
 use crc_any::{CRCu32, CRCu8};
 use std::collections::BTreeSet;
@@ -12,7 +11,6 @@ use std::mem::size_of;
 #[derive(Debug, Clone)]
 pub enum TripleSect {
     Bitmap(TriplesBitmap),
-    // List(TriplesList),
 }
 
 impl TripleSect {
@@ -33,9 +31,17 @@ impl TripleSect {
         }
     }
 
-    pub fn read_all_ids(&mut self) -> BTreeSet<TripleId> {
+    pub fn read_all_ids(self) -> BTreeSet<TripleId> {
         match self {
-            TripleSect::Bitmap(bitmap) => BTreeSet::new(),
+            TripleSect::Bitmap(bitmap) => {
+                let mut triple_ids = BTreeSet::new();
+
+                for triple_id in bitmap.into_iter() {
+                    triple_ids.insert(triple_id);
+                }
+
+                triple_ids
+            }
         }
     }
 }
@@ -80,7 +86,7 @@ pub struct TriplesBitmap {
 }
 
 impl TriplesBitmap {
-    fn read<R: BufRead>(reader: &mut R, triples_ci: ControlInfo) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R, triples_ci: ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
 
@@ -124,27 +130,45 @@ impl IntoIterator for TriplesBitmap {
 pub struct BitmapIter {
     // triples data
     triples: TriplesBitmap,
+
     // current position
     pos_y: usize,
     pos_z: usize,
-    // maximum
-    max_y: usize,
-    max_z: usize,
+
+    // next position
+    next_y: usize,
+    next_z: usize,
 }
 
 impl BitmapIter {
     pub fn new(triples: TriplesBitmap) -> Self {
-        let pos_z = 0;
-        let pos_y = triples.adjlist_z.find_index(pos_z);
-        let max_y = triples.adjlist_y.sequence.entries;
-        let max_z = triples.adjlist_z.sequence.entries;
+        // let pos_z = 0;
+        // let pos_y =
+        // let next_y = pos_z;
+        // let next_z = pos_y;
+        unimplemented!();
 
-        BitmapIter {
-            triples,
-            pos_y,
-            pos_z,
-            max_y,
-            max_z,
+        // BitmapIter {
+        //     triples,
+        //     pos_y,
+        //     pos_z,
+        //     next_y,
+        //     next_z,
+        // }
+    }
+
+    fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
+        use io::Error;
+        use io::ErrorKind::InvalidData;
+
+        match self.triples.order {
+            Order::SPO => Ok(TripleId::new(x, y, z)),
+            Order::SOP => Ok(TripleId::new(x, z, y)),
+            Order::PSO => Ok(TripleId::new(y, x, z)),
+            Order::POS => Ok(TripleId::new(y, z, x)),
+            Order::OSP => Ok(TripleId::new(z, x, y)),
+            Order::OPS => Ok(TripleId::new(z, y, x)),
+            Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
         }
     }
 }
@@ -153,14 +177,8 @@ impl Iterator for BitmapIter {
     type Item = TripleId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let subject_id = self.triples.adjlist_z.get(self.pos_z)?;
-        let predicate_id = self.triples.adjlist_y.get(self.pos_y)?;
-        let object_id = self.triples.adjlist_y.find_index(self.pos_y) + 1;
-
-        self.pos_y = self.triples.adjlist_y.last(subject_id - 1) + 1;
-        self.pos_z = self.triples.adjlist_z.last(self.pos_y) + 1;
-
-        Some(TripleId::new(subject_id, predicate_id, object_id))
+        // Some(self.coord_to_triple(x, y, z).unwrap())
+        unimplemented!();
     }
 }
 
@@ -181,35 +199,6 @@ impl TripleId {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AdjList {
-    sequence: Sequence,
-    bitmap: Bitmap,
-    subject_id: usize,
-}
-
-impl AdjList {
-    fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
-        AdjList {
-            sequence,
-            bitmap,
-            subject_id: 0,
-        }
-    }
-
-    fn find_index(&self, global_pos: usize) -> usize {
-        self.bitmap.rank1(global_pos - 1)
-    }
-
-    fn get(&self, pos: usize) -> Option<usize> {
-        self.sequence.get(pos)
-    }
-
-    fn last(&self, pos: usize) -> usize {
-        self.bitmap.select1(pos + 1)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,13 +206,15 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
 
-    #[test]
-    fn read_triples() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-        let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).unwrap();
-        Header::read(&mut reader).unwrap();
-        Dict::read(&mut reader).unwrap();
-        let triples = TripleSect::read(&mut reader).unwrap();
-    }
+    // #[test]
+    // fn read_triples() {
+    //     let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+    //     let mut reader = BufReader::new(file);
+    //     ControlInfo::read(&mut reader).unwrap();
+    //     Header::read(&mut reader).unwrap();
+    //     Dict::read(&mut reader).unwrap();
+    //     let triples = TripleSect::read(&mut reader).unwrap();
+
+    //     panic!("{:?}", triples.read_all_ids());
+    // }
 }

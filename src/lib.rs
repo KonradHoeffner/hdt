@@ -1,18 +1,18 @@
 #![allow(unused)]
-mod bitmap;
-mod control_info;
-mod dict;
-mod header;
-pub mod rdf;
-mod sequence;
-mod triple_sect;
-mod vbyte;
+// types for storing and reading data
+pub mod containers;
+// types for representing dictionaries
+pub mod dict;
+// types for representing the header
+pub mod header;
+// types for representing triple sections
+pub mod triples;
 
-use control_info::{ControlInfo, ControlType};
+use containers::rdf::Triple;
+use containers::ControlInfo;
 use dict::Dict;
-pub use header::Header;
-use rdf::Triple;
-use triple_sect::TripleSect;
+use header::Header;
+use triples::TripleSect;
 
 use std::collections::BTreeSet;
 use std::io;

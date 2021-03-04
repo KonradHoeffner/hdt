@@ -1,5 +1,5 @@
-use crate::rdf::{Id, Literal, Term, Triple};
-use crate::ControlInfo;
+use crate::containers::rdf::{Id, Literal, Term, Triple};
+use crate::containers::ControlInfo;
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
 use std::io;
