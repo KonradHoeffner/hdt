@@ -69,9 +69,14 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         }
     }
 
-    // (this is going to be an iterator variant that reads on-demand)
+    // TODO: (this is going to be an iterator variant that reads on-demand)
     // pub fn triples() -> impl Iterator<Item = Triple> {
     //     let v: Vec<Triple> = Vec::new();
     //     v.into_iter()
     // }
+}
+
+#[cfg(test)]
+mod tests {
+    fn read_full_triples() {}
 }

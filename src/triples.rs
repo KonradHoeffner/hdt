@@ -131,30 +131,22 @@ pub struct BitmapIter {
     // triples data
     triples: TriplesBitmap,
 
+    // x-coordinate identifier
+    x: usize,
+
     // current position
     pos_y: usize,
     pos_z: usize,
-
-    // next position
-    next_y: usize,
-    next_z: usize,
 }
 
 impl BitmapIter {
     pub fn new(triples: TriplesBitmap) -> Self {
-        // let pos_z = 0;
-        // let pos_y =
-        // let next_y = pos_z;
-        // let next_z = pos_y;
-        unimplemented!();
-
-        // BitmapIter {
-        //     triples,
-        //     pos_y,
-        //     pos_z,
-        //     next_y,
-        //     next_z,
-        // }
+        BitmapIter {
+            triples,
+            x: 0,
+            pos_y: 0,
+            pos_z: 0,
+        }
     }
 
     fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
@@ -177,8 +169,29 @@ impl Iterator for BitmapIter {
     type Item = TripleId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Some(self.coord_to_triple(x, y, z).unwrap())
-        unimplemented!();
+        if self.pos_y >= self.triples.adjlist_y.get_max() {
+            return None;
+        }
+
+        if self.pos_z >= self.triples.adjlist_z.get_max() {
+            return None;
+        }
+
+        let y = self.triples.adjlist_y.get_id(self.pos_y);
+        let z = self.triples.adjlist_z.get_id(self.pos_z);
+        let triple_id = self.coord_to_triple(self.x, y, z).unwrap();
+
+        if self.triples.adjlist_y.at_last_sibling(self.pos_y) {
+            self.x += 1;
+        }
+
+        if self.triples.adjlist_z.at_last_sibling(self.pos_z) {
+            self.pos_y += 1;
+        }
+
+        self.pos_z += 1;
+
+        Some(triple_id)
     }
 }
 
@@ -206,15 +219,14 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
 
-    // #[test]
-    // fn read_triples() {
-    //     let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-    //     let mut reader = BufReader::new(file);
-    //     ControlInfo::read(&mut reader).unwrap();
-    //     Header::read(&mut reader).unwrap();
-    //     Dict::read(&mut reader).unwrap();
-    //     let triples = TripleSect::read(&mut reader).unwrap();
-
-    //     panic!("{:?}", triples.read_all_ids());
-    // }
+    #[test]
+    fn read_triples() {
+        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader).unwrap();
+        let header = Header::read(&mut reader).unwrap();
+        Dict::read(&mut reader).unwrap();
+        let triples = TripleSect::read(&mut reader).unwrap();
+        assert_eq!(triples.read_all_ids().len(), 242256);
+    }
 }

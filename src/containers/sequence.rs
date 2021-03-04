@@ -4,6 +4,8 @@ use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
+const USIZE_BITS: usize = size_of::<usize>() * 8;
+
 #[derive(Debug, Clone)]
 pub struct Sequence {
     pub entries: usize,
@@ -12,8 +14,24 @@ pub struct Sequence {
 }
 
 impl Sequence {
-    pub fn get(&self, pos: usize) -> Option<usize> {
-        self.data.get(pos).cloned()
+    pub fn get(&self, index: usize) -> usize {
+        let scaled_index = (index * self.bits_per_entry);
+        let block_index = (scaled_index / USIZE_BITS);
+        let bit_index = (scaled_index % USIZE_BITS);
+
+        let mut result = 0;
+
+        let result_shift = USIZE_BITS - self.bits_per_entry;
+        if bit_index + self.bits_per_entry <= USIZE_BITS {
+            let block_shift = USIZE_BITS - bit_index - self.bits_per_entry;
+            result = (self.data[block_index] << block_shift) >> result_shift;
+        } else {
+            let block_shift = (USIZE_BITS << 1) - bit_index - self.bits_per_entry;
+            result = self.data[block_index] >> bit_index;
+            result |= (self.data[(block_index + 1)] << block_shift) >> result_shift;
+        }
+
+        result
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
@@ -39,7 +57,7 @@ impl Sequence {
         reader.read_exact(&mut buffer)?;
         history.extend_from_slice(&buffer);
         let bits_per_entry = buffer[0] as usize;
-        if bits_per_entry > 64 {
+        if bits_per_entry > USIZE_BITS {
             return Err(Error::new(InvalidData, "entry size too large (>64 bit)"));
         }
 
@@ -67,12 +85,13 @@ impl Sequence {
 
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
-        let full_byte_amount = (((total_bits + 63) / 64) - 1) * 8;
+        let full_byte_amount =
+            (((total_bits + USIZE_BITS - 1) / USIZE_BITS) - 1) * size_of::<usize>();
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words);
         history.extend_from_slice(&full_words);
 
-        // turn the raw bytes into usize/u64 values
+        // turn the raw bytes into usize values
         for word in full_words.chunks_exact(size_of::<usize>()) {
             if let Ok(word_data) = <[u8; 8]>::try_from(word) {
                 data.push(usize::from_le_bytes(word_data));
@@ -87,7 +106,7 @@ impl Sequence {
         let last_entry_bits = if total_bits == 0 {
             0
         } else {
-            ((total_bits - 1) % 64) + 1
+            ((total_bits - 1) % USIZE_BITS) + 1
         };
 
         while bits_read < last_entry_bits {
@@ -95,7 +114,7 @@ impl Sequence {
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
             last_value |= (buffer[0] as usize) << bits_read;
-            bits_read += 8;
+            bits_read += size_of::<usize>();
         }
         data.push(last_value);
 

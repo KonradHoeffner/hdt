@@ -67,7 +67,6 @@ mod tests {
     use std::io::BufReader;
     use std::io::Read;
 
-    #[test]
     fn read_dict() {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);

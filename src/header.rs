@@ -10,7 +10,7 @@ use std::str;
 pub struct Header {
     format: String,
     length: usize,
-    body: BTreeSet<Triple>,
+    pub body: BTreeSet<Triple>,
 }
 
 impl Header {

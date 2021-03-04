@@ -5,6 +5,8 @@ use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
+const USIZE_BITS: usize = size_of::<usize>() * 8;
+
 #[derive(Debug, Clone)]
 pub struct Bitmap {
     num_bits: usize,
@@ -12,6 +14,22 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
+    pub fn at_last_sibling(&self, word_index: usize) -> bool {
+        // Each block in the bitmap has `USIZE_BITS` many bits. If `usize` is 64 bits, and we are
+        // looking for the 65th word in the sequence this means we need the first bit of the second
+        // `usize` in `self.data`.
+
+        // We can get the right usize `block` by dividing by the amount of bits in the usize.
+        let block_index = word_index / USIZE_BITS;
+
+        // We need to determine the value of the bit at a given `bit_index`
+        let bit_index = word_index % USIZE_BITS;
+        let bit_flag = 1_usize << bit_index;
+
+        // If the `bit_flag` is set to one, the bitwise and will be equal to the `bit_flag`.
+        self.data[block_index] & bit_flag == bit_flag
+    }
+
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::{InvalidData, Other};
@@ -93,29 +111,5 @@ impl Bitmap {
         let mut bitmap = Bitmap { num_bits, data };
 
         Ok(bitmap)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::containers::ControlInfo;
-    use crate::dict::Dict;
-    use crate::header::Header;
-    use crate::triples::TriplesBitmap;
-    use std::fs::File;
-    use std::io::BufReader;
-
-    #[test]
-    fn bitmap_test() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-        let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).unwrap();
-        Header::read(&mut reader).unwrap();
-        Dict::read(&mut reader).unwrap();
-        let triples_ci = ControlInfo::read(&mut reader).unwrap();
-        let triples = TriplesBitmap::read(&mut reader, triples_ci).unwrap();
-
-        // triples.
     }
 }
