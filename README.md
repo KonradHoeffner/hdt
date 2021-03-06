@@ -1,26 +1,9 @@
-# Header Dictionary Triples (HDT) Library
+# HDT Rust
 
 Rust implementation for the HDT library, [https://www.rdfhdt.org/](https://www.rdfhdt.org/).
-
-<details open="open">
-  <summary>Contents</summary>
-  <ol>
-    <li><a href="#about">About</a></li>
-    <li><a href="#usage">Usage</a></li>
-    <li><a href="#Authors">Authors</a></li>
-    <li><a href="#Acknowledgement">Acknowledgement</a></li>
-    <li><a href="#license">License</a></li>
-  </ol>
-</details>
-
-## About
-
-This library is currently in development, I am focussing on implementing reading from HDT files
-first.
-
-## Usage
-
-Usage information/examples will follow once this is in a usable state.
+The library can read out triples, but it's super slow and there's a bug here and there. I do not
+really recommend using it right now. Implementing this correctly is not exactly easy because the
+specification and other implementatios are sometimes conflicting.
 
 ## Authors
 
@@ -28,7 +11,7 @@ Usage information/examples will follow once this is in a usable state.
 
 ## Acknowledgement
 
-This file-format is not my design, I merely created a Rust implementation of it. For a
+This file-format is not my design, I merely tried created a Rust implementation of it. For a
 reference implementation and acknowledgement of all the original authors, please look at the
 [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
 

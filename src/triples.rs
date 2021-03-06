@@ -31,17 +31,9 @@ impl TripleSect {
         }
     }
 
-    pub fn read_all_ids(self) -> BTreeSet<TripleId> {
+    pub fn read_all_ids(self) -> Vec<TripleId> {
         match self {
-            TripleSect::Bitmap(bitmap) => {
-                let mut triple_ids = BTreeSet::new();
-
-                for triple_id in bitmap.into_iter() {
-                    triple_ids.insert(triple_id);
-                }
-
-                triple_ids
-            }
+            TripleSect::Bitmap(bitmap) => bitmap.into_iter().collect(),
         }
     }
 }
@@ -197,9 +189,9 @@ impl Iterator for BitmapIter {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TripleId {
-    subject_id: usize,
-    predicate_id: usize,
-    object_id: usize,
+    pub subject_id: usize,
+    pub predicate_id: usize,
+    pub object_id: usize,
 }
 
 impl TripleId {

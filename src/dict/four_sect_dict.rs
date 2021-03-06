@@ -1,4 +1,4 @@
-use crate::dict::DictSect;
+use crate::dict::{DictSect, IdKind};
 use std::io;
 use std::io::BufRead;
 
@@ -11,6 +11,28 @@ pub struct FourSectDict {
 }
 
 impl FourSectDict {
+    pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> String {
+        let shared_size = self.shared.num_strings();
+
+        match id_kind {
+            IdKind::Subject => {
+                if (id < shared_size) {
+                    self.shared.id_to_string(id)
+                } else {
+                    self.subjects.id_to_string(id - shared_size)
+                }
+            }
+            IdKind::Predicate => self.predicates.id_to_string(id),
+            IdKind::Object => {
+                if (id < shared_size) {
+                    self.shared.id_to_string(id)
+                } else {
+                    self.objects.id_to_string(id - shared_size)
+                }
+            }
+        }
+    }
+
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         Ok(FourSectDict {
             shared: DictSect::read(reader)?,

@@ -15,9 +15,9 @@ pub struct Sequence {
 
 impl Sequence {
     pub fn get(&self, index: usize) -> usize {
-        let scaled_index = (index * self.bits_per_entry);
-        let block_index = (scaled_index / USIZE_BITS);
-        let bit_index = (scaled_index % USIZE_BITS);
+        let scaled_index = index * self.bits_per_entry;
+        let block_index = scaled_index / USIZE_BITS;
+        let bit_index = scaled_index % USIZE_BITS;
 
         let mut result = 0;
 

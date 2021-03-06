@@ -47,6 +47,23 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     }
 }
 
+pub fn decode_vbyte_delta(data: &Vec<u8>, offset: usize) -> (usize, usize) {
+    let mut n: usize = 0;
+    let mut shift: usize = 0;
+    let mut byte_amount = 0;
+
+    while (data[offset + byte_amount] & 0x80) == 0 {
+        n |= ((data[offset + byte_amount] & 127) as usize) << shift;
+        byte_amount += 1;
+        shift += 7;
+    }
+
+    n |= ((data[offset + byte_amount] & 127) as usize) << shift;
+    byte_amount += 1;
+
+    (n, byte_amount)
+}
+
 // little endian
 pub fn encode_vbyte(n: usize) -> Vec<u8> {
     let mut bytes = Vec::new();

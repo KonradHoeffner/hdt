@@ -50,7 +50,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
     }
 
     /// Blocking operation that reads the entire file.
-    pub fn read_all_triples(&mut self) -> io::Result<BTreeSet<Triple>> {
+    pub fn read_all_triples(&mut self) -> io::Result<Vec<(String, String, String)>> {
         use io::Error;
         use io::ErrorKind::Other;
 
@@ -78,5 +78,20 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
 
 #[cfg(test)]
 mod tests {
-    fn read_full_triples() {}
+    use super::*;
+    use std::fs::File;
+    use std::io::BufReader;
+
+    #[test]
+    fn read_full_triples() {
+        // let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let file = File::open("data/wordnet.hdt").expect("error opening file");
+        let mut reader = BufReader::new(file);
+        let mut hdt_reader = HDTReader::new(&mut reader);
+        let triples = hdt_reader.read_all_triples().unwrap();
+        // assert_eq!(triples.len(), 242256);
+
+        let ten: Vec<(String, String, String)> = triples.into_iter().take(50).collect();
+        panic!("{:#?}", ten);
+    }
 }

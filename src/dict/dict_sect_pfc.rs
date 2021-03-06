@@ -1,9 +1,10 @@
-use crate::containers::vbyte::read_vbyte;
+use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
+use std::str;
 
 #[derive(Debug, Clone)]
 pub struct DictSectPFC {
@@ -15,6 +16,68 @@ pub struct DictSectPFC {
 }
 
 impl DictSectPFC {
+    pub fn id_to_string(&self, id: usize) -> String {
+        self.extract(id)
+        // Self::decode(self.extract(id))
+    }
+
+    // TODO: fix this
+    fn decode(string: String) -> String {
+        let mut split: Vec<String> = string.rsplit('"').map(String::from).collect();
+
+        if split.len() > 2 {
+            split = split.into_iter().skip(1).collect();
+            split[0] = format!("\"{}\"", split[0]);
+            split.into_iter().collect()
+        } else {
+            split[0].clone()
+        }
+    }
+
+    fn extract(&self, id: usize) -> String {
+        if id > self.num_strings {
+            return String::from("");
+        }
+
+        let block_index = id.saturating_sub(1) / self.block_size;
+        let string_index = id.saturating_sub(1) % self.block_size;
+        let mut position = self.sequence.get(block_index);
+        let mut length = self.strlen(position);
+        let mut string: Vec<u8> = self.packed_data[position..position + length].to_owned();
+
+        for _ in 0..string_index {
+            position += length + 1;
+            let (delta, vbyte_bytes) = decode_vbyte_delta(&self.packed_data, position);
+            position += vbyte_bytes;
+            length = self.strlen(position);
+
+            let mut new_string = vec![0x00_u8; string.len() + position + length];
+            for i in 0..string.len() {
+                new_string[i] = string[i];
+            }
+
+            for i in 0..length {
+                new_string[delta + 1 + i] = self.packed_data[position + i];
+            }
+        }
+
+        match str::from_utf8(&string) {
+            Ok(string) => String::from(string),
+            Err(e) => panic!("Read invalid UTF-8 sequence: {}", e),
+        }
+    }
+
+    fn strlen(&self, offset: usize) -> usize {
+        let length = self.packed_data.len();
+        let mut position = offset;
+
+        while position < length && self.packed_data[position] != 0 {
+            position += 1;
+        }
+
+        position - offset
+    }
+
     pub fn num_strings(&self) -> usize {
         self.num_strings
     }
@@ -93,6 +156,13 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
     use std::io::Read;
+
+    #[test]
+    fn test_decode() {
+        let s = String::from("^^<http://www.w3.org/2001/XMLSchema#integer>\"123\"");
+        let d = DictSectPFC::decode(s);
+        assert_eq!(d, "\"123\"^^<http://www.w3.org/2001/XMLSchema#integer>");
+    }
 
     #[test]
     fn test_section_read() {
