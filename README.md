@@ -14,9 +14,3 @@ specification and other implementatios are sometimes conflicting.
 This file-format is not my design, I merely tried created a Rust implementation of it. For a
 reference implementation and acknowledgement of all the original authors, please look at the
 [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
-
-## License
-
-This software is licensed under the EUPL. The European Union Public Licence (EUPL) is a copyleft
-free/open source software license created on the initiative of and approved by the European
-Commission in 23 official languages of the European Union.
