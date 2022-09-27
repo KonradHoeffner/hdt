@@ -1,9 +1,9 @@
 [package]
 name = "hdt"
-version = "0.1.0"
-repository = "https://github.com/tbaccaer/hdt-rust"
+version = "0.1.1"
+repository = "https://github.com/konradhoeffner/hdt-rust"
 authors = ["Tim Baccaert <tbaccaer@vub.be>"]
-license = "EUPL-1.2"
+license = "MIT"
 description = "Library for the Header Dictionary Triples (HDT) RDF compression format."
 keywords = ["rdf", "hdt", "header dictionary triples", "compression", "file format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
