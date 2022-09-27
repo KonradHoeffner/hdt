@@ -50,7 +50,7 @@ impl DictSectPFC {
             let (delta, vbyte_bytes) = decode_vbyte_delta(&self.packed_data, position);
             position += vbyte_bytes;
             length = self.strlen(position);
-
+            /*
             let mut new_string = vec![0x00_u8; string.len() + position + length];
             for i in 0..string.len() {
                 new_string[i] = string[i];
@@ -59,6 +59,7 @@ impl DictSectPFC {
             for i in 0..length {
                 new_string[delta + 1 + i] = self.packed_data[position + i];
             }
+            */
         }
 
         match str::from_utf8(&string) {
