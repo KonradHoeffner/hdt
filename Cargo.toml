@@ -11,6 +11,6 @@ edition = "2018"
 
 [dependencies]
 crc-any = "2.3"
-iref = "1.4"
-langtag = "^0.2"
+iref = "2.2"
+langtag = "^0.3.2"
 ntriple = "^0.1.1"
