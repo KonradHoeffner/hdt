@@ -10,6 +10,8 @@ use std::collections::BTreeSet;
 use std::io;
 use std::io::BufRead;
 
+use rayon::prelude::*;
+
 #[derive(Debug, Clone)]
 pub enum DictSect {
     PFC(DictSectPFC),
@@ -68,7 +70,7 @@ impl Dict {
 
     pub fn translate_all_ids(&self, triple_ids: Vec<TripleId>) -> Vec<(String, String, String)> {
         triple_ids
-            .iter()
+            .par_iter()
             .map(|id: &TripleId| {
                 let subject = self.id_to_string(id.subject_id, IdKind::Subject);
                 let predicate = self.id_to_string(id.predicate_id, IdKind::Predicate);

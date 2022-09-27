@@ -14,6 +14,7 @@ crc-any = "2.3"
 iref = "2.2"
 langtag = "^0.3.2"
 ntriple = "^0.1.1"
+rayon = "1.5.3"
 
 [profile.test]
 opt-level = 1
