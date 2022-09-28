@@ -1,6 +1,7 @@
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
+use std::cmp::Ordering;
 use std::convert::TryInto;
 use std::io;
 use std::io::BufRead;
@@ -39,16 +40,14 @@ impl DictSectPFC {
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     fn locate(&self, element: &str) -> usize {
-        let blocknum = self.locate_block(element);
-        if blocknum >= 0 {
+        let (blocknum, direct) = self.locate_block(element);
+        if direct {
             // Located exactly
-            return (blocknum * &self.block_size) + 1;
+            return (blocknum * self.block_size) + 1;
         }
-        // Not located exactly.
-        blocknum = -blocknum - 2;
 
         if blocknum >= 0 {
-            let idblock = locate_in_block(blocknum, element);
+            let idblock = self.locate_in_block(blocknum, element);
 
             if idblock != 0 {
                 return (blocknum * self.block_size) + idblock + 1;
@@ -57,45 +56,53 @@ impl DictSectPFC {
         0
     }
 
-    fn locate_block(&self, element: &str) -> i64 {
+    fn locate_block(&self, element: &str) -> (usize, bool) {
+        // can this happen? comment out for now
+        /*
         if (self.sequence.entries == 0) {
             return -1;
         }
+        */
         // binary search
-        let mut low = 0i64;
-        let high: i64 = (self.sequence.entries - 1).try_into().unwrap();
-        let max = high;
+        let mut low: usize = 0;
+        let mut high = self.sequence.entries - 1;
+        let mut max = high;
 
         while (low <= high) {
             let mid = (low + high) / 2;
 
-            let cmp;
+            let cmp: Ordering;
             if (mid == max) {
-                cmp = -1;
+                cmp = Ordering::Less;
             } else {
-                let pos = self.sequence.get(mid);
-                cmp = strcmp(element, text, pos);
-                //				System.out.println("Comparing against block: "+ mid + " which is "+ ByteStringUtil.asString(text, pos)+ " Result: "+cmp);
+                let pos: usize = self.sequence.get(mid.try_into().unwrap());
+                cmp = element.cmp(text[pos..]);
+                print!(
+                    "Comparing against block: {} which is {} Result {:?}",
+                    mid,
+                    text[pos..],
+                    cmp
+                );
             }
 
-            if (cmp < 0) {
-                high = mid - 1;
-            } else if (cmp > 0) {
-                low = mid + 1;
-            } else {
-                return mid; // key found
+            match cmp {
+                Ordering::Less => high = mid - 1, // shouldn't this be the other way around? the java code had it like this
+                Ordering::Greater => low = mid + 1,
+                Ordering::Equal => {
+                    return (mid, true);
+                } // key found
             }
         }
-        return -(low + 1); // key not found.
+        return (low - 1, false); // key not found.
     }
 
-    fn locate_in_block(&self, block: usize, element: &str) {
+    fn locate_in_block(&self, block: usize, element: &str) -> usize {
         if (block >= self.sequence.entries) {
             return 0;
         }
 
-        let pos = &self.sequence.get(block);
-        tempString: String = String::new();
+        let mut pos = self.sequence.get(block);
+        let mut tempString: String = String::new();
 
         let mut delta: u64 = 0;
         let idInBlock = 0;
@@ -115,19 +122,17 @@ impl DictSectPFC {
 
             //Copy suffix
             slen = ByteStringUtil.strlen(text, pos);
-            tempString.replace(delta.getValue().intValue(), text, pos, slen);
+            tempString.replace(delta, text, pos, slen);
 
-            if (delta.getValue() >= cshared) {
-                // Current delta value means that this string
-                // has a larger long common prefix than the previous one
+            if (delta >= cshared) {
+                // Current delta value means that this string has a larger long common prefix than the previous one
                 cshared += ByteStringUtil.longestCommonPrefix(tempString, element, cshared);
 
                 if ((cshared == str.length()) && (tempString.length() == str.length())) {
                     break;
                 }
             } else {
-                // We have less common characters than before,
-                // this string is bigger that what we are looking for.
+                // We have less common characters than before, this string is bigger that what we are looking for.
                 // i.e. Not found.
                 idInBlock = 0;
                 break;
