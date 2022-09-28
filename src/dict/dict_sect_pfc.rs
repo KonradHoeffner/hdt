@@ -1,11 +1,13 @@
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
+use std::convert::TryInto;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 use std::str;
 
+/// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 #[derive(Debug, Clone)]
 pub struct DictSectPFC {
     num_strings: usize,
@@ -32,6 +34,113 @@ impl DictSectPFC {
         } else {
             split[0].clone()
         }
+    }
+
+    // translated from Java
+    // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
+    fn locate(&self, element: &str) -> usize {
+        let blocknum = self.locate_block(element);
+        if blocknum >= 0 {
+            // Located exactly
+            return (blocknum * &self.block_size) + 1;
+        }
+        // Not located exactly.
+        blocknum = -blocknum - 2;
+
+        if blocknum >= 0 {
+            let idblock = locate_in_block(blocknum, element);
+
+            if idblock != 0 {
+                return (blocknum * self.block_size) + idblock + 1;
+            }
+        }
+        0
+    }
+
+    fn locate_block(&self, element: &str) -> i64 {
+        if (self.sequence.entries == 0) {
+            return -1;
+        }
+        // binary search
+        let mut low = 0i64;
+        let high: i64 = (self.sequence.entries - 1).try_into().unwrap();
+        let max = high;
+
+        while (low <= high) {
+            let mid = (low + high) / 2;
+
+            let cmp;
+            if (mid == max) {
+                cmp = -1;
+            } else {
+                let pos = self.sequence.get(mid);
+                cmp = strcmp(element, text, pos);
+                //				System.out.println("Comparing against block: "+ mid + " which is "+ ByteStringUtil.asString(text, pos)+ " Result: "+cmp);
+            }
+
+            if (cmp < 0) {
+                high = mid - 1;
+            } else if (cmp > 0) {
+                low = mid + 1;
+            } else {
+                return mid; // key found
+            }
+        }
+        return -(low + 1); // key not found.
+    }
+
+    fn locate_in_block(&self, block: usize, element: &str) {
+        if (block >= self.sequence.entries) {
+            return 0;
+        }
+
+        let pos = &self.sequence.get(block);
+        tempString: String = String::new();
+
+        let mut delta: u64 = 0;
+        let idInBlock = 0;
+        let cshared = 0;
+
+        //		dumpBlock(block);
+
+        // Read the first string in the block
+        let slen = ByteStringUtil.strlen(text, pos);
+        tempString.append(text, pos, slen);
+        pos += slen + 1;
+        idInBlock += 1;
+
+        while ((idInBlock < self.block_size) && (pos < text.length)) {
+            // Decode prefix
+            pos += VByte.decode(text, pos, delta);
+
+            //Copy suffix
+            slen = ByteStringUtil.strlen(text, pos);
+            tempString.replace(delta.getValue().intValue(), text, pos, slen);
+
+            if (delta.getValue() >= cshared) {
+                // Current delta value means that this string
+                // has a larger long common prefix than the previous one
+                cshared += ByteStringUtil.longestCommonPrefix(tempString, element, cshared);
+
+                if ((cshared == str.length()) && (tempString.length() == str.length())) {
+                    break;
+                }
+            } else {
+                // We have less common characters than before,
+                // this string is bigger that what we are looking for.
+                // i.e. Not found.
+                idInBlock = 0;
+                break;
+            }
+            pos += slen + 1;
+            idInBlock += 1;
+        }
+
+        if (pos >= text.length || idInBlock == self.block_size) {
+            idInBlock = 0;
+        }
+
+        return idInBlock;
     }
 
     fn extract(&self, id: usize) -> String {
@@ -189,6 +298,7 @@ mod tests {
         assert_eq!(dict_sect_pfc.num_strings, 23128);
         assert_eq!(dict_sect_pfc.packed_length, 396479);
         assert_eq!(dict_sect_pfc.block_size, 8);
+        println!("{}", dict_sect_pfc.locate("_:b6"));
         let sequence = dict_sect_pfc.sequence;
         let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
         assert_eq!(sequence.data.len(), data_size);
