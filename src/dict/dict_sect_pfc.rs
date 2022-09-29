@@ -60,7 +60,7 @@ impl DictSectPFC {
             } else {
                 let text = self.index_str(mid);
                 cmp = element.cmp(text);
-                print!("mid: {} text: {} cmp: {:?}", mid, text, cmp);
+                //println!("mid: {} text: {} cmp: {:?}", mid, text, cmp);
             }
 
             match cmp {
@@ -292,7 +292,10 @@ mod tests {
         assert_eq!(dict_sect_pfc.num_strings, 23128);
         assert_eq!(dict_sect_pfc.packed_length, 396479);
         assert_eq!(dict_sect_pfc.block_size, 8);
-        println!("{}", dict_sect_pfc.locate("_:b6"));
+        for term in ["_:b5", "_:b6", "_b7"] {
+            let id = dict_sect_pfc.locate(term);
+            println!("{} -> {} -> {}", term, id, dict_sect_pfc.extract(id));
+        }
         let sequence = dict_sect_pfc.sequence;
         let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
         assert_eq!(sequence.data.len(), data_size);
