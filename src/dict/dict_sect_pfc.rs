@@ -1,7 +1,7 @@
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::convert::TryInto;
 use std::io;
 use std::io::BufRead;
@@ -40,7 +40,7 @@ impl DictSectPFC {
     fn index_str(&self, index: usize) -> &str {
         let position: usize = self.sequence.get(index);
         let length = self.strlen(position);
-        str::from_utf8(self.packed_data[position..position + length])
+        str::from_utf8(&self.packed_data[position..position + length]).unwrap()
     }
 
     // translated from Java
@@ -80,9 +80,17 @@ impl DictSectPFC {
         (blocknum * self.block_size) + idblock + 1
     }
 
-    fn pos_str(&self, pos: usize, slen: usize) -> &str
-    {
-       str::from_utf8(&self.packed_data[pos..pos + slen])
+    fn longest_common_prefix(a: &[u8], b: &[u8]) -> usize {
+        let len = min(a.len(), b.len());
+        let mut delta = 0;
+        while (delta < len && a[delta] == b[delta]) {
+            delta += 1;
+        }
+        delta
+    }
+
+    fn pos_str(&self, pos: usize, slen: usize) -> &str {
+        str::from_utf8(&self.packed_data[pos..pos + slen]).unwrap()
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
@@ -91,36 +99,36 @@ impl DictSectPFC {
         }
 
         let mut pos = self.sequence.get(block);
-        let mut tempString = String::new();
+        let mut temp_string = String::new();
 
         //let mut delta: u64 = 0;
-        let id_in_block = 0;
-        let cshared = 0;
+        let mut id_in_block = 0;
+        let mut cshared = 0;
 
-        //		dumpBlock(block);
         // Read the first string in the block
-        //let slen = ByteStringUtil.strlen(text, pos);
-        //tempString.append(text, pos, slen);
-        //tempString.append(index_str(block));
         let slen = self.strlen(pos);
-        tempString.append(str::from_utf8(&self.packed_data[pos..pos + slen]));
+        temp_string.push_str(self.pos_str(pos, slen));
         pos += slen + 1;
         id_in_block += 1;
 
         while (id_in_block < self.block_size) && (pos < self.packed_data.len()) {
             // Decode prefix
-            let (p, delta) = decode_vbyte_delta(&self.packed_data, pos);
+            let (p, mut delta) = decode_vbyte_delta(&self.packed_data, pos);
             pos += p;
 
             //Copy suffix
             let slen = self.strlen(pos);
-            tempString.replace(delta, self.pos_str(pos,slen));
+            temp_string.truncate(delta);
+            temp_string.push_str(self.pos_str(pos, slen)); // check if that is correct
 
             if (delta >= cshared) {
                 // Current delta value means that this string has a larger long common prefix than the previous one
-                cshared += ByteStringUtil.longestCommonPrefix(tempString, element, cshared);
+                cshared += Self::longest_common_prefix(
+                    temp_string[cshared..].as_bytes(),
+                    element[cshared..].as_bytes(),
+                );
 
-                if ((cshared == str.length()) && (tempString.length() == str.length())) {
+                if ((cshared == element.len()) && (temp_string.len() == element.len())) {
                     break;
                 }
             } else {
@@ -133,11 +141,10 @@ impl DictSectPFC {
             id_in_block += 1;
         }
 
-        if (pos >= text.length || id_in_block == self.block_size) {
+        if (pos >= self.packed_data.len() || id_in_block == self.block_size) {
             id_in_block = 0;
         }
-
-        return id_in_block;
+        id_in_block
     }
 
     fn extract(&self, id: usize) -> String {
@@ -215,16 +222,6 @@ impl DictSectPFC {
         crc.digest(&buffer[..]);
         if crc.get_crc() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
-        }
-
-        // validate section size
-        if packed_length > usize::MAX {
-            return Err(Error::new(
-                InvalidData,
-                // We will probably die from global warming before we reach section sizes this
-                // large; if we do, then color me surprised, you never know :).
-                "Cannot address sections over 16 exabytes (EB) on 64-bit machines",
-            ));
         }
 
         // read sequence log array
