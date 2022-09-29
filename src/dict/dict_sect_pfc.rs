@@ -37,37 +37,20 @@ impl DictSectPFC {
         }
     }
 
+    fn index_str(&self, index: usize) -> &str {
+        let position: usize = self.sequence.get(index);
+        let length = self.strlen(position);
+        str::from_utf8(self.packed_data[position..position + length])
+    }
+
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     fn locate(&self, element: &str) -> usize {
-        let (blocknum, direct) = self.locate_block(element);
-        if direct {
-            // Located exactly
-            return (blocknum * self.block_size) + 1;
-        }
-
-        if blocknum >= 0 {
-            let idblock = self.locate_in_block(blocknum, element);
-
-            if idblock != 0 {
-                return (blocknum * self.block_size) + idblock + 1;
-            }
-        }
-        0
-    }
-
-    fn locate_block(&self, element: &str) -> (usize, bool) {
-        // can this happen? comment out for now
-        /*
-        if (self.sequence.entries == 0) {
-            return -1;
-        }
-        */
         // binary search
         let mut low: usize = 0;
         let mut high = self.sequence.entries - 1;
-        let mut max = high;
-
+        let max = high;
+        let mut mid = high;
         while (low <= high) {
             let mid = (low + high) / 2;
 
@@ -75,25 +58,31 @@ impl DictSectPFC {
             if (mid == max) {
                 cmp = Ordering::Less;
             } else {
-                let pos: usize = self.sequence.get(mid.try_into().unwrap());
-                cmp = element.cmp(text[pos..]);
-                print!(
-                    "Comparing against block: {} which is {} Result {:?}",
-                    mid,
-                    text[pos..],
-                    cmp
-                );
+                let text = self.index_str(mid);
+                cmp = element.cmp(text);
+                print!("mid: {} text: {} cmp: {:?}", mid, text, cmp);
             }
 
             match cmp {
-                Ordering::Less => high = mid - 1, // shouldn't this be the other way around? the java code had it like this
+                Ordering::Less => high = mid - 1,
                 Ordering::Greater => low = mid + 1,
                 Ordering::Equal => {
-                    return (mid, true);
-                } // key found
+                    return (mid * self.block_size) + 1;
+                }
             }
         }
-        return (low - 1, false); // key not found.
+        // key not found, it must be inside the previous block
+        let blocknum = mid - 1;
+        let idblock = self.locate_in_block(blocknum, element);
+        if idblock == 0 {
+            return 0;
+        }
+        (blocknum * self.block_size) + idblock + 1
+    }
+
+    fn pos_str(&self, pos: usize, slen: usize) -> &str
+    {
+       str::from_utf8(&self.packed_data[pos..pos + slen])
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
@@ -102,27 +91,30 @@ impl DictSectPFC {
         }
 
         let mut pos = self.sequence.get(block);
-        let mut tempString: String = String::new();
+        let mut tempString = String::new();
 
-        let mut delta: u64 = 0;
-        let idInBlock = 0;
+        //let mut delta: u64 = 0;
+        let id_in_block = 0;
         let cshared = 0;
 
         //		dumpBlock(block);
-
         // Read the first string in the block
-        let slen = ByteStringUtil.strlen(text, pos);
-        tempString.append(text, pos, slen);
+        //let slen = ByteStringUtil.strlen(text, pos);
+        //tempString.append(text, pos, slen);
+        //tempString.append(index_str(block));
+        let slen = self.strlen(pos);
+        tempString.append(str::from_utf8(&self.packed_data[pos..pos + slen]));
         pos += slen + 1;
-        idInBlock += 1;
+        id_in_block += 1;
 
-        while ((idInBlock < self.block_size) && (pos < text.length)) {
+        while (id_in_block < self.block_size) && (pos < self.packed_data.len()) {
             // Decode prefix
-            pos += VByte.decode(text, pos, delta);
+            let (p, delta) = decode_vbyte_delta(&self.packed_data, pos);
+            pos += p;
 
             //Copy suffix
-            slen = ByteStringUtil.strlen(text, pos);
-            tempString.replace(delta, text, pos, slen);
+            let slen = self.strlen(pos);
+            tempString.replace(delta, self.pos_str(pos,slen));
 
             if (delta >= cshared) {
                 // Current delta value means that this string has a larger long common prefix than the previous one
@@ -134,18 +126,18 @@ impl DictSectPFC {
             } else {
                 // We have less common characters than before, this string is bigger that what we are looking for.
                 // i.e. Not found.
-                idInBlock = 0;
+                id_in_block = 0;
                 break;
             }
             pos += slen + 1;
-            idInBlock += 1;
+            id_in_block += 1;
         }
 
-        if (pos >= text.length || idInBlock == self.block_size) {
-            idInBlock = 0;
+        if (pos >= text.length || id_in_block == self.block_size) {
+            id_in_block = 0;
         }
 
-        return idInBlock;
+        return id_in_block;
     }
 
     fn extract(&self, id: usize) -> String {
