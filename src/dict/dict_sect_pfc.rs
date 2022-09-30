@@ -48,7 +48,7 @@ impl DictSectPFC {
     fn locate(&self, element: &str) -> usize {
         // binary search
         let mut low: usize = 0;
-        let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate 
+        let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
         let max = high;
         let mut mid = high;
         while (low <= high) {
@@ -57,7 +57,7 @@ impl DictSectPFC {
             let cmp: Ordering;
             if (mid > max) {
                 mid = max;
-               break;
+                break;
             } else {
                 let text = self.index_str(mid);
                 cmp = element.cmp(text);
@@ -158,36 +158,30 @@ impl DictSectPFC {
         let string_index = id.saturating_sub(1) % self.block_size;
         let mut position = self.sequence.get(block_index);
         let mut slen = self.strlen(position);
-        // using a Vector may be faster
-        //let mut string: Vec<u8> = self.packed_data[position..position + slen].to_owned();
-        let mut string = self.pos_str(position, slen).to_owned();
+        let mut string: Vec<u8> = self.packed_data[position..position + slen].to_owned();
         //println!("block_index={} string_index={}, string={}", block_index, string_index, str::from_utf8(&string).unwrap());
+        // loop takes around nearly half the time of the function
         for _ in 0..string_index {
             position += slen + 1;
             let (delta, vbyte_bytes) = decode_vbyte_delta(&self.packed_data, position);
             position += vbyte_bytes;
             slen = self.strlen(position);
-            string.truncate(delta); // assertion failed self.is_char_boundary(new_len)
-            string.push_str(self.pos_str(position, slen));
-            /*
-            old unfinished code, may be faster than using String, revisit if there is a performance bottleneck here
-            let mut new_string = vec![0x00_u8; string.len() + position + length];
-            for i in 0..string.len() {
-                new_string[i] = string[i];
-            }
-            for i in 0..length {
-                new_string[delta + 1 + i] = self.packed_data[position + i];
-            }
-            */
+            string.truncate(delta);
+            string.append(&mut self.packed_data[position..position + slen].to_owned());
         }
-        //println!("{}",self.pos_str(position,length));
-        string
-        /*
+        // tried simdutf8::basic::from_utf8 but that didn't speed up extract that much
         match str::from_utf8(&string) {
             Ok(string) => String::from(string),
-            Err(e) => panic!("Read invalid UTF-8 sequence: {}", e),
+            Err(e) => {
+                eprintln!(
+                    "Read invalid UTF-8 sequence: {} in {:?} '{}'",
+                    e,
+                    string,
+                    String::from_utf8_lossy(&string)
+                );
+                "".to_owned()
+            }
         }
-        */
     }
 
     fn strlen(&self, offset: usize) -> usize {
