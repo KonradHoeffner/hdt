@@ -48,15 +48,16 @@ impl DictSectPFC {
     fn locate(&self, element: &str) -> usize {
         // binary search
         let mut low: usize = 0;
-        let mut high = self.sequence.entries - 1;
+        let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate 
         let max = high;
         let mut mid = high;
         while (low <= high) {
-            let mid = (low + high) / 2;
+            mid = (low + high) / 2;
 
             let cmp: Ordering;
-            if (mid == max) {
-                cmp = Ordering::Less;
+            if (mid > max) {
+                mid = max;
+               break;
             } else {
                 let text = self.index_str(mid);
                 cmp = element.cmp(text);
@@ -71,13 +72,12 @@ impl DictSectPFC {
                 }
             }
         }
-        // key not found, it must be inside the previous block
-        let blocknum = mid - 1;
-        let idblock = self.locate_in_block(blocknum, element);
+        //println!("block {} but not first", mid);
+        let idblock = self.locate_in_block(mid, element);
         if idblock == 0 {
             return 0;
         }
-        (blocknum * self.block_size) + idblock + 1
+        (mid * self.block_size) + idblock + 1
     }
 
     fn longest_common_prefix(a: &[u8], b: &[u8]) -> usize {
@@ -90,11 +90,13 @@ impl DictSectPFC {
     }
 
     fn pos_str(&self, pos: usize, slen: usize) -> &str {
+        //println!("pos_str({}, {})", pos, slen);
         str::from_utf8(&self.packed_data[pos..pos + slen]).unwrap()
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
         if (block >= self.sequence.entries) {
+            //println!("block {} >= blocks {}", block, self.sequence.entries );
             return 0;
         }
 
@@ -113,13 +115,13 @@ impl DictSectPFC {
 
         while (id_in_block < self.block_size) && (pos < self.packed_data.len()) {
             // Decode prefix
-            let (p, mut delta) = decode_vbyte_delta(&self.packed_data, pos);
-            pos += p;
+            let (delta, vbyte_bytes) = decode_vbyte_delta(&self.packed_data, pos);
+            pos += vbyte_bytes;
 
             //Copy suffix
             let slen = self.strlen(pos);
             temp_string.truncate(delta);
-            temp_string.push_str(self.pos_str(pos, slen)); // check if that is correct
+            temp_string.push_str(self.pos_str(pos, slen));
 
             if (delta >= cshared) {
                 // Current delta value means that this string has a larger long common prefix than the previous one
@@ -155,30 +157,37 @@ impl DictSectPFC {
         let block_index = id.saturating_sub(1) / self.block_size;
         let string_index = id.saturating_sub(1) % self.block_size;
         let mut position = self.sequence.get(block_index);
-        let mut length = self.strlen(position);
-        let mut string: Vec<u8> = self.packed_data[position..position + length].to_owned();
-
+        let mut slen = self.strlen(position);
+        // using a Vector may be faster
+        //let mut string: Vec<u8> = self.packed_data[position..position + slen].to_owned();
+        let mut string = self.pos_str(position, slen).to_owned();
+        //println!("block_index={} string_index={}, string={}", block_index, string_index, str::from_utf8(&string).unwrap());
         for _ in 0..string_index {
-            position += length + 1;
+            position += slen + 1;
             let (delta, vbyte_bytes) = decode_vbyte_delta(&self.packed_data, position);
             position += vbyte_bytes;
-            length = self.strlen(position);
+            slen = self.strlen(position);
+            string.truncate(delta); // assertion failed self.is_char_boundary(new_len)
+            string.push_str(self.pos_str(position, slen));
             /*
+            old unfinished code, may be faster than using String, revisit if there is a performance bottleneck here
             let mut new_string = vec![0x00_u8; string.len() + position + length];
             for i in 0..string.len() {
                 new_string[i] = string[i];
             }
-
             for i in 0..length {
                 new_string[delta + 1 + i] = self.packed_data[position + i];
             }
             */
         }
-
+        //println!("{}",self.pos_str(position,length));
+        string
+        /*
         match str::from_utf8(&string) {
             Ok(string) => String::from(string),
             Err(e) => panic!("Read invalid UTF-8 sequence: {}", e),
         }
+        */
     }
 
     fn strlen(&self, offset: usize) -> usize {
@@ -292,9 +301,17 @@ mod tests {
         assert_eq!(dict_sect_pfc.num_strings, 23128);
         assert_eq!(dict_sect_pfc.packed_length, 396479);
         assert_eq!(dict_sect_pfc.block_size, 8);
-        for term in ["_:b5", "_:b6", "_b7"] {
+        for term in [
+            "_:b5",
+            "_:b1",
+            "_:b6",
+            "http://www.uni-koblenz.de/~sschenk",
+            "http://ymatsuo.com/",
+        ] {
             let id = dict_sect_pfc.locate(term);
-            println!("{} -> {} -> {}", term, id, dict_sect_pfc.extract(id));
+            let back = dict_sect_pfc.extract(id);
+            //println!("{} -> {} -> {}", term, id, back);
+            assert_eq!(term, back);
         }
         let sequence = dict_sect_pfc.sequence;
         let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
