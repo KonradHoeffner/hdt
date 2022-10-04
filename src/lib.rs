@@ -7,7 +7,11 @@ pub mod dict;
 pub mod hdt_reader;
 pub mod header;
 // types for representing triple sections
+#[cfg_attr(feature = "sophia_graph")]
+pub mod hdt_graph;
 pub mod triples;
+
+use containers::rdf::Triple;
 use containers::ControlInfo;
-use header::Header;
 use dict::Dict;
+use header::Header;
