@@ -1,23 +1,66 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use resiter::filter::*;
-use resiter::map::*;
-
-use crate::dataset::adapter::GraphAsDataset;
-use crate::term::matcher::TermMatcher;
-use crate::term::{term_eq, TTerm, TermKind};
-use crate::triple::stream::*;
-use crate::triple::streaming_mode::*;
-use crate::triple::*;
-
+use crate::hdt_reader::HDTReader;
+use sophia::dataset::adapter::GraphAsDataset;
+use sophia::graph::*;
+use sophia::iri::*;
+use sophia::term::*;
+use sophia::term::{term_eq, TTerm, TermKind};
+use sophia::triple::stream::*;
+use sophia::triple::streaming_mode::*;
+use sophia::triple::*;
+use std::convert::Infallible;
 use std::error::Error;
+use std::fs::File;
+use std::io::BufRead;
+use std::io::BufReader;
+/*
+struct HdtGraph<'a, R: std::io::BufRead> {
+    reader: HDTReader<'a, R>,
+}
 
-struct HdtGraph {}
+impl<'a, R: BufRead> HdtGraph<'a, R> {
+    fn read(r: &'a mut R) -> Self {
+        HdtGraph::<'a> {
+            reader: HDTReader::new(r),
+        }
+    }
+}
+
+impl<R: BufRead> Graph for HdtGraph<'_, R> {
+*/
+
+struct HdtGraph {
+    file: File,
+}
 
 impl HdtGraph {
-    fn from_reader(r: impl BufRead) -> Self {
-        HdtGraph {}
+    fn new(file: File) -> Self {
+        HdtGraph { file }
+    }
+}
+
+impl Graph for HdtGraph {
+    type Triple = ByValue<[Term<String>; 3]>;
+    type Error = Infallible; // infallible for now, figure out what to put here later
+
+    fn triples(&self) -> GTripleSource<Self> {
+        let mut reader = BufReader::new(self.file.try_clone().unwrap());
+        let mut hdt_reader = HDTReader::new(&mut reader);
+
+        Box::new(
+            hdt_reader
+                .triples()
+                .map(|(s, p, o)| {
+                    StreamedTriple::by_value([
+                        Term::<String>::from(s),
+                        Term::<String>::from(p),
+                        Term::<String>::from(o),
+                    ])
+                })
+                .into_triple_source(),
+        )
     }
 }
 /*
@@ -598,5 +641,17 @@ pub trait MutableGraph: Graph {
     }
 }
 */
+
 #[cfg(test)]
-mod test {}
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_graph() {
+        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let graph = HdtGraph::new(file);
+        //let triples: Vec<HdtGraph::Triple> = graph.triples().collect();
+        let mut triples = graph.triples();
+        println!("first triple: {:?}", triples.next().unwrap());
+    }
+}

@@ -7,7 +7,7 @@ pub mod dict;
 pub mod hdt_reader;
 pub mod header;
 // types for representing triple sections
-#[cfg_attr(feature = "sophia_graph")]
+#[cfg(feature = "sophia_graph")]
 pub mod hdt_graph;
 pub mod triples;
 

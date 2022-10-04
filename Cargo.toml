@@ -15,11 +15,11 @@ iref = "2.2"
 langtag = "^0.3.2"
 ntriple = "^0.1.1"
 rayon = "1.5.3"
-sophia_api = { version = "0.7", optional = true }
+sophia = { version = "0.7", optional = true }
 
 [features]
 default = ["sophia_graph"]
-sophia_graph = ["sophia_api"]
+sophia_graph = ["sophia"]
 
 [profile.test]
 opt-level = 1
