@@ -82,8 +82,10 @@ mod tests {
         let mut hdt_reader = HDTReader::new(&mut reader);
         let triples = hdt_reader.read_all_triples().unwrap();
         assert_eq!(triples.len(), 242256);
-
-        let ten: Vec<(String, String, String)> = triples.into_iter().take(50).collect();
-        //panic!("{:#?}", ten);
+        //println!("{:?}",triples.iter().filter(|(s,p,o)| s == "<http://ymatsuo.com/>"));
+        //<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Thing> .
+        let end: Vec<(String, String, String)> = triples.into_iter().rev().take(10).collect();
+        //let end: Vec<(String, String, String)> = triples.into_iter().collect();
+        println!("triples {:#?}", end);
     }
 }

@@ -13,13 +13,16 @@ pub struct FourSectDict {
 impl FourSectDict {
     pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> String {
         let shared_size = self.shared.num_strings();
-
         match id_kind {
             IdKind::Subject => {
                 if (id < shared_size) {
+                //println!("shared {} {}",id, self.shared.id_to_string(id));
                     self.shared.id_to_string(id)
                 } else {
+                //println!("not shared {} {}",id, self.subjects.id_to_string(id - shared_size));
+                println!("not shared {} {} {} {} {}",id, id - shared_size, self.subjects.id_to_string((id - shared_size) ), shared_size, self.objects.num_strings());
                     self.subjects.id_to_string(id - shared_size)
+                    //self.subjects.id_to_string(id)
                 }
             }
             IdKind::Predicate => self.predicates.id_to_string(id),

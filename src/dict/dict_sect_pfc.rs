@@ -291,25 +291,54 @@ mod tests {
             panic!("invalid section type: {:?}", preamble);
         }
 
-        let dict_sect_pfc = DictSectPFC::read(&mut reader).unwrap();
-        assert_eq!(dict_sect_pfc.num_strings, 23128);
-        assert_eq!(dict_sect_pfc.packed_length, 396479);
-        assert_eq!(dict_sect_pfc.block_size, 8);
+        let shared = DictSectPFC::read(&mut reader).unwrap();
+        // the file contains IRIs that are used both as subject and object 23128
+        assert_eq!(shared.num_strings, 23128);
+        assert_eq!(shared.packed_length, 396479);
+        assert_eq!(shared.block_size, 8);
         for term in [
             "_:b5",
             "_:b1",
             "_:b6",
             "http://www.uni-koblenz.de/~sschenk",
             "http://ymatsuo.com/",
+            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/"
         ] {
-            let id = dict_sect_pfc.locate(term);
-            let back = dict_sect_pfc.extract(id);
+            let id = shared.locate(term);
+            let back = shared.extract(id);
             //println!("{} -> {} -> {}", term, id, back);
             assert_eq!(term, back);
         }
-        let sequence = dict_sect_pfc.sequence;
+        let sequence = shared.sequence;
         let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
         assert_eq!(sequence.data.len(), data_size);
-        assert_eq!(dict_sect_pfc.packed_data.len(), dict_sect_pfc.packed_length);
+        assert_eq!(shared.packed_data.len(), shared.packed_length);
+
+        let subjects = DictSectPFC::read(&mut reader).unwrap();
+        // the file contains IRIs that are used both as subject and object 23128
+        println!("{}", subjects.num_strings);
+        //assert_eq!(subjects.num_strings, 23128);
+        /*
+        assert_eq!(shared.packed_length, 396479);
+        assert_eq!(shared.block_size, 8);
+        for term in [
+            "_:b5",
+            "_:b1",
+            "_:b6",
+            "http://www.uni-koblenz.de/~sschenk",
+            "http://ymatsuo.com/",
+            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/"
+        ] {
+            let id = shared.locate(term);
+            let back = shared.extract(id);
+            //println!("{} -> {} -> {}", term, id, back);
+            assert_eq!(term, back);
+        }
+        let sequence = shared.sequence;
+        let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
+        assert_eq!(sequence.data.len(), data_size);
+        assert_eq!(shared.packed_data.len(), shared.packed_length);
+    */
+        
     }
 }
