@@ -72,6 +72,9 @@ impl DictSectPFC {
                 }
             }
         }
+        if (high < mid) {
+            mid = high;
+        }
         //println!("block {} but not first", mid);
         let idblock = self.locate_in_block(mid, element);
         if idblock == 0 {
@@ -297,16 +300,16 @@ mod tests {
         assert_eq!(shared.packed_length, 396479);
         assert_eq!(shared.block_size, 8);
         for term in [
+            "http://ymatsuo.com/",
             "_:b5",
             "_:b1",
             "_:b6",
             "http://www.uni-koblenz.de/~sschenk",
-            "http://ymatsuo.com/",
-            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/"
+            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/",
         ] {
             let id = shared.locate(term);
             let back = shared.extract(id);
-            //println!("{} -> {} -> {}", term, id, back);
+            println!("{} -> {} -> {}", term, id, back);
             assert_eq!(term, back);
         }
         let sequence = shared.sequence;
@@ -314,31 +317,38 @@ mod tests {
         assert_eq!(sequence.data.len(), data_size);
         assert_eq!(shared.packed_data.len(), shared.packed_length);
 
+        // read section preamble
+        let mut preamble: [u8; 1] = [0; 1];
+        reader.read_exact(&mut preamble).unwrap();
+        if preamble[0] != 2 {
+            panic!("invalid section type: {:?}", preamble);
+        }
+
         let subjects = DictSectPFC::read(&mut reader).unwrap();
-        // the file contains IRIs that are used both as subject and object 23128
-        println!("{}", subjects.num_strings);
-        //assert_eq!(subjects.num_strings, 23128);
-        /*
-        assert_eq!(shared.packed_length, 396479);
-        assert_eq!(shared.block_size, 8);
+        //println!("{}", subjects.num_strings);
+        assert_eq!(subjects.num_strings, 182);
         for term in [
-            "_:b5",
-            "_:b1",
-            "_:b6",
-            "http://www.uni-koblenz.de/~sschenk",
-            "http://ymatsuo.com/",
-            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/"
+			"http://www.eswc2006.org/topics/#topic2.7.8",
+            "http://xmlns.com/foaf/0.1/",
+			"http://www.eswc2006.org/topics/#topic3.0",
+			"http://www.eswc2006.org/topics/#topic3.2",
+			"http://www.eswc2006.org/topics/#topic3.4",
+			"http://www.eswc2006.org/topics/#topic3.5",
+			"http://www.eswc2006.org/topics/#topic3.6",
+			"http://www.eswc2006.org/topics/#topic3.7",
+			"http://www.eswc2006.org/topics/#topic3.8",
+            "http://sdow2008.semanticweb.org/#cfp",
+            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/authors",
+            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/demos"
         ] {
-            let id = shared.locate(term);
-            let back = shared.extract(id);
-            //println!("{} -> {} -> {}", term, id, back);
+            let id = subjects.locate(term);
+            let back = subjects.extract(id);
+            println!("{} -> {} -> {}", term, id, back);
             assert_eq!(term, back);
         }
-        let sequence = shared.sequence;
+        let sequence = subjects.sequence;
         let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
         assert_eq!(sequence.data.len(), data_size);
         assert_eq!(shared.packed_data.len(), shared.packed_length);
-    */
-        
     }
 }
