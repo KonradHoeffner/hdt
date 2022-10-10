@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-use std::hash::Hash;
-
 use crate::hdt_reader::HDTReader;
 use sophia::dataset::adapter::GraphAsDataset;
 use sophia::graph::*;
@@ -10,9 +7,11 @@ use sophia::term::{term_eq, TTerm, TermKind};
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
 use sophia::triple::*;
+use std::collections::HashSet;
 use std::convert::Infallible;
 use std::error::Error;
 use std::fs::File;
+use std::hash::Hash;
 use std::io::BufRead;
 use std::io::BufReader;
 /*
@@ -41,6 +40,13 @@ impl HdtGraph {
     }
 }
 
+fn auto_term(s: String) -> BoxTerm {
+    match s.chars().next().unwrap() {
+        '"' => BoxTerm::from(s),
+        _ => BoxTerm::new_iri_unchecked(s),
+    }
+}
+
 impl Graph for HdtGraph {
     type Triple = ByValue<[BoxTerm; 3]>;
     type Error = Infallible; // infallible for now, figure out what to put here later
@@ -53,11 +59,7 @@ impl Graph for HdtGraph {
             hdt_reader
                 .triples()
                 .map(|(s, p, o)| {
-                    StreamedTriple::by_value([
-                        BoxTerm::from(s),
-                        BoxTerm::from(p),
-                        BoxTerm::from(o),
-                    ])
+                    StreamedTriple::by_value([auto_term(s), auto_term(p), auto_term(o)])
                 })
                 .into_triple_source(),
         )
