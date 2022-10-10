@@ -42,7 +42,7 @@ impl HdtGraph {
 }
 
 impl Graph for HdtGraph {
-    type Triple = ByValue<[Term<String>; 3]>;
+    type Triple = ByValue<[BoxTerm; 3]>;
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
@@ -54,9 +54,9 @@ impl Graph for HdtGraph {
                 .triples()
                 .map(|(s, p, o)| {
                     StreamedTriple::by_value([
-                        Term::<String>::from(s),
-                        Term::<String>::from(p),
-                        Term::<String>::from(o),
+                        BoxTerm::from(s),
+                        BoxTerm::from(p),
+                        BoxTerm::from(o),
                     ])
                 })
                 .into_triple_source(),
