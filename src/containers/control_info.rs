@@ -81,7 +81,7 @@ impl ControlInfo {
         let mut format = Vec::new();
         reader.read_until(0x00, &mut format)?;
         history.extend_from_slice(&format);
-        if let None = format.pop() {
+        if format.pop().is_none() {
             // We failed to get rid of the trailing 0x00 byte,
             // in theory we should never reach this branch.
             unreachable!();
@@ -92,7 +92,7 @@ impl ControlInfo {
         let mut prop_str = Vec::new();
         reader.read_until(0x00, &mut prop_str)?;
         history.extend_from_slice(&prop_str);
-        if let None = prop_str.pop() {
+        if prop_str.pop().is_none() {
             // We failed to get rid of the trailing 0x00 byte,
             // in theory we should never reach this branch.
             unreachable!();

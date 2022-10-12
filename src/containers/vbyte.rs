@@ -2,7 +2,7 @@ use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
-const MAX_VBYTE_BYTES: usize = size_of::<usize>() * 8 / 7 + 1;
+const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
 // little endian
 pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
@@ -40,14 +40,14 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     if let Ok(valid) = usize::try_from(n) {
         Ok((valid, bytes_read))
     } else {
-        return Err(Error::new(
+        Err(Error::new(
             InvalidData,
             "Tried to read a VByte that does not fit into a usize",
-        ));
+        ))
     }
 }
 
-pub fn decode_vbyte_delta(data: &Vec<u8>, offset: usize) -> (usize, usize) {
+pub fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     let mut n: usize = 0;
     let mut shift: usize = 0;
     let mut byte_amount = 0;

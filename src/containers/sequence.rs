@@ -4,7 +4,7 @@ use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
-const USIZE_BITS: usize = size_of::<usize>() * 8;
+const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Debug, Clone)]
 pub struct Sequence {
