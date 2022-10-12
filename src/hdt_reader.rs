@@ -9,9 +9,9 @@ use std::io::BufRead;
 
 pub struct HDTReader<'a, R: BufRead> {
     reader: &'a mut R,
-    global_ci: Option<ControlInfo>,
-    header: Option<Header>,
-    dict: Option<Dict>,
+    pub global_ci: Option<ControlInfo>,
+    pub header: Option<Header>,
+    pub dict: Option<Dict>,
 }
 
 impl<'a, R: BufRead> HDTReader<'a, R> {
@@ -28,7 +28,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         self.global_ci.is_some() && self.header.is_some() && self.dict.is_some()
     }
 
-    fn read_meta(&mut self) -> io::Result<()> {
+    pub fn read_meta(&mut self) -> io::Result<()> {
         if !self.has_read_meta() {
             self.global_ci = Some(ControlInfo::read(&mut self.reader)?);
             self.header = Some(Header::read(&mut self.reader)?);

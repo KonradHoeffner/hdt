@@ -9,6 +9,7 @@ pub mod header;
 // types for representing triple sections
 #[cfg(feature = "sophia_graph")]
 pub mod hdt_graph;
+pub mod hdt;
 pub mod triples;
 
 use containers::rdf::Triple;

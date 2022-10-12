@@ -80,7 +80,7 @@ impl Dict {
             .collect()
     }
 
-    fn id_to_string(&self, id: usize, id_kind: IdKind) -> String {
+    pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> String {
         match self {
             Dict::FourSectDict(dict) => dict.id_to_string(id, id_kind),
         }
