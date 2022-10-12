@@ -653,7 +653,6 @@ mod tests {
     fn test_graph() {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
         let graph = HdtGraph::new(file);
-        //let triples: Vec<HdtGraph::Triple> = graph.triples().collect();
         let mut triples = graph.triples();
         println!("first triple: {:?}", triples.next().unwrap());
     }

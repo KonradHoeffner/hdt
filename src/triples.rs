@@ -31,9 +31,9 @@ impl TripleSect {
         }
     }
 
-    pub fn read_all_ids(self) -> Vec<TripleId> {
+    pub fn read_all_ids(self) -> TriplesBitmap {
         match self {
-            TripleSect::Bitmap(bitmap) => bitmap.into_iter().collect(),
+            TripleSect::Bitmap(bitmap) => bitmap,
         }
     }
 }
@@ -219,6 +219,6 @@ mod tests {
         let header = Header::read(&mut reader).unwrap();
         Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
-        assert_eq!(triples.read_all_ids().len(), 242256);
+        assert_eq!(triples.read_all_ids().into_iter().collect::<Vec<TripleId>>().len(), 242256);
     }
 }

@@ -48,7 +48,7 @@ impl<'a, R: BufRead> HDTReader<'a, R> {
         //println!("read triples");
         let mut triple_sect = TripleSect::read(&mut self.reader)?;
         //println!("read ids");
-        let triple_ids = triple_sect.read_all_ids();
+        let triple_ids = triple_sect.read_all_ids().into_iter().collect();
 
         if let Some(dict) = &mut self.dict {
             Ok(dict.translate_all_ids(triple_ids))
