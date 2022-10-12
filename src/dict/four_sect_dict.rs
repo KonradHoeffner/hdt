@@ -19,8 +19,7 @@ impl FourSectDict {
                 //println!("shared {} {}",id, self.shared.id_to_string(id));
                     self.shared.id_to_string(id)
                 } else {
-                //println!("not shared {} {}",id, self.subjects.id_to_string(id - shared_size));
-                println!("not shared {} {} {} {} {}",id, id - shared_size, self.subjects.id_to_string((id - shared_size) ), shared_size, self.objects.num_strings());
+                //println!("not shared {} {} {} {} {}",id, id - shared_size, self.subjects.id_to_string((id - shared_size) ), shared_size, self.objects.num_strings());
                     self.subjects.id_to_string(id - shared_size)
                     //self.subjects.id_to_string(id)
                 }

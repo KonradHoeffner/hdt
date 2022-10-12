@@ -43,6 +43,7 @@ impl HdtGraph {
 fn auto_term(s: String) -> BoxTerm {
     match s.chars().next().unwrap() {
         '"' => BoxTerm::from(s),
+        '_' => BoxTerm::new_bnode_unchecked(s[2..].to_owned()),
         _ => BoxTerm::new_iri_unchecked(s),
     }
 }
