@@ -8,7 +8,7 @@ use std::io;
 use std::io::BufRead;
 
 pub struct HDTReader<'a, R: BufRead> {
-    reader: &'a mut R,
+    pub reader: &'a mut R,
     pub global_ci: Option<ControlInfo>,
     pub header: Option<Header>,
     pub dict: Option<Dict>,

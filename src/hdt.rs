@@ -29,14 +29,15 @@ impl Hdt {
         let mut br = BufReader::new(file);
         let mut hdtr = HDTReader::new(&mut br);
         hdtr.read_meta()?;
-        let triple_sect = TripleSect::read(&mut br)?;
+        let triple_sect = TripleSect::read(&mut hdtr.reader)?;
         Ok (Hdt {global_ci: hdtr.global_ci.unwrap(), header: hdtr.header.unwrap(), dict: hdtr.dict.unwrap(), triple_sect})
     }
 
 
     pub fn triples(&mut self) -> impl Iterator<Item = (String, String, String)> {
-        let mut it = &self.triple_sect.read_all_ids().into_iter();
-        it.map(|_| ("".to_owned(),"".to_owned(),"".to_owned()))
+        // todo: implement and use into_iter with references for bitmap
+        self.triple_sect.clone().read_all_ids().into_iter()
+        .map(|_| ("".to_owned(),"".to_owned(),"".to_owned()))
 /*            it.map(|id: &TripleId| {
                 let subject = self.dict.id_to_string(id.subject_id, IdKind::Subject);
                 let predicate = self.dict.id_to_string(id.predicate_id, IdKind::Predicate);
