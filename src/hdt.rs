@@ -1,4 +1,3 @@
-//use crate::containers::rdf::Triple;
 use crate::containers::ControlInfo;
 use crate::dict::Dict;
 use crate::header::Header;
@@ -9,12 +8,6 @@ use std::fs::File;
 use crate::triples::TripleSect;
 use crate::triples::TripleId;
 use crate::dict::IdKind;
-/*
-use crate::triples::BitmapIter;
-use io::Error;
-use std::collections::BTreeSet;
-        use io::ErrorKind::Other;
-*/
 
 pub struct Hdt {
     global_ci: ControlInfo,
@@ -30,7 +23,6 @@ impl Hdt {
         let triple_sect = TripleSect::read(&mut hdtr.reader)?;
         Ok (Hdt {global_ci: hdtr.global_ci.unwrap(), header: hdtr.header.unwrap(), dict: hdtr.dict.unwrap(), triple_sect})
     }
-
 
     pub fn triples(&self) -> impl Iterator<Item = (String, String, String)> +'_ {
         // todo: implement and use into_iter with references for bitmap

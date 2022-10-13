@@ -12,7 +12,7 @@ use std::convert::Infallible;
 use std::error::Error;
 //use std::hash::Hash;
 
-struct HdtGraph {
+pub struct HdtGraph {
     hdt: Hdt
 }
 
@@ -632,6 +632,7 @@ mod tests {
     #[test]
     fn test_graph() {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
         let hdt = Hdt::new(file).unwrap();
         let graph = HdtGraph::new(hdt);
         let mut triples = graph.triples();
