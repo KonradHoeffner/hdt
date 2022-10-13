@@ -1,4 +1,11 @@
 # HDT Rust
+This is a fork of the archived <https://github.com/timplication/hdt-rs> that the author kindly licensed as MIT on request.
+Current efforts focus on an in-memory representation and iterators for visiting all triples with a given subject, predicate or object without materializing all triples in memory. 
+Detailed profiling, performance optimization and cleanup will come later.
+Pull requests are welcome.
+See the original README below.
+
+# Original README
 
 Rust implementation for the HDT library, [https://www.rdfhdt.org/](https://www.rdfhdt.org/).
 The library can read out triples, but it's super slow and there's a bug here and there. I do not
