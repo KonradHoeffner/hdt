@@ -5,7 +5,7 @@ repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
 description = "Library for the Header Dictionary Triples (HDT) RDF compression format."
-keywords = ["rdf", "hdt", "header dictionary triples", "compression", "file format"]
+keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
 edition = "2018"
 
