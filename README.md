@@ -1,16 +1,10 @@
-# HDT Rust
+# Rust implementation of the HDT compression format
+Header Dictionary Triples (HDT) is a compression format for RDF data that can also be queried for Triple Patterns.
 
-Rust implementation for the HDT library, [https://www.rdfhdt.org/](https://www.rdfhdt.org/).
-The library can read out triples, but it's super slow and there's a bug here and there. I do not
-really recommend using it right now. Implementing this correctly is not exactly easy because the
-specification and other implementatios are sometimes conflicting.
+## History 
+This is a fork of the archived <https://github.com/timplication/hdt-rs> by Tim Baccaert [tbaccaer@vub.be](mailto:tbaccaer@vub.be), who kindly licensed it as MIT on request.
+Current efforts focus on an in-memory representation and iterators for visiting all triples with a given subject, predicate or object without materializing all triples in memory. 
+Detailed profiling, performance optimization and cleanup will come later.
+Pull requests are welcome.
 
-## Authors
-
-- Tim Baccaert [tbaccaer@vub.be](mailto:tbaccaer@vub.be)
-
-## Acknowledgement
-
-This file-format is not my design, I merely tried created a Rust implementation of it. For a
-reference implementation and acknowledgement of all the original authors, please look at the
-[https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
+For reference implementations in C++ and Java and acknowledgement of all the original authors, please look at the [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
