@@ -5,19 +5,20 @@ use crate::header::Header;
 use crate::triples::TripleSect;
 use std::collections::BTreeSet;
 use std::io;
-use std::io::BufRead;
+use std::io::BufReader;
+use std::fs::File;
 
-pub struct HDTReader<'a, R: BufRead> {
-    pub reader: &'a mut R,
+pub struct HdtReader {
+    pub reader: BufReader<File>,
     pub global_ci: Option<ControlInfo>,
     pub header: Option<Header>,
     pub dict: Option<Dict>,
 }
 
-impl<'a, R: BufRead> HDTReader<'a, R> {
-    pub fn new(reader: &'a mut R) -> Self {
-        HDTReader {
-            reader,
+impl HdtReader {
+    pub fn new(file: File) -> Self {
+        HdtReader {
+            reader: BufReader::new(file),
             global_ci: None,
             header: None,
             dict: None,
@@ -78,8 +79,7 @@ mod tests {
         // let file = File::open("data/wordnet.hdt").expect("error opening file");
         //let file = File::open("tests/resources/qbench2.hdt").expect("error opening file");
         //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
-        let mut reader = BufReader::new(file);
-        let mut hdt_reader = HDTReader::new(&mut reader);
+        let mut hdt_reader = HdtReader::new(file);
         let triples = hdt_reader.read_all_triples().unwrap();
         assert_eq!(triples.len(), 242256);
         //println!("{:?}",triples.iter().filter(|(s,p,o)| s == "<http://ymatsuo.com/>"));

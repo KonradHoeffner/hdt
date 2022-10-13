@@ -1,4 +1,4 @@
-use crate::hdt_reader::HDTReader;
+use crate::hdt::Hdt;
 use sophia::dataset::adapter::GraphAsDataset;
 use sophia::graph::*;
 use sophia::iri::*;
@@ -10,33 +10,15 @@ use sophia::triple::*;
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::error::Error;
-use std::fs::File;
-use std::hash::Hash;
-use std::io::BufRead;
-use std::io::BufReader;
-/*
-struct HdtGraph<'a, R: std::io::BufRead> {
-    reader: HDTReader<'a, R>,
-}
-
-impl<'a, R: BufRead> HdtGraph<'a, R> {
-    fn read(r: &'a mut R) -> Self {
-        HdtGraph::<'a> {
-            reader: HDTReader::new(r),
-        }
-    }
-}
-
-impl<R: BufRead> Graph for HdtGraph<'_, R> {
-*/
+//use std::hash::Hash;
 
 struct HdtGraph {
-    file: File,
+    hdt: Hdt
 }
 
 impl HdtGraph {
-    fn new(file: File) -> Self {
-        HdtGraph { file }
+    pub fn new(hdt: Hdt) -> Self {
+        HdtGraph { hdt }
     }
 }
 
@@ -53,11 +35,8 @@ impl Graph for HdtGraph {
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
-        let mut reader = BufReader::new(self.file.try_clone().unwrap());
-        let mut hdt_reader = HDTReader::new(&mut reader);
-
         Box::new(
-            hdt_reader
+            self.hdt
                 .triples()
                 .map(|(s, p, o)| {
                     StreamedTriple::by_value([auto_term(s), auto_term(p), auto_term(o)])
@@ -648,11 +627,13 @@ pub trait MutableGraph: Graph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::File;
 
     #[test]
     fn test_graph() {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-        let graph = HdtGraph::new(file);
+        let hdt = Hdt::new(file).unwrap();
+        let graph = HdtGraph::new(hdt);
         let mut triples = graph.triples();
         println!("first triple: {:?}", triples.next().unwrap());
     }
