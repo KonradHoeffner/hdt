@@ -15,7 +15,7 @@ impl FourSectDict {
         let shared_size = self.shared.num_strings();
         match id_kind {
             IdKind::Subject => {
-                if (id < shared_size) {
+                if id < shared_size {
                 //println!("shared {} {}",id, self.shared.id_to_string(id));
                     self.shared.id_to_string(id)
                 } else {
@@ -26,7 +26,7 @@ impl FourSectDict {
             }
             IdKind::Predicate => self.predicates.id_to_string(id),
             IdKind::Object => {
-                if (id < shared_size) {
+                if id < shared_size {
                     self.shared.id_to_string(id)
                 } else {
                     self.objects.id_to_string(id - shared_size)

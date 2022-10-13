@@ -1,12 +1,12 @@
-use crate::containers::vbyte::read_vbyte;
+
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
-use crc_any::{CRCu32, CRCu8};
-use std::collections::BTreeSet;
+
+
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
-use std::mem::size_of;
+
 
 #[derive(Debug, Clone)]
 pub enum TripleSect {
@@ -83,7 +83,7 @@ impl TriplesBitmap {
         use std::io::ErrorKind::InvalidData;
 
         // read order
-        let mut order: Order;
+        let order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
             order = Order::try_from(n)?;
         } else {
@@ -216,7 +216,7 @@ mod tests {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
-        let header = Header::read(&mut reader).unwrap();
+        let _header = Header::read(&mut reader).unwrap();
         Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         assert_eq!(triples.read_all_ids().into_iter().collect::<Vec<TripleId>>().len(), 242256);

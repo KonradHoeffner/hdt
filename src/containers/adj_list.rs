@@ -1,8 +1,5 @@
 use crate::containers::Bitmap;
 use crate::containers::Sequence;
-use std::mem::size_of;
-
-const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Debug, Clone)]
 pub struct AdjList {

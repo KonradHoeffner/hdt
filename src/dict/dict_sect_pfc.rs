@@ -2,10 +2,10 @@ use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
 use std::cmp::{min, Ordering};
-use std::convert::TryInto;
+
 use std::io;
 use std::io::BufRead;
-use std::mem::size_of;
+
 use std::str;
 
 /// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
@@ -51,11 +51,11 @@ impl DictSectPFC {
         let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
         let max = high;
         let mut mid = high;
-        while (low <= high) {
+        while low <= high {
             mid = (low + high) / 2;
 
             let cmp: Ordering;
-            if (mid > max) {
+            if mid > max {
                 mid = max;
                 break;
             } else {
@@ -72,7 +72,7 @@ impl DictSectPFC {
                 }
             }
         }
-        if (high < mid) {
+        if high < mid {
             mid = high;
         }
         //println!("block {} but not first", mid);
@@ -86,7 +86,7 @@ impl DictSectPFC {
     fn longest_common_prefix(a: &[u8], b: &[u8]) -> usize {
         let len = min(a.len(), b.len());
         let mut delta = 0;
-        while (delta < len && a[delta] == b[delta]) {
+        while delta < len && a[delta] == b[delta] {
             delta += 1;
         }
         delta
@@ -98,7 +98,7 @@ impl DictSectPFC {
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
-        if (block >= self.sequence.entries) {
+        if block >= self.sequence.entries {
             //println!("block {} >= blocks {}", block, self.sequence.entries );
             return 0;
         }
@@ -126,14 +126,14 @@ impl DictSectPFC {
             temp_string.truncate(delta);
             temp_string.push_str(self.pos_str(pos, slen));
 
-            if (delta >= cshared) {
+            if delta >= cshared {
                 // Current delta value means that this string has a larger long common prefix than the previous one
                 cshared += Self::longest_common_prefix(
                     temp_string[cshared..].as_bytes(),
                     element[cshared..].as_bytes(),
                 );
 
-                if ((cshared == element.len()) && (temp_string.len() == element.len())) {
+                if (cshared == element.len()) && (temp_string.len() == element.len()) {
                     break;
                 }
             } else {
@@ -146,7 +146,7 @@ impl DictSectPFC {
             id_in_block += 1;
         }
 
-        if (pos >= self.packed_data.len() || id_in_block == self.block_size) {
+        if pos >= self.packed_data.len() || id_in_block == self.block_size {
             id_in_block = 0;
         }
         id_in_block
@@ -313,7 +313,7 @@ mod tests {
             assert_eq!(term, back);
         }
         let sequence = shared.sequence;
-        let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
+        let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
         assert_eq!(sequence.data.len(), data_size);
         assert_eq!(shared.packed_data.len(), shared.packed_length);
 
@@ -347,7 +347,7 @@ mod tests {
             assert_eq!(term, back);
         }
         let sequence = subjects.sequence;
-        let data_size = ((sequence.bits_per_entry * sequence.entries + 63) / 64);
+        let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
         assert_eq!(sequence.data.len(), data_size);
         assert_eq!(shared.packed_data.len(), shared.packed_length);
     }

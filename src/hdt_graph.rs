@@ -1,15 +1,15 @@
 use crate::hdt::Hdt;
-use sophia::dataset::adapter::GraphAsDataset;
+
 use sophia::graph::*;
-use sophia::iri::*;
+
 use sophia::term::*;
-use sophia::term::{term_eq, TTerm, TermKind};
+
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
-use sophia::triple::*;
-use std::collections::HashSet;
+
+
 use std::convert::Infallible;
-use std::error::Error;
+
 //use std::hash::Hash;
 
 pub struct HdtGraph {

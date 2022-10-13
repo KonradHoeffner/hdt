@@ -1,6 +1,6 @@
 use std::io;
 use std::io::BufRead;
-use std::mem::size_of;
+
 
 const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
@@ -93,7 +93,7 @@ mod tests {
         let mut reader = BufReader::new(&buffer[..]);
         if let Ok((number, bytes_read)) = read_vbyte(&mut reader) {
             assert_eq!(number, 824);
-            assert_eq!(bytes_read, Vec::from(buffer));
+            assert_eq!(bytes_read, buffer);
         } else {
             panic!("Failed to read vbyte");
         }
@@ -105,7 +105,7 @@ mod tests {
         let mut reader = BufReader::new(&buffer[..]);
         if let Ok((number, bytes_read)) = read_vbyte(&mut reader) {
             assert_eq!(number, usize::MAX);
-            assert_eq!(bytes_read, Vec::from(buffer));
+            assert_eq!(bytes_read, buffer);
         } else {
             panic!("Failed to read vbyte");
         }
@@ -118,7 +118,7 @@ mod tests {
         buffer[MAX_VBYTE_BYTES - 1] &= 0x7F;
         buffer.push(0x7F);
         let mut reader = BufReader::new(&buffer[..]);
-        let (val, buffer) = read_vbyte(&mut reader).unwrap();
+        let (val, _buffer) = read_vbyte(&mut reader).unwrap();
         assert!(val > usize::MAX);
     }
 

@@ -1,12 +1,12 @@
 mod dict_sect_pfc;
 mod four_sect_dict;
 
-use crate::containers::rdf::Triple;
+
 use crate::triples::TripleId;
 use crate::ControlInfo;
 pub use dict_sect_pfc::DictSectPFC;
 pub use four_sect_dict::FourSectDict;
-use std::collections::BTreeSet;
+
 use std::io;
 use std::io::BufRead;
 

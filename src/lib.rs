@@ -14,8 +14,8 @@ pub mod triples;
 
 #[cfg(feature = "sophia_graph")]
 pub use hdt_graph::HdtGraph;
-pub use hdt::Hdt;
-use containers::rdf::Triple;
+pub use crate::hdt::Hdt;
+
 use containers::ControlInfo;
 use dict::Dict;
 use header::Header;

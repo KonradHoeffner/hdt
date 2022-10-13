@@ -108,7 +108,7 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        let mut bitmap = Bitmap { num_bits, data };
+        let bitmap = Bitmap { num_bits, data };
 
         Ok(bitmap)
     }

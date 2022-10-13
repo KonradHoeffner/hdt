@@ -1,9 +1,9 @@
-use crate::containers::rdf::Triple;
+
 use crate::containers::ControlInfo;
 use crate::dict::Dict;
 use crate::header::Header;
 use crate::triples::TripleSect;
-use std::collections::BTreeSet;
+
 use std::io;
 use std::io::BufReader;
 use std::fs::File;
@@ -47,7 +47,7 @@ impl HdtReader {
         //println!("read meta");
         self.read_meta()?;
         //println!("read triples");
-        let mut triple_sect = TripleSect::read(&mut self.reader)?;
+        let triple_sect = TripleSect::read(&mut self.reader)?;
         //println!("read ids");
         let triple_ids = triple_sect.read_all_ids().into_iter().collect();
 
@@ -71,7 +71,7 @@ impl HdtReader {
 mod tests {
     use super::*;
     use std::fs::File;
-    use std::io::BufReader;
+    
 
     #[test]
     fn read_full_triples() {

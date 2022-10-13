@@ -50,9 +50,7 @@ impl Header {
                         ntriple::Subject::BNode(id) => Id::Blank(id),
                     };
 
-                    let predicate = match triple.predicate {
-                        ntriple::Predicate::IriRef(iri) => iri,
-                    };
+                    let ntriple::Predicate::IriRef(predicate) = triple.predicate;
 
                     let object = match triple.object {
                         ntriple::Object::IriRef(iri) => Term::Id(Id::Named(iri)),

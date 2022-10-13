@@ -3,7 +3,7 @@ use crate::dict::Dict;
 use crate::header::Header;
 use crate::hdt_reader::HdtReader;
 use std::io;
-use std::io::BufReader;
+
 use std::fs::File;
 use crate::triples::TripleSect;
 use crate::triples::TripleId;
