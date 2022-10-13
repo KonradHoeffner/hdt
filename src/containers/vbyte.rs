@@ -1,7 +1,6 @@
 use std::io;
 use std::io::BufRead;
 
-
 const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
 // little endian

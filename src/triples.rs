@@ -1,12 +1,9 @@
-
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
-
 
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
-
 
 #[derive(Debug, Clone)]
 pub enum TripleSect {
@@ -219,6 +216,13 @@ mod tests {
         let _header = Header::read(&mut reader).unwrap();
         Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
-        assert_eq!(triples.read_all_ids().into_iter().collect::<Vec<TripleId>>().len(), 242256);
+        assert_eq!(
+            triples
+                .read_all_ids()
+                .into_iter()
+                .collect::<Vec<TripleId>>()
+                .len(),
+            242256
+        );
     }
 }

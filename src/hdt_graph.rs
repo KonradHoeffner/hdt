@@ -7,13 +7,12 @@ use sophia::term::*;
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
 
-
 use std::convert::Infallible;
 
 //use std::hash::Hash;
 
 pub struct HdtGraph {
-    hdt: Hdt
+    hdt: Hdt,
 }
 
 impl HdtGraph {

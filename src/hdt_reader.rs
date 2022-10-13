@@ -1,12 +1,11 @@
-
 use crate::containers::ControlInfo;
 use crate::dict::Dict;
 use crate::header::Header;
 use crate::triples::TripleSect;
 
+use std::fs::File;
 use std::io;
 use std::io::BufReader;
-use std::fs::File;
 
 pub struct HdtReader {
     pub reader: BufReader<File>,
@@ -71,7 +70,6 @@ impl HdtReader {
 mod tests {
     use super::*;
     use std::fs::File;
-    
 
     #[test]
     fn read_full_triples() {

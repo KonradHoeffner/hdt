@@ -7,14 +7,14 @@ pub mod dict;
 pub mod hdt_reader;
 pub mod header;
 // types for representing triple sections
+pub mod hdt;
 #[cfg(feature = "sophia_graph")]
 pub mod hdt_graph;
-pub mod hdt;
 pub mod triples;
 
+pub use crate::hdt::Hdt;
 #[cfg(feature = "sophia_graph")]
 pub use hdt_graph::HdtGraph;
-pub use crate::hdt::Hdt;
 
 use containers::ControlInfo;
 use dict::Dict;

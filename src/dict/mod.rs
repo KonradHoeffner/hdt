@@ -1,7 +1,6 @@
 mod dict_sect_pfc;
 mod four_sect_dict;
 
-
 use crate::triples::TripleId;
 use crate::ControlInfo;
 pub use dict_sect_pfc::DictSectPFC;
