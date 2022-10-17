@@ -642,10 +642,15 @@ mod tests {
     #[test]
     fn test_graph() {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        //let file = File::open("tests/resources/snik.hdt").expect("error opening file");
         //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
         let hdt = Hdt::new(file).unwrap();
         let graph = HdtGraph::new(hdt);
         let mut triples = graph.triples();
         println!("first triple: {:?}", triples.next().unwrap());
+        //println!("meta {:?}", graph.triples_with_s(&BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta")).next());
+        let binding = BoxTerm::new_bnode_unchecked("b1");
+        let sample: Vec<_> = graph.triples_with_s(&binding).collect();
+        println!("{:?}", sample);
     }
 }

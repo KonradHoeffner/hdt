@@ -216,13 +216,12 @@ mod tests {
         let _header = Header::read(&mut reader).unwrap();
         Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
-        assert_eq!(
-            triples
-                .read_all_ids()
-                .into_iter()
-                .collect::<Vec<TripleId>>()
-                .len(),
-            242256
-        );
+        let v: Vec<TripleId> = triples
+            .read_all_ids()
+            .into_iter()
+            .collect::<Vec<TripleId>>();
+        assert_eq!(v.len(), 242256);
+        assert_eq!(v[2].subject_id, 0);
+        assert_eq!(v[3].subject_id, 1);
     }
 }

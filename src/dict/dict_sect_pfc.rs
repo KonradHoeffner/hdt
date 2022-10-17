@@ -303,6 +303,7 @@ mod tests {
             "http://ymatsuo.com/",
             "_:b5",
             "_:b1",
+            "_:b10",
             "_:b6",
             "http://www.uni-koblenz.de/~sschenk",
             "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/",
