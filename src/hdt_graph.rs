@@ -21,11 +21,12 @@ impl HdtGraph {
     }
 }
 
-fn auto_term(s: String) -> BoxTerm {
-    match s.chars().next().unwrap() {
-        '"' => BoxTerm::from(s),
-        '_' => BoxTerm::new_bnode_unchecked(s[2..].to_owned()),
-        _ => BoxTerm::new_iri_unchecked(s),
+fn auto_term(s: String) -> Result<BoxTerm, TermError> {
+    match s.chars().next() {
+        None => Err(TermError::InvalidIri("".to_owned())),
+        Some('"') => Ok(BoxTerm::from(s)),
+        Some('_') => BoxTerm::new_bnode(s[2..].to_owned()),
+        _ => BoxTerm::new_iri(s),
     }
 }
 
@@ -38,7 +39,17 @@ impl Graph for HdtGraph {
             self.hdt
                 .triples()
                 .map(|(s, p, o)| {
-                    StreamedTriple::by_value([auto_term(s), auto_term(p), auto_term(o)])
+                    Ok(StreamedTriple::by_value([
+                        auto_term(s)?,
+                        auto_term(p)?,
+                        auto_term(o)?,
+                    ]))
+                })
+                .filter_map(|r| {
+                    r.map_err(|e: TermError| {
+                        eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
+                    })
+                    .ok()
                 })
                 .into_triple_source(),
         )
