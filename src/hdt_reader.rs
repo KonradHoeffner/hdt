@@ -48,7 +48,9 @@ impl HdtReader {
         //println!("read triples");
         let triple_sect = TripleSect::read(&mut self.reader)?;
         //println!("read ids");
-        let triple_ids = triple_sect.read_all_ids().into_iter().collect();
+        let triple_ids: Vec<crate::triples::TripleId> =
+            triple_sect.read_all_ids().into_iter().collect();
+        println!("{:?}", &triple_ids[0..8]);
 
         if let Some(dict) = &mut self.dict {
             Ok(dict.translate_all_ids(triple_ids))
@@ -83,7 +85,11 @@ mod tests {
         //println!("{:?}",triples.iter().filter(|(s,p,o)| s == "<http://ymatsuo.com/>"));
         //<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Thing> .
         //let sample: Vec<(String, String, String)> = triples.into_iter().rev().take(10).collect();
-        let sample = &triples[0..8];
+        let sample = &triples[0..50];
         println!("sample {:#?}", sample);
+        //let sample2 = &triples[100000..100008];
+        //println!("sample2 {:#?}", sample2);
+        assert_eq!(sample[0].0, "_:b1");
+        assert_eq!(sample[3].0, "_:b10");
     }
 }

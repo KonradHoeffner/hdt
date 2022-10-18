@@ -109,9 +109,9 @@ mod tests {
         Header::read(&mut reader).unwrap();
         match Dict::read(&mut reader).unwrap() {
             Dict::FourSectDict(dict) => {
-                assert_eq!("_:b1",dict.id_to_string(1,IdKind::Subject));
-                assert_eq!("_:b10",dict.id_to_string(2,IdKind::Subject));
-                assert_eq!("_:b11",dict.id_to_string(3,IdKind::Subject));
+                assert_eq!("_:b1", dict.id_to_string(1, IdKind::Subject));
+                assert_eq!("_:b10", dict.id_to_string(2, IdKind::Subject));
+                assert_eq!("_:b11", dict.id_to_string(3, IdKind::Subject));
                 match dict.shared {
                     DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23128),
                 };

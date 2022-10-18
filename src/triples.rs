@@ -132,7 +132,7 @@ impl BitmapIter {
     pub fn new(triples: TriplesBitmap) -> Self {
         BitmapIter {
             triples,
-            x: 0,
+            x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
             pos_z: 0,
         }
@@ -141,7 +141,15 @@ impl BitmapIter {
     fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
         use io::Error;
         use io::ErrorKind::InvalidData;
-
+        if x == 0 || y == 0 || z == 0 {
+            return Err(Error::new(
+                InvalidData,
+                format!(
+                    "({},{},{}) none of the components of a triple may be 0.",
+                    x, y, z
+                ),
+            ));
+        }
         match self.triples.order {
             Order::SPO => Ok(TripleId::new(x, y, z)),
             Order::SOP => Ok(TripleId::new(x, z, y)),
@@ -166,17 +174,22 @@ impl Iterator for BitmapIter {
             return None;
         }
 
+        //println!("{} pos {} {} ",self.x,self.pos_y,self.pos_z);
         let y = self.triples.adjlist_y.get_id(self.pos_y);
         let z = self.triples.adjlist_z.get_id(self.pos_z);
+        //println!("x y z {} {} {}", self.x,y,z);
+        //println!("{} {}", self.triples.adjlist_y.at_last_sibling(self.pos_y), self.triples.adjlist_z.at_last_sibling(self.pos_z));
         let triple_id = self.coord_to_triple(self.x, y, z).unwrap();
 
-        if self.triples.adjlist_y.at_last_sibling(self.pos_y) {
-            self.x += 1;
-        }
-
+        // theoretically the second condition should only be true if the first is as well but in practise it wasn't, which screwed up the subject identifiers
+        // fixed by moving the second condition inside the first one but there may be another reason for the bug occuring in the first place
         if self.triples.adjlist_z.at_last_sibling(self.pos_z) {
+            if self.triples.adjlist_y.at_last_sibling(self.pos_y) {
+                self.x += 1;
+            }
             self.pos_y += 1;
         }
+        //if ! self.triples.adjlist_y.at_last_sibling(self.pos_y) && (!self.triples.adjlist_z.at_last_sibling(self.pos_z)) {self.x-=1;}
 
         self.pos_z += 1;
 
@@ -221,7 +234,9 @@ mod tests {
             .into_iter()
             .collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 242256);
-        assert_eq!(v[2].subject_id, 0);
-        assert_eq!(v[3].subject_id, 1);
+        println!("{:#?}", &v[0..30]);
+        assert_eq!(v[0].subject_id, 1);
+        assert_eq!(v[2].subject_id, 1);
+        assert_eq!(v[3].subject_id, 2);
     }
 }
