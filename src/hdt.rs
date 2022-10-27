@@ -28,6 +28,8 @@ impl Hdt {
         })
     }
 
+    // TODO: refactor out common code of triples methods
+
     pub fn triples(&self) -> impl Iterator<Item = (String, String, String)> + '_ {
         // todo: implement and use into_iter with references for bitmap
         // current implementation is inefficient due to cloning
@@ -58,6 +60,29 @@ impl Hdt {
             .read_all_ids()
             .into_iter()
             .filter(move |id: &TripleId| id.subject_id == subject_id)
+            .map(move |id: TripleId| {
+                let subject = self.dict.id_to_string(id.subject_id, IdKind::Subject);
+                let predicate = self.dict.id_to_string(id.predicate_id, IdKind::Predicate);
+                let object = self.dict.id_to_string(id.object_id, IdKind::Object);
+                (subject, predicate, object)
+            })
+    }
+
+    pub fn triples_with_o(&self, o: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
+        // todo: implement and use into_iter with references for bitmap
+        // current implementation is inefficient due to cloning
+        let object_id = self.dict.string_to_id(o, IdKind::Object);
+        println!(
+            "string_to_id({},IdKind::Subject) == {}, reverse test {}",
+            o,
+            object_id,
+            self.dict.id_to_string(object_id, IdKind::Object)
+        );
+        self.triple_sect
+            .clone()
+            .read_all_ids()
+            .into_iter()
+            .filter(move |id: &TripleId| id.object_id == object_id)
             .map(move |id: TripleId| {
                 let subject = self.dict.id_to_string(id.subject_id, IdKind::Subject);
                 let predicate = self.dict.id_to_string(id.predicate_id, IdKind::Predicate);

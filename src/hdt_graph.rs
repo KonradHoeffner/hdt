@@ -26,32 +26,37 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
     }
 }
 
+// transforms string triples into a sophia TripleSource
+fn triple_source<'s>(
+    triples: impl Iterator<Item = (String, String, String)> + 's,
+) -> GTripleSource<'s, HdtGraph> {
+    Box::new(
+        triples
+            .map(|(s, p, o)| {
+                Ok(StreamedTriple::by_value([
+                    auto_term(s)?,
+                    auto_term(p)?,
+                    auto_term(o)?,
+                ]))
+            })
+            .filter_map(|r| {
+                r.map_err(|e: TermError| {
+                    eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
+                })
+                .ok()
+            })
+            .into_triple_source(),
+    )
+}
+
 impl Graph for HdtGraph {
     type Triple = ByValue<[BoxTerm; 3]>;
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
-        Box::new(
-            self.hdt
-                .triples()
-                .map(|(s, p, o)| {
-                    Ok(StreamedTriple::by_value([
-                        auto_term(s)?,
-                        auto_term(p)?,
-                        auto_term(o)?,
-                    ]))
-                })
-                .filter_map(|r| {
-                    r.map_err(|e: TermError| {
-                        eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
-                    })
-                    .ok()
-                })
-                .into_triple_source(),
-        )
+        triple_source(self.hdt.triples())
     }
-    /// An iterator visiting all triples with the given subject.
-    /// See also [`triples`](#tymethod.triples).
+
     fn triples_with_s<'s, TS>(&'s self, s: &'s TS) -> GTripleSource<'s, Self>
     where
         TS: TTerm + ?Sized,
@@ -61,24 +66,19 @@ impl Graph for HdtGraph {
             _ => s.value().to_string(),
         };
         println!("{}", value);
-        Box::new(
-            self.hdt
-                .triples_with_s(&value)
-                .map(|(s, p, o)| {
-                    Ok(StreamedTriple::by_value([
-                        auto_term(s)?,
-                        auto_term(p)?,
-                        auto_term(o)?,
-                    ]))
-                })
-                .filter_map(|r| {
-                    r.map_err(|e: TermError| {
-                        eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
-                    })
-                    .ok()
-                })
-                .into_triple_source(),
-        )
+        triple_source(self.hdt.triples_with_s(&value))
+    }
+
+    fn triples_with_o<'s, TS>(&'s self, o: &'s TS) -> GTripleSource<'s, Self>
+    where
+        TS: TTerm + ?Sized,
+    {
+        let value = match o.kind() {
+            TermKind::BlankNode => "_:".to_owned() + &o.value().to_string(),
+            _ => o.value().to_string(),
+        };
+        println!("{}", value);
+        triple_source(self.hdt.triples_with_o(&value))
     }
 }
 //Box::new(self.triples().filter_ok(move |t| term_eq(t.s(), s)))
