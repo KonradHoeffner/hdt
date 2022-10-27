@@ -1,6 +1,5 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
-
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;

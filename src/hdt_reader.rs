@@ -2,7 +2,6 @@ use crate::containers::ControlInfo;
 use crate::dict::Dict;
 use crate::header::Header;
 use crate::triples::TripleSect;
-
 use std::fs::File;
 use std::io;
 use std::io::BufReader;

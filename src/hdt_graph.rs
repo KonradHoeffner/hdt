@@ -1,12 +1,8 @@
 use crate::hdt::Hdt;
-
 use sophia::graph::*;
-
 use sophia::term::*;
-
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
-
 use std::convert::Infallible;
 
 //use std::hash::Hash;
@@ -54,65 +50,39 @@ impl Graph for HdtGraph {
                 .into_triple_source(),
         )
     }
-}
-/*
-impl Graph for HdtGraph {
-    /// Determine the type of [`Triple`](../triple/trait.Triple.html)s
-    /// that the methods of this graph will yield
-    /// (see [`streaming_mode`](../triple/streaming_mode/index.html)
-    type Triple: TripleStreamingMode;
-    /// The error type that this graph may raise.
-    type Error: 'static + Error;
-
-    /// An iterator visiting all triples of this graph in arbitrary order.
-    ///
-    /// This iterator is fallible:
-    /// its items are `Result`s,
-    /// an error may occur at any time during the iteration.
-    ///
-    /// # Examples
-    ///
-    /// The result of this method is an iterator,
-    /// so it can be used in a `for` loop:
-    /// ```
-    /// # use sophia_api::graph::Graph;
-    /// # use sophia_api::term::simple_iri::SimpleIri;
-    /// # fn foo() -> Result<(), std::convert::Infallible> {
-    /// # let graph = Vec::<[SimpleIri;3]>::new();
-    /// for t in graph.triples() {
-    ///     let t = t?; // rethrow error if any
-    ///     // do something with t
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// Another way is to use the specific methods provided by
-    /// [`TripleSource`](../triple/stream/trait.TripleSource.html),
-    /// for example:
-    /// ```
-    /// # use sophia_api::graph::Graph;
-    /// # use sophia_api::term::simple_iri::SimpleIri;
-    /// # use sophia_api::triple::stream::TripleSource;
-    /// # fn foo() -> Result<(), std::convert::Infallible> {
-    /// # let graph = Vec::<[SimpleIri;3]>::new();
-    /// graph.triples().for_each_triple(|t| {
-    ///     // do something with t
-    /// })?; // rethrow error if any
-    /// # Ok(())
-    /// # }
-    /// ```
-    fn triples(&self) -> GTripleSource<Self>;
-
     /// An iterator visiting all triples with the given subject.
-    ///
     /// See also [`triples`](#tymethod.triples).
     fn triples_with_s<'s, TS>(&'s self, s: &'s TS) -> GTripleSource<'s, Self>
     where
         TS: TTerm + ?Sized,
     {
-        Box::new(self.triples().filter_ok(move |t| term_eq(t.s(), s)))
+        let value = match s.kind() {
+            TermKind::BlankNode => "_:".to_owned() + &s.value().to_string(),
+            _ => s.value().to_string(),
+        };
+        println!("{}", value);
+        Box::new(
+            self.hdt
+                .triples_with_s(&value)
+                .map(|(s, p, o)| {
+                    Ok(StreamedTriple::by_value([
+                        auto_term(s)?,
+                        auto_term(p)?,
+                        auto_term(o)?,
+                    ]))
+                })
+                .filter_map(|r| {
+                    r.map_err(|e: TermError| {
+                        eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
+                    })
+                    .ok()
+                })
+                .into_triple_source(),
+        )
     }
+}
+//Box::new(self.triples().filter_ok(move |t| term_eq(t.s(), s)))
+/*
     /// An iterator visiting all triples with the given predicate.
     ///
     /// See also [`triples`](#tymethod.triples).
@@ -649,8 +619,13 @@ mod tests {
         let mut triples = graph.triples();
         println!("first triple: {:?}", triples.next().unwrap());
         //println!("meta {:?}", graph.triples_with_s(&BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta")).next());
-        let binding = BoxTerm::new_bnode_unchecked("b1");
-        let sample: Vec<_> = graph.triples_with_s(&binding).collect();
-        println!("{:?}", sample);
+        //let binding = BoxTerm::new_bnode_unchecked("b1");
+        for binding in [
+            BoxTerm::new_iri_unchecked("http://ymatsuo.com/"),
+            BoxTerm::new_bnode_unchecked("b1"),
+        ] {
+            let tws: Vec<_> = graph.triples_with_s(&binding).collect();
+            println!("{:?}", tws);
+        }
     }
 }

@@ -5,11 +5,9 @@ use crate::triples::TripleId;
 use crate::ControlInfo;
 pub use dict_sect_pfc::DictSectPFC;
 pub use four_sect_dict::FourSectDict;
-
+use rayon::prelude::*;
 use std::io;
 use std::io::BufRead;
-
-use rayon::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum DictSect {
@@ -20,6 +18,12 @@ impl DictSect {
     pub fn id_to_string(&self, id: usize) -> String {
         match self {
             DictSect::PFC(pfc_dict) => pfc_dict.id_to_string(id),
+        }
+    }
+
+    pub fn string_to_id(&self, s: &str) -> usize {
+        match self {
+            DictSect::PFC(pfc_dict) => pfc_dict.locate(s),
         }
     }
 
@@ -79,9 +83,34 @@ impl Dict {
             .collect()
     }
 
+    pub fn triples_with_s(
+        &self,
+        triple_ids: Vec<TripleId>,
+        s: &str,
+    ) -> Vec<(String, String, String)> {
+        let id = self.string_to_id(s, IdKind::Subject);
+        // TODO this is very inefficient, use binary search instead
+        triple_ids
+            .iter()
+            //.filter(|id: &TripleId| id.subject_id == id)
+            .map(|id: &TripleId| {
+                let subject = self.id_to_string(id.subject_id, IdKind::Subject);
+                let predicate = self.id_to_string(id.predicate_id, IdKind::Predicate);
+                let object = self.id_to_string(id.object_id, IdKind::Object);
+                (subject, predicate, object)
+            })
+            .collect()
+    }
+
     pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> String {
         match self {
             Dict::FourSectDict(dict) => dict.id_to_string(id, id_kind),
+        }
+    }
+
+    pub fn string_to_id(&self, s: &str, id_kind: IdKind) -> usize {
+        match self {
+            Dict::FourSectDict(dict) => dict.string_to_id(s, id_kind),
         }
     }
 }
@@ -112,6 +141,10 @@ mod tests {
                 assert_eq!("_:b1", dict.id_to_string(1, IdKind::Subject));
                 assert_eq!("_:b10", dict.id_to_string(2, IdKind::Subject));
                 assert_eq!("_:b11", dict.id_to_string(3, IdKind::Subject));
+                assert_eq!(
+                    "http://ymatsuo.com/",
+                    dict.id_to_string(23128, IdKind::Subject)
+                );
                 match dict.shared {
                     DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23128),
                 };

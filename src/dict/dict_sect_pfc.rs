@@ -2,10 +2,8 @@ use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crc_any::{CRCu32, CRCu8};
 use std::cmp::{min, Ordering};
-
 use std::io;
 use std::io::BufRead;
-
 use std::str;
 
 /// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
@@ -45,7 +43,7 @@ impl DictSectPFC {
 
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
-    fn locate(&self, element: &str) -> usize {
+    pub fn locate(&self, element: &str) -> usize {
         // binary search
         let mut low: usize = 0;
         let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
