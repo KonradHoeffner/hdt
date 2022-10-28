@@ -1,5 +1,6 @@
 use crate::hdt::Hdt;
 use sophia::graph::*;
+use sophia::term::ns::rdf::value;
 use sophia::term::*;
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
@@ -49,43 +50,39 @@ fn triple_source<'s>(
     )
 }
 
+// Sophia doesn't include the _: prefix for blank node strings but HDT expects it
+// not needed for property terms, as they can't be blank nodes
+fn term_string(t: &(impl TTerm + ?Sized)) -> String {
+    match t.kind() {
+        TermKind::BlankNode => "_:".to_owned() + &t.value().to_string(),
+        _ => t.value().to_string(),
+    }
+}
+
 impl Graph for HdtGraph {
     type Triple = ByValue<[BoxTerm; 3]>;
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
+        eprintln!("Warning: Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         triple_source(self.hdt.triples())
     }
 
-    fn triples_with_s<'s, TS>(&'s self, s: &'s TS) -> GTripleSource<'s, Self>
-    where
-        TS: TTerm + ?Sized,
-    {
-        let value = match s.kind() {
-            TermKind::BlankNode => "_:".to_owned() + &s.value().to_string(),
-            _ => s.value().to_string(),
-        };
-        println!("{}", value);
-        triple_source(self.hdt.triples_with_s(&value))
+    fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
+        println!("triples_with_s {}", s.value().to_string());
+        triple_source(self.hdt.triples_with_s(&term_string(s)))
     }
 
-    fn triples_with_o<'s, TS>(&'s self, o: &'s TS) -> GTripleSource<'s, Self>
-    where
-        TS: TTerm + ?Sized,
-    {
-        let value = match o.kind() {
-            TermKind::BlankNode => "_:".to_owned() + &o.value().to_string(),
-            _ => o.value().to_string(),
-        };
-        println!("{}", value);
-        triple_source(self.hdt.triples_with_o(&value))
+    fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
+        println!("triples_with_p {}", p.value().to_string());
+        triple_source(self.hdt.triples_with_p(&p.value().to_string()))
+    }
+    fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
+        println!("triples_with_o {}", o.value().to_string());
+        triple_source(self.hdt.triples_with_o(&term_string(o)))
     }
 }
-//Box::new(self.triples().filter_ok(move |t| term_eq(t.s(), s)))
 /*
-    /// An iterator visiting all triples with the given predicate.
-    ///
-    /// See also [`triples`](#tymethod.triples).
     fn triples_with_p<'s, TP>(&'s self, p: &'s TP) -> GTripleSource<'s, Self>
     where
         TP: TTerm + ?Sized,
