@@ -15,12 +15,7 @@ pub struct HdtReader {
 
 impl HdtReader {
     pub fn new(file: File) -> Self {
-        HdtReader {
-            reader: BufReader::new(file),
-            global_ci: None,
-            header: None,
-            dict: None,
-        }
+        HdtReader { reader: BufReader::new(file), global_ci: None, header: None, dict: None }
     }
 
     fn has_read_meta(&self) -> bool {
@@ -47,17 +42,13 @@ impl HdtReader {
         //println!("read triples");
         let triple_sect = TripleSect::read(&mut self.reader)?;
         //println!("read ids");
-        let triple_ids: Vec<crate::triples::TripleId> =
-            triple_sect.read_all_ids().into_iter().collect();
+        let triple_ids: Vec<crate::triples::TripleId> = triple_sect.read_all_ids().into_iter().collect();
         println!("{:?}", &triple_ids[0..8]);
 
         if let Some(dict) = &mut self.dict {
             Ok(dict.translate_all_ids(triple_ids))
         } else {
-            Err(Error::new(
-                Other,
-                "Something unexpected went wrong when reading the dictionary.",
-            ))
+            Err(Error::new(Other, "Something unexpected went wrong when reading the dictionary."))
         }
     }
 

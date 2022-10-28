@@ -28,23 +28,12 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
 }
 
 // transforms string triples into a sophia TripleSource
-fn triple_source<'s>(
-    triples: impl Iterator<Item = (String, String, String)> + 's,
-) -> GTripleSource<'s, HdtGraph> {
+fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + 's) -> GTripleSource<'s, HdtGraph> {
     Box::new(
         triples
-            .map(|(s, p, o)| {
-                Ok(StreamedTriple::by_value([
-                    auto_term(s)?,
-                    auto_term(p)?,
-                    auto_term(o)?,
-                ]))
-            })
+            .map(|(s, p, o)| Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?])))
             .filter_map(|r| {
-                r.map_err(|e: TermError| {
-                    eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)
-                })
-                .ok()
+                r.map_err(|e: TermError| eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)).ok()
             })
             .into_triple_source(),
     )
@@ -64,7 +53,9 @@ impl Graph for HdtGraph {
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
-        eprintln!("Warning: Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
+        eprintln!(
+            "Warning: Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs."
+        );
         triple_source(self.hdt.triples())
     }
 
@@ -83,21 +74,6 @@ impl Graph for HdtGraph {
     }
 }
 /*
-    fn triples_with_p<'s, TP>(&'s self, p: &'s TP) -> GTripleSource<'s, Self>
-    where
-        TP: TTerm + ?Sized,
-    {
-        Box::new(self.triples().filter_ok(move |t| term_eq(t.p(), p)))
-    }
-    /// An iterator visiting all triples with the given object.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    fn triples_with_o<'s, TO>(&'s self, o: &'s TO) -> GTripleSource<'s, Self>
-    where
-        TO: TTerm + ?Sized,
-    {
-        Box::new(self.triples().filter_ok(move |t| term_eq(t.o(), o)))
-    }
     /// An iterator visiting all triples with the given subject and predicate.
     ///
     /// See also [`triples`](#tymethod.triples).
@@ -617,10 +593,7 @@ mod tests {
         println!("first triple: {:?}", triples.next().unwrap());
         //println!("meta {:?}", graph.triples_with_s(&BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta")).next());
         //let binding = BoxTerm::new_bnode_unchecked("b1");
-        for binding in [
-            BoxTerm::new_iri_unchecked("http://ymatsuo.com/"),
-            BoxTerm::new_bnode_unchecked("b1"),
-        ] {
+        for binding in [BoxTerm::new_iri_unchecked("http://ymatsuo.com/"), BoxTerm::new_bnode_unchecked("b1")] {
             let tws: Vec<_> = graph.triples_with_s(&binding).collect();
             println!("{:?}", tws);
         }

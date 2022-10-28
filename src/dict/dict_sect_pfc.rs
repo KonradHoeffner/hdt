@@ -126,10 +126,8 @@ impl DictSectPFC {
 
             if delta >= cshared {
                 // Current delta value means that this string has a larger long common prefix than the previous one
-                cshared += Self::longest_common_prefix(
-                    temp_string[cshared..].as_bytes(),
-                    element[cshared..].as_bytes(),
-                );
+                cshared +=
+                    Self::longest_common_prefix(temp_string[cshared..].as_bytes(), element[cshared..].as_bytes());
 
                 if (cshared == element.len()) && (temp_string.len() == element.len()) {
                     break;
@@ -247,13 +245,7 @@ impl DictSectPFC {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        Ok(DictSectPFC {
-            num_strings,
-            packed_length,
-            block_size,
-            sequence,
-            packed_data,
-        })
+        Ok(DictSectPFC { num_strings, packed_length, block_size, sequence, packed_data })
     }
 }
 
@@ -298,12 +290,7 @@ mod tests {
         assert_eq!(shared.packed_length, 396479);
         assert_eq!(shared.block_size, 8);
         for term in [
-            "http://ymatsuo.com/",
-            "_:b5",
-            "_:b1",
-            "_:b10",
-            "_:b6",
-            "http://www.uni-koblenz.de/~sschenk",
+            "http://ymatsuo.com/", "_:b5", "_:b1", "_:b10", "_:b6", "http://www.uni-koblenz.de/~sschenk",
             "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/",
         ] {
             let id = shared.locate(term);
@@ -327,18 +314,13 @@ mod tests {
         //println!("{}", subjects.num_strings);
         assert_eq!(subjects.num_strings, 182);
         for term in [
-			"http://www.eswc2006.org/topics/#topic2.7.8",
-            "http://xmlns.com/foaf/0.1/",
-			"http://www.eswc2006.org/topics/#topic3.0",
-			"http://www.eswc2006.org/topics/#topic3.2",
-			"http://www.eswc2006.org/topics/#topic3.4",
-			"http://www.eswc2006.org/topics/#topic3.5",
-			"http://www.eswc2006.org/topics/#topic3.6",
-			"http://www.eswc2006.org/topics/#topic3.7",
-			"http://www.eswc2006.org/topics/#topic3.8",
-            "http://sdow2008.semanticweb.org/#cfp",
+            "http://www.eswc2006.org/topics/#topic2.7.8", "http://xmlns.com/foaf/0.1/",
+            "http://www.eswc2006.org/topics/#topic3.0", "http://www.eswc2006.org/topics/#topic3.2",
+            "http://www.eswc2006.org/topics/#topic3.4", "http://www.eswc2006.org/topics/#topic3.5",
+            "http://www.eswc2006.org/topics/#topic3.6", "http://www.eswc2006.org/topics/#topic3.7",
+            "http://www.eswc2006.org/topics/#topic3.8", "http://sdow2008.semanticweb.org/#cfp",
             "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/authors",
-            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/demos"
+            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/demos",
         ] {
             let id = subjects.locate(term);
             let back = subjects.extract(id);

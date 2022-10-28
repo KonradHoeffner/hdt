@@ -1,0 +1,15 @@
+max_width = 115
+short_array_element_width_threshold = 115
+use_field_init_shorthand = true
+use_small_heuristics = "Max"
+use_try_shorthand = true
+fn_args_layout = "Compressed"
+single_line_if_else_max_width = 115
+# fn_params_layout = "Compressed" # renamed from fn_args_layout in the master branch but not in current release rustfmt 1.5.1
+
+# *** only available in unstable rust ***
+#where_single_line = true
+#fn_single_line = true
+#group_imports = "One"
+#condense_wildcard_suffixes = true
+# ***************************************

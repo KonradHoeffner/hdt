@@ -41,8 +41,7 @@ impl DictSect {
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
             return Err(Error::new(
-                InvalidData,
-                "Implementation only supports plain front coded dictionary sections.",
+                InvalidData, "Implementation only supports plain front coded dictionary sections.",
             ));
         }
 
@@ -62,10 +61,7 @@ impl Dict {
 
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-            return Err(Error::new(
-                InvalidData,
-                "Implementation only supports four section dictionaries",
-            ));
+            return Err(Error::new(InvalidData, "Implementation only supports four section dictionaries"));
         }
 
         Ok(Dict::FourSectDict(FourSectDict::read(reader)?))
@@ -83,11 +79,7 @@ impl Dict {
             .collect()
     }
 
-    pub fn triples_with_s(
-        &self,
-        triple_ids: Vec<TripleId>,
-        s: &str,
-    ) -> Vec<(String, String, String)> {
+    pub fn triples_with_s(&self, triple_ids: Vec<TripleId>, s: &str) -> Vec<(String, String, String)> {
         let id = self.string_to_id(s, IdKind::Subject);
         // TODO this is very inefficient, use binary search instead
         triple_ids
@@ -141,10 +133,7 @@ mod tests {
                 assert_eq!("_:b1", dict.id_to_string(1, IdKind::Subject));
                 assert_eq!("_:b10", dict.id_to_string(2, IdKind::Subject));
                 assert_eq!("_:b11", dict.id_to_string(3, IdKind::Subject));
-                assert_eq!(
-                    "http://ymatsuo.com/",
-                    dict.id_to_string(23128, IdKind::Subject)
-                );
+                assert_eq!("http://ymatsuo.com/", dict.id_to_string(23128, IdKind::Subject));
                 match dict.shared {
                     DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23128),
                 };

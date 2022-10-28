@@ -19,10 +19,9 @@ impl TripleSect {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => {
                 Ok(TripleSect::Bitmap(TriplesBitmap::read(reader, triples_ci)?))
             }
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(Error::new(
-                InvalidData,
-                "Triples Lists are not supported yet.",
-            )),
+            "<http://purl.org/HDT/hdt#triplesList>" => {
+                Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
+            }
             _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
         }
     }
@@ -58,10 +57,7 @@ impl TryFrom<u32> for Order {
             4 => Ok(Order::POS),
             5 => Ok(Order::OSP),
             6 => Ok(Order::OPS),
-            _ => Err(Self::Error::new(
-                io::ErrorKind::InvalidData,
-                "Unrecognized order",
-            )),
+            _ => Err(Self::Error::new(io::ErrorKind::InvalidData, "Unrecognized order")),
         }
     }
 }
@@ -98,11 +94,7 @@ impl TriplesBitmap {
         let adjlist_y = AdjList::new(sequence_y, bitmap_y);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
-        Ok(TriplesBitmap {
-            order,
-            adjlist_y,
-            adjlist_z,
-        })
+        Ok(TriplesBitmap { order, adjlist_y, adjlist_z })
     }
 }
 
@@ -143,10 +135,7 @@ impl BitmapIter {
         if x == 0 || y == 0 || z == 0 {
             return Err(Error::new(
                 InvalidData,
-                format!(
-                    "({},{},{}) none of the components of a triple may be 0.",
-                    x, y, z
-                ),
+                format!("({},{},{}) none of the components of a triple may be 0.", x, y, z),
             ));
         }
         match self.triples.order {
@@ -205,11 +194,7 @@ pub struct TripleId {
 
 impl TripleId {
     pub fn new(subject_id: usize, predicate_id: usize, object_id: usize) -> Self {
-        TripleId {
-            subject_id,
-            predicate_id,
-            object_id,
-        }
+        TripleId { subject_id, predicate_id, object_id }
     }
 }
 
@@ -228,10 +213,7 @@ mod tests {
         let _header = Header::read(&mut reader).unwrap();
         Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
-        let v: Vec<TripleId> = triples
-            .read_all_ids()
-            .into_iter()
-            .collect::<Vec<TripleId>>();
+        let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 242256);
         println!("{:#?}", &v[0..30]);
         assert_eq!(v[0].subject_id, 1);

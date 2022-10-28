@@ -10,21 +10,13 @@ pub struct Triple {
 
 impl Triple {
     pub fn new(subject: Id, predicate: String, object: Term) -> Self {
-        Triple {
-            subject,
-            predicate,
-            object,
-        }
+        Triple { subject, predicate, object }
     }
 }
 
 impl fmt::Debug for Triple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{:?} {:?} {:?} .",
-            self.subject, self.predicate, self.object
-        )
+        write!(f, "{:?} {:?} {:?} .", self.subject, self.predicate, self.object)
     }
 }
 
@@ -122,20 +114,12 @@ impl Literal {
     /// Create a new literal with type [xs:string](http://www.w3.org/2001/XMLSchema#string) (which
     /// we do not store since it is the default type).
     pub fn new(form: String) -> Self {
-        Literal {
-            form,
-            datatype: None,
-            lang: None,
-        }
+        Literal { form, datatype: None, lang: None }
     }
 
     /// Create a new literal with a given form and datatype.
     pub fn new_typed(form: String, datatype: String) -> Self {
-        Literal {
-            form,
-            datatype: Some(datatype),
-            lang: None,
-        }
+        Literal { form, datatype: Some(datatype), lang: None }
     }
 
     /// Create a new literal with a given form and langauge. Automatically sets the type to
@@ -143,10 +127,6 @@ impl Literal {
     pub fn new_lang(form: String, lang: String) -> Self {
         let datatype = String::from("http://www.w3.org/1999/02/22-rdf-syntax-ns#langString");
 
-        Literal {
-            form,
-            datatype: Some(datatype),
-            lang: Some(lang),
-        }
+        Literal { form, datatype: Some(datatype), lang: Some(lang) }
     }
 }

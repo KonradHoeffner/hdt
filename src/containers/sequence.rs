@@ -85,8 +85,7 @@ impl Sequence {
 
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
-        let full_byte_amount =
-            (((total_bits + USIZE_BITS - 1) / USIZE_BITS) - 1) * size_of::<usize>();
+        let full_byte_amount = (((total_bits + USIZE_BITS - 1) / USIZE_BITS) - 1) * size_of::<usize>();
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words);
         history.extend_from_slice(&full_words);
@@ -103,11 +102,7 @@ impl Sequence {
         // read the last few bits, byte aligned
         let mut bits_read = 0;
         let mut last_value: usize = 0;
-        let last_entry_bits = if total_bits == 0 {
-            0
-        } else {
-            ((total_bits - 1) % USIZE_BITS) + 1
-        };
+        let last_entry_bits = if total_bits == 0 { 0 } else { ((total_bits - 1) % USIZE_BITS) + 1 };
 
         while bits_read < last_entry_bits {
             let mut buffer = [0u8];
@@ -130,10 +125,6 @@ impl Sequence {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        Ok(Sequence {
-            entries,
-            bits_per_entry,
-            data,
-        })
+        Ok(Sequence { entries, bits_per_entry, data })
     }
 }

@@ -81,11 +81,7 @@ impl Bitmap {
 
         let mut bits_read = 0;
         let mut last_value: usize = 0;
-        let last_word_bits = if num_bits == 0 {
-            0
-        } else {
-            ((num_bits - 1) % 64) + 1
-        };
+        let last_word_bits = if num_bits == 0 { 0 } else { ((num_bits - 1) % 64) + 1 };
 
         while bits_read < last_word_bits {
             let mut buffer = [0u8];

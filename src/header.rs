@@ -15,11 +15,7 @@ pub struct Header {
 
 impl Header {
     pub fn new() -> Self {
-        Header {
-            format: String::new(),
-            length: 0,
-            body: BTreeSet::new(),
-        }
+        Header { format: String::new(), length: 0, body: BTreeSet::new() }
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
@@ -28,15 +24,10 @@ impl Header {
 
         let header_ci = ControlInfo::read(reader)?;
         if header_ci.format != "ntriples" {
-            return Err(Error::new(
-                InvalidData,
-                "Headers currently only support the NTriples format",
-            ));
+            return Err(Error::new(InvalidData, "Headers currently only support the NTriples format"));
         }
 
-        let length = header_ci
-            .get("length")
-            .and_then(|v| v.parse::<usize>().ok());
+        let length = header_ci.get("length").and_then(|v| v.parse::<usize>().ok());
 
         if let Some(length) = length {
             let mut body_buffer: Vec<u8> = vec![0; length];
@@ -71,11 +62,7 @@ impl Header {
                 }
             }
 
-            Ok(Header {
-                format: header_ci.format,
-                length,
-                body,
-            })
+            Ok(Header { format: header_ci.format, length, body })
         } else {
             Err(Error::new(InvalidData, "Header is missing header length."))
         }

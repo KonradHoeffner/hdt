@@ -30,8 +30,7 @@ impl Hdt {
 
     // TODO: refactor out common code of triples methods
     fn translate_ids<'a>(
-        &'a self,
-        ids: impl Iterator<Item = TripleId> + 'a,
+        &'a self, ids: impl Iterator<Item = TripleId> + 'a,
     ) -> impl Iterator<Item = (String, String, String)> + 'a {
         ids.map(move |id: TripleId| {
             let subject = self.dict.id_to_string(id.subject_id, IdKind::Subject);
@@ -67,12 +66,10 @@ impl Hdt {
     pub fn triples_with_p(&self, p: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
         // TODO: optimize
         let predicate_id = self.dict.string_to_id(p, IdKind::Predicate);
-        println!(
-            "string_to_id({},IdKind::Predicate) == {}, reverse test {}",
-            p,
-            predicate_id,
-            self.dict.id_to_string(predicate_id, IdKind::Predicate)
-        );
+        let test = self.dict.id_to_string(predicate_id, IdKind::Predicate);
+        if test != p {
+            eprintln!("string_to_id({},IdKind::Predicate) == {}, reverse test {}", p, predicate_id, test);
+        }
         self.translate_ids(
             self.triple_sect
                 .clone()

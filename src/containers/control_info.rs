@@ -27,10 +27,7 @@ impl TryFrom<u8> for ControlType {
             3 => Ok(ControlType::Dictionary),
             4 => Ok(ControlType::Triples),
             5 => Ok(ControlType::Index),
-            _ => Err(Self::Error::new(
-                io::ErrorKind::InvalidData,
-                "Unrecognized control type",
-            )),
+            _ => Err(Self::Error::new(io::ErrorKind::InvalidData, "Unrecognized control type")),
         }
     }
 }
@@ -44,11 +41,7 @@ pub struct ControlInfo {
 
 impl ControlInfo {
     pub fn new() -> Self {
-        ControlInfo {
-            control_type: ControlType::Unknown,
-            format: String::new(),
-            properties: HashMap::new(),
-        }
+        ControlInfo { control_type: ControlType::Unknown, format: String::new(), properties: HashMap::new() }
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
@@ -63,10 +56,7 @@ impl ControlInfo {
         reader.read_exact(&mut hdt_cookie)?;
         if let Ok(hdt_cookie) = str::from_utf8(&hdt_cookie) {
             if hdt_cookie != "$HDT" {
-                return Err(Error::new(
-                    InvalidData,
-                    "Chunk is invalid HDT Control Information",
-                ));
+                return Err(Error::new(InvalidData, "Chunk is invalid HDT Control Information"));
             }
         }
         history.extend_from_slice(&hdt_cookie);
@@ -118,11 +108,7 @@ impl ControlInfo {
             return Err(Error::new(InvalidData, "Invalid CRC16-ANSI checksum"));
         }
 
-        Ok(ControlInfo {
-            control_type,
-            format,
-            properties,
-        })
+        Ok(ControlInfo { control_type, format, properties })
     }
 
     pub fn get(&self, key: &str) -> Option<String> {

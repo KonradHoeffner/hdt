@@ -18,10 +18,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
 
     while (buffer[0] & 0x80) == 0 {
         if bytes_read.len() >= MAX_VBYTE_BYTES {
-            return Err(Error::new(
-                InvalidData,
-                "Tried to read a VByte that does not fit into a usize",
-            ));
+            return Err(Error::new(InvalidData, "Tried to read a VByte that does not fit into a usize"));
         }
 
         n |= ((buffer[0] & 127) as u128) << shift;
@@ -39,10 +36,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     if let Ok(valid) = usize::try_from(n) {
         Ok((valid, bytes_read))
     } else {
-        Err(Error::new(
-            InvalidData,
-            "Tried to read a VByte that does not fit into a usize",
-        ))
+        Err(Error::new(InvalidData, "Tried to read a VByte that does not fit into a usize"))
     }
 }
 
