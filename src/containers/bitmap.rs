@@ -6,12 +6,21 @@ use std::io::BufRead;
 use std::mem::size_of;
 
 const USIZE_BITS: usize = usize::BITS as usize;
+const BLOCKS_PER_SUPER: usize = 256 / USIZE_BITS;
 
 #[derive(Debug, Clone)]
 pub struct Bitmap {
     num_bits: usize,
+    num_ones: usize,
     data: Vec<usize>,
+    /// superblock counters
+    superblocks: Vec<usize>,
+    /// block counters
+    blocks: Vec<u8>,
 }
+
+// could we achieve better results with using broadwords? see Broadword Implementation of Rank/Select Queries
+// https://link.springer.com/chapter/10.1007/978-3-540-68552-4_12
 
 impl Bitmap {
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
@@ -104,8 +113,52 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        let bitmap = Bitmap { num_bits, data };
+        // build index ***************************************************************
+        // translated from https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/bitsequence/BitSequence375.cpp
+        // described in "Optimal lower bounds for rank and select indexes" by Alexander Glynski 2006 ?
+        // unfinished, untested
 
+        let mut block_pop = 0_usize;
+        let mut superblock_pop = 0_usize;
+        let mut block_index = 0_usize;
+        let mut superblock_index = 0_usize;
+        let num_words = Self::num_words(num_bits);
+        let mut superblocks: Vec<usize> = Vec::with_capacity(num_words);
+        let mut blocks: Vec<u8> = Vec::with_capacity(1 + (num_words - 1) / BLOCKS_PER_SUPER);
+
+        while block_index < num_words {
+            if !(block_index % BLOCKS_PER_SUPER) == 0 {
+                superblock_pop += block_pop;
+                if (superblock_index < superblocks.len()) {
+                    superblock_index += 1;
+                    superblocks.push(superblock_pop);
+                }
+                block_pop = 0
+            }
+
+            blocks[block_index] = block_pop as u8; // TODO: is this correct? can this overflow?
+            block_pop += data[block_index].count_ones() as usize;
+            block_index += 1;
+        }
+
+        let num_ones = superblock_pop + block_pop;
+
+        let bitmap = Bitmap { num_bits, num_ones, data, superblocks, blocks };
         Ok(bitmap)
+    }
+
+    fn num_words(bits: usize) -> usize {
+        if bits == 0 {
+            return 1;
+        }
+        ((bits - 1) / USIZE_BITS) + 1
+    }
+
+    /** Return the first position starting at start that contains a 1.
+     * In case there are no more ones in the bitsequence, the function
+     * returns the length of the bitmap
+     */
+    pub fn select_next_1(&self, start: usize) -> usize {
+        0
     }
 }

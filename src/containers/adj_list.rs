@@ -23,4 +23,8 @@ impl AdjList {
     pub fn get_max(&self) -> usize {
         self.sequence.entries
     }
+
+    pub fn find_next(&self, pos: usize) -> usize {
+        self.bitmap.select_next_1(pos)
+    }
 }
