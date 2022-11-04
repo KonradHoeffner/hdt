@@ -1,17 +1,17 @@
 use crate::containers::vbyte::read_vbyte;
 use crc_any::{CRCu32, CRCu8};
+use rsdict::RsDict;
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
-use rsdict::RsDict;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Debug, Clone)]
 pub struct Bitmap {
     num_bits: usize,
-    data: RsDict,
+    pub dict: RsDict,
 }
 
 impl Bitmap {
@@ -29,7 +29,7 @@ impl Bitmap {
 
         // If the `bit_flag` is set to one, the bitwise and will be equal to the `bit_flag`.
         //self.data[block_index] & bit_flag == bit_flag
-        self.data.get_bit(word_index as u64)
+        self.dict.get_bit(word_index as u64)
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
@@ -108,7 +108,7 @@ impl Bitmap {
 
         let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
 
-        let bitmap = Bitmap { num_bits, data: dict };
+        let bitmap = Bitmap { num_bits, dict };
         Ok(bitmap)
     }
 }

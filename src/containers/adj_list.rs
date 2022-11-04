@@ -23,4 +23,11 @@ impl AdjList {
     pub fn get_max(&self) -> usize {
         self.sequence.entries
     }
+
+    pub fn find(&self, x: usize) -> usize {
+        if (x <= 0) {
+            return 0;
+        }
+        return self.bitmap.dict.select1(x as u64).unwrap() as usize + 1;
+    }
 }

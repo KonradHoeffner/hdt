@@ -31,6 +31,15 @@ impl TripleSect {
             TripleSect::Bitmap(bitmap) => bitmap,
         }
     }
+
+    pub fn triples_with_s(self, sid: usize)  {
+        match self {
+            TripleSect::Bitmap(bitmap) => {
+             let start_pos = bitmap.adjlist_y.find(sid);
+             let end_pos = bitmap.adjlist_y.find(sid+1);
+            },
+        };
+    }
 }
 
 #[repr(u8)]
