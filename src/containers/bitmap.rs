@@ -4,13 +4,14 @@ use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
+use rsdict::RsDict;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Debug, Clone)]
 pub struct Bitmap {
     num_bits: usize,
-    data: Vec<usize>,
+    data: RsDict,
 }
 
 impl Bitmap {
@@ -20,14 +21,15 @@ impl Bitmap {
         // `usize` in `self.data`.
 
         // We can get the right usize `block` by dividing by the amount of bits in the usize.
-        let block_index = word_index / USIZE_BITS;
+        //let block_index = word_index / USIZE_BITS;
 
         // We need to determine the value of the bit at a given `bit_index`
-        let bit_index = word_index % USIZE_BITS;
-        let bit_flag = 1_usize << bit_index;
+        //let bit_index = word_index % USIZE_BITS;
+        //let bit_flag = 1_u64 << bit_index;
 
         // If the `bit_flag` is set to one, the bitwise and will be equal to the `bit_flag`.
-        self.data[block_index] & bit_flag == bit_flag
+        //self.data[block_index] & bit_flag == bit_flag
+        self.data.get_bit(word_index as u64)
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
@@ -62,7 +64,7 @@ impl Bitmap {
 
         // reset history for CRC32
         history = Vec::new();
-        let mut data: Vec<usize> = Vec::new();
+        let mut data: Vec<u64> = Vec::new();
 
         // read all but the last word, last word is byte aligned
         let full_byte_amount = ((num_bits - 1) >> 6) * 8;
@@ -71,23 +73,23 @@ impl Bitmap {
         history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize/u64 values
-        for word in full_words.chunks_exact(size_of::<usize>()) {
+        for word in full_words.chunks_exact(size_of::<u64>()) {
             if let Ok(word_data) = <[u8; 8]>::try_from(word) {
-                data.push(usize::from_le_bytes(word_data));
+                data.push(u64::from_le_bytes(word_data));
             } else {
-                return Err(Error::new(Other, "failed to read usize"));
+                return Err(Error::new(Other, "failed to read u64"));
             }
         }
 
         let mut bits_read = 0;
-        let mut last_value: usize = 0;
+        let mut last_value: u64 = 0;
         let last_word_bits = if num_bits == 0 { 0 } else { ((num_bits - 1) % 64) + 1 };
 
         while bits_read < last_word_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
-            last_value |= (buffer[0] as usize) << bits_read;
+            last_value |= (buffer[0] as u64) << bits_read;
             bits_read += 8;
         }
         data.push(last_value);
@@ -104,8 +106,9 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        let bitmap = Bitmap { num_bits, data };
+        let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
 
+        let bitmap = Bitmap { num_bits, data: dict };
         Ok(bitmap)
     }
 }
