@@ -46,7 +46,7 @@ impl HdtReader {
         println!("{:?}", &triple_ids[0..8]);
 
         if let Some(dict) = &mut self.dict {
-            Ok(dict.translate_all_ids(triple_ids))
+            Ok(dict.translate_all_ids(&triple_ids))
         } else {
             Err(Error::new(Other, "Something unexpected went wrong when reading the dictionary."))
         }

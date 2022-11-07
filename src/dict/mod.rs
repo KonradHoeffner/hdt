@@ -67,24 +67,9 @@ impl Dict {
         Ok(Dict::FourSectDict(FourSectDict::read(reader)?))
     }
 
-    pub fn translate_all_ids(&self, triple_ids: Vec<TripleId>) -> Vec<(String, String, String)> {
+    pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
         triple_ids
-            .par_iter()
-            .map(|id: &TripleId| {
-                let subject = self.id_to_string(id.subject_id, IdKind::Subject);
-                let predicate = self.id_to_string(id.predicate_id, IdKind::Predicate);
-                let object = self.id_to_string(id.object_id, IdKind::Object);
-                (subject, predicate, object)
-            })
-            .collect()
-    }
-
-    pub fn triples_with_s(&self, triple_ids: Vec<TripleId>, s: &str) -> Vec<(String, String, String)> {
-        let id = self.string_to_id(s, IdKind::Subject);
-        // TODO this is very inefficient, use binary search instead
-        triple_ids
-            .iter()
-            //.filter(|id: &TripleId| id.subject_id == id)
+            .into_par_iter()
             .map(|id: &TripleId| {
                 let subject = self.id_to_string(id.subject_id, IdKind::Subject);
                 let predicate = self.id_to_string(id.predicate_id, IdKind::Predicate);

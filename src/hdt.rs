@@ -3,6 +3,7 @@ use crate::dict::Dict;
 use crate::dict::IdKind;
 use crate::hdt_reader::HdtReader;
 use crate::header::Header;
+use crate::triples::BitmapIter;
 use crate::triples::TripleId;
 use crate::triples::TripleSect;
 use std::fs::File;
@@ -28,7 +29,6 @@ impl Hdt {
         })
     }
 
-    // TODO: refactor out common code of triples methods
     fn translate_ids<'a>(
         &'a self, ids: impl Iterator<Item = TripleId> + 'a,
     ) -> impl Iterator<Item = (String, String, String)> + 'a {
@@ -41,9 +41,8 @@ impl Hdt {
     }
 
     pub fn triples(&self) -> impl Iterator<Item = (String, String, String)> + '_ {
-        // todo: implement and use into_iter with references for bitmap
-        // current implementation is inefficient due to cloning
-        self.translate_ids(self.triple_sect.clone().read_all_ids().into_iter())
+        let mut ids = self.triple_sect.read_all_ids();
+        self.translate_ids(ids)
     }
 
     pub fn triples_with_s(&self, s: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
@@ -54,9 +53,8 @@ impl Hdt {
             subject_id,
             self.dict.id_to_string(subject_id, IdKind::Subject)
         );
-        self.translate_ids(
-            self.triple_sect.clone().triples_with_s(subject_id),
-        )
+        let mut ids = self.triple_sect.triples_with_s(subject_id);
+        self.translate_ids(ids)
     }
     pub fn triples_with_p(&self, p: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
         // TODO: optimize
@@ -65,13 +63,8 @@ impl Hdt {
         if test != p {
             eprintln!("string_to_id({},IdKind::Predicate) == {}, reverse test {}", p, predicate_id, test);
         }
-        self.translate_ids(
-            self.triple_sect
-                .clone()
-                .read_all_ids()
-                .into_iter()
-                .filter(move |id: &TripleId| id.predicate_id == predicate_id),
-        )
+        let ids = self.triple_sect.read_all_ids();
+        self.translate_ids(ids.filter(move |id: &TripleId| id.predicate_id == predicate_id))
     }
 
     pub fn triples_with_o(&self, o: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
@@ -83,13 +76,8 @@ impl Hdt {
             object_id,
             self.dict.id_to_string(object_id, IdKind::Object)
         );
-        self.translate_ids(
-            self.triple_sect
-                .clone()
-                .read_all_ids()
-                .into_iter()
-                .filter(move |id: &TripleId| id.object_id == object_id),
-        )
+        let ids = self.triple_sect.read_all_ids();
+        self.translate_ids(ids.into_iter().filter(move |id: &TripleId| id.object_id == object_id))
     }
 }
 

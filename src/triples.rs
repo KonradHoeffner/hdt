@@ -26,13 +26,13 @@ impl TripleSect {
         }
     }
 
-    pub fn read_all_ids(self) -> TriplesBitmap {
+    pub fn read_all_ids(&self) -> BitmapIter {
         match self {
-            TripleSect::Bitmap(bitmap) => bitmap,
+            TripleSect::Bitmap(bitmap) => bitmap.into_iter(),
         }
     }
 
-    pub fn triples_with_s(self, subject_id: usize) -> BitmapIter {
+    pub fn triples_with_s(&self, subject_id: usize) -> BitmapIter {
         match self {
             TripleSect::Bitmap(bitmap) => {
                 /*let start_pos = bitmap.adjlist_y.find(sid);
@@ -107,7 +107,7 @@ impl TriplesBitmap {
         Ok(TriplesBitmap { order, adjlist_y, adjlist_z })
     }
 }
-
+/*
 impl IntoIterator for TriplesBitmap {
     type Item = TripleId;
     type IntoIter = BitmapIter;
@@ -116,10 +116,19 @@ impl IntoIterator for TriplesBitmap {
         BitmapIter::new(self)
     }
 }
+*/
+impl<'a> IntoIterator for &'a TriplesBitmap {
+    type Item = TripleId;
+    type IntoIter = BitmapIter<'a>;
 
-pub struct BitmapIter {
+    fn into_iter(self) -> Self::IntoIter {
+        BitmapIter::new(self)
+    }
+}
+
+pub struct BitmapIter<'a> {
     // triples data
-    triples: TriplesBitmap,
+    triples: &'a TriplesBitmap,
 
     // x-coordinate identifier
     x: usize,
@@ -131,8 +140,8 @@ pub struct BitmapIter {
     max_z: usize,
 }
 
-impl BitmapIter {
-    pub fn new(triples: TriplesBitmap) -> Self {
+impl<'a> BitmapIter<'a> {
+    pub fn new(triples: &'a TriplesBitmap) -> Self {
         BitmapIter {
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
@@ -143,7 +152,7 @@ impl BitmapIter {
         }
     }
 
-    pub fn with_s(triples: TriplesBitmap, subject_id: usize) -> Self {
+    pub fn with_s(triples: &'a TriplesBitmap, subject_id: usize) -> Self {
         let min_y = triples.adjlist_y.find(subject_id - 1);
         let min_z = triples.adjlist_z.find(min_y);
         let max_y = triples.adjlist_y.last(subject_id - 1) + 1;
@@ -176,7 +185,7 @@ impl BitmapIter {
     }
 }
 
-impl Iterator for BitmapIter {
+impl<'a> Iterator for BitmapIter<'a> {
     type Item = TripleId;
 
     fn next(&mut self) -> Option<Self::Item> {
