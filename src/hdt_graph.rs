@@ -43,7 +43,7 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &(impl TTerm + ?Sized)) -> String {
     match t.kind() {
-        TermKind::BlankNode => "_:".to_owned() + &t.value().to_string(),
+        TermKind::BlankNode => "_:".to_owned() + &t.value(),
         _ => t.value().to_string(),
     }
 }
@@ -60,16 +60,16 @@ impl Graph for HdtGraph {
     }
 
     fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
-        println!("triples_with_s {}", s.value().to_string());
+        println!("triples_with_s {}", s.value());
         triple_source(self.hdt.triples_with_s(&term_string(s)))
     }
 
     fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
-        println!("triples_with_p {}", p.value().to_string());
-        triple_source(self.hdt.triples_with_p(&p.value().to_string()))
+        println!("triples_with_p {}", p.value());
+        triple_source(self.hdt.triples_with_p(&p.value()))
     }
     fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
-        println!("triples_with_o {}", o.value().to_string());
+        println!("triples_with_o {}", o.value());
         triple_source(self.hdt.triples_with_o(&term_string(o)))
     }
 }

@@ -47,7 +47,6 @@ impl Hdt {
     }
 
     pub fn triples_with_s(&self, s: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
-        // TODO: optimize, for example with binary search
         let subject_id = self.dict.string_to_id(s, IdKind::Subject);
         println!(
             "string_to_id({},IdKind::Subject) == {}, reverse test {}",
@@ -56,11 +55,7 @@ impl Hdt {
             self.dict.id_to_string(subject_id, IdKind::Subject)
         );
         self.translate_ids(
-            self.triple_sect
-                .clone()
-                .read_all_ids()
-                .into_iter()
-                .filter(move |id: &TripleId| id.subject_id == subject_id),
+            self.triple_sect.clone().triples_with_s(subject_id),
         )
     }
     pub fn triples_with_p(&self, p: &str) -> impl Iterator<Item = (String, String, String)> + '_ {

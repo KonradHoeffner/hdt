@@ -32,13 +32,14 @@ impl TripleSect {
         }
     }
 
-    pub fn triples_with_s(self, sid: usize)  {
+    pub fn triples_with_s(self, subject_id: usize) -> BitmapIter {
         match self {
             TripleSect::Bitmap(bitmap) => {
-             let start_pos = bitmap.adjlist_y.find(sid);
-             let end_pos = bitmap.adjlist_y.find(sid+1);
-            },
-        };
+                /*let start_pos = bitmap.adjlist_y.find(sid);
+                let end_pos = bitmap.adjlist_y.find(sid + 1);*/
+                BitmapIter::with_s(bitmap, subject_id)
+            }
+        }
     }
 }
 
@@ -126,16 +127,32 @@ pub struct BitmapIter {
     // current position
     pos_y: usize,
     pos_z: usize,
+    max_y: usize,
+    max_z: usize,
 }
 
 impl BitmapIter {
     pub fn new(triples: TriplesBitmap) -> Self {
         BitmapIter {
-            triples,
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
             pos_z: 0,
+            max_y: triples.adjlist_y.get_max(),
+            max_z: triples.adjlist_z.get_max(),
+            triples,
         }
+    }
+
+    pub fn with_s(triples: TriplesBitmap, subject_id: usize) -> Self {
+        let min_y = triples.adjlist_y.find(subject_id - 1);
+        let min_z = triples.adjlist_z.find(min_y);
+        let max_y = triples.adjlist_y.last(subject_id - 1) + 1;
+        let max_z = triples.adjlist_z.find(max_y);
+        println!(
+            "BitMapIter::with_s subject_id={} min_y={} max_y={} min_z={} max_z={}",
+            subject_id, min_y, max_y, min_z, max_z
+        );
+        BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
 
     fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
@@ -163,11 +180,11 @@ impl Iterator for BitmapIter {
     type Item = TripleId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos_y >= self.triples.adjlist_y.get_max() {
+        if self.pos_y >= self.max_y {
             return None;
         }
 
-        if self.pos_z >= self.triples.adjlist_z.get_max() {
+        if self.pos_z >= self.max_z {
             return None;
         }
 
