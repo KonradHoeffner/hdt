@@ -75,8 +75,8 @@ impl TryFrom<u32> for Order {
 #[derive(Debug, Clone)]
 pub struct TriplesBitmap {
     order: Order,
-    adjlist_y: AdjList,
-    adjlist_z: AdjList,
+    pub adjlist_y: AdjList,
+    pub adjlist_z: AdjList,
 }
 
 impl TriplesBitmap {
@@ -129,10 +129,8 @@ impl<'a> IntoIterator for &'a TriplesBitmap {
 pub struct BitmapIter<'a> {
     // triples data
     triples: &'a TriplesBitmap,
-
     // x-coordinate identifier
     x: usize,
-
     // current position
     pos_y: usize,
     pos_z: usize,

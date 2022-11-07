@@ -10,6 +10,7 @@ pub mod header;
 pub mod hdt;
 #[cfg(feature = "sophia_graph")]
 pub mod hdt_graph;
+pub mod object_iter;
 pub mod triples;
 
 pub use crate::hdt::Hdt;
