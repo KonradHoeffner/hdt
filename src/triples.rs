@@ -1,5 +1,7 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
+use rsdict::RsDict;
+use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
@@ -77,6 +79,7 @@ pub struct TriplesBitmap {
     order: Order,
     pub adjlist_y: AdjList,
     pub adjlist_z: AdjList,
+    op_index: AdjList,
 }
 
 impl TriplesBitmap {
@@ -104,10 +107,56 @@ impl TriplesBitmap {
         let adjlist_y = AdjList::new(sequence_y, bitmap_y);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
-        Ok(TriplesBitmap { order, adjlist_y, adjlist_z })
+        // construct object-based index to traverse from the leaves and support O?? queries
+        // unfinished
+        let entries = adjlist_z.sequence.entries;
+
+        // Could import the multimap crate instead but not worth it for single use.
+        let mut map = BTreeMap::<usize, Vec<usize>>::new();
+
+        // Count the number of appearances of each object
+        for i in 0..entries - 1 {
+            let object = adjlist_z.sequence.get(i);
+            if object == 0 {
+                eprintln!("ERROR: There is a zero value in the Z level.");
+                continue;
+            }
+            if let Some(indexes) = map.get_mut(&object) {
+                indexes.push(i + 1);
+            } else {
+                map.insert(object, vec![i + 1]);
+            }
+        }
+
+        let mut bitmap_index_dict = RsDict::new();
+
+        let mut sequence_index_data = Vec::<usize>::new();
+        for (object, indexes) in map {
+            let mut first = true;
+            for index in indexes {
+                bitmap_index_dict.push(first);
+                first = false;
+                sequence_index_data.push(index);
+            }
+        }
+
+        // reduce memory consumption of index by using adjacency list
+        //let object_count = Vec::with_capacity();
+        //let max_count: usize = 0;
+
+        let bitmap_index = Bitmap { dict: bitmap_index_dict };
+        let sequence_index = Sequence {
+            entries,
+            bits_per_entry: (entries as f64).log2().ceil() as usize, // is this correct?
+            data: sequence_index_data,
+        };
+        let op_index = AdjList::new(sequence_index, bitmap_index);
+
+        Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index })
     }
 }
 /*
+// old iterator without references
 impl IntoIterator for TriplesBitmap {
     type Item = TripleId;
     type IntoIter = BitmapIter;

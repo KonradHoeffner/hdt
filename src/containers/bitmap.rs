@@ -10,12 +10,18 @@ const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Debug, Clone)]
 pub struct Bitmap {
-    num_bits: usize,
+    //num_bits: usize,
     pub dict: RsDict,
-    pub data: Vec<u64>,
+    //pub data: Vec<u64>,
 }
 
 impl Bitmap {
+    pub fn new(data: Vec<u64>) -> Self {
+        let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
+        //let dict = RsDict::from_blocks((data.clone() as Vec<u64>).into_iter()); // keep data. faster get_bit but more RAM.
+        Bitmap { dict }
+    }
+
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
         // Each block in the bitmap has `USIZE_BITS` many bits. If `usize` is 64 bits, and we are
         // looking for the 65th word in the sequence this means we need the first bit of the second
@@ -108,10 +114,6 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        //let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
-        let dict = RsDict::from_blocks((data.clone() as Vec<u64>).into_iter()); // keep data. faster get_bit but more RAM.
-
-        let bitmap = Bitmap { num_bits, data, dict };
-        Ok(bitmap)
+        Ok(Self::new(data))
     }
 }
