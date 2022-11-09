@@ -20,7 +20,7 @@ impl AdjList {
         self.sequence.get(word_index)
     }
 
-    pub fn get_max(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.sequence.entries
     }
 
@@ -28,10 +28,14 @@ impl AdjList {
         if (x <= 0) {
             return 0;
         }
-        self.bitmap.dict.select1(x as u64).unwrap() as usize + 1
+        // hdt counts from 1
+        //self.bitmap.dict.select1(x as u64).unwrap()  as usize +1
+        // rsdict has nonzero value for 0, is that correct? adjust for that.
+        self.bitmap.dict.select1(x as u64 - 1).unwrap() as usize + 1
     }
 
     pub fn last(&self, x: usize) -> usize {
+        // last(x) = find(x+1)-1
         self.bitmap.dict.select1(x as u64 + 1).unwrap() as usize
     }
 }

@@ -27,7 +27,7 @@ impl<'a> ObjectIter<'a> {
 impl<'a> Iterator for ObjectIter<'a> {
     type Item = TripleId;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos_index >= self.max_index || self.o == 0 {
+        if self.pos_index > self.max_index || self.o == 0 {
             if self.o == 0 {
                 eprintln!("object is 0, cant iterate");
             }
@@ -36,7 +36,8 @@ impl<'a> Iterator for ObjectIter<'a> {
         let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let pos_y = self.triples.adjlist_z.bitmap.dict.select1(pos_z).unwrap();
         let y = self.triples.adjlist_y.sequence.get(pos_y as usize);
-        let x = self.triples.adjlist_y.bitmap.dict.rank(pos_y, true);
-        Some(self.triples.coord_to_triple(x as usize, y as usize, self.o).unwrap())
+        let x = self.triples.adjlist_y.bitmap.dict.inclusive_rank(pos_y, true);
+        self.pos_index += 1;
+        Some(self.triples.coord_to_triple(x as usize, y, self.o).unwrap())
     }
 }

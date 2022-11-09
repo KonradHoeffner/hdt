@@ -112,6 +112,7 @@ impl TriplesBitmap {
 
         // construct object-based index to traverse from the leaves and support O?? queries
         // unfinished
+        print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
 
         // Could import the multimap crate instead but not worth it for single use.
@@ -125,6 +126,9 @@ impl TriplesBitmap {
             if object == 0 {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
+            }
+            if object == 86 {
+                println!("finland aid found");
             }
             if let Some(indexes) = map.get_mut(&object) {
                 indexes.push(i + 1);
@@ -156,7 +160,7 @@ impl TriplesBitmap {
             data: sequence_index_data,
         };
         let op_index = AdjList::new(sequence_index, bitmap_index);
-
+        println!("...finished constructing OPS index");
         Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index })
     }
 
@@ -218,16 +222,21 @@ impl<'a> BitmapIter<'a> {
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
             pos_z: 0,
-            max_y: triples.adjlist_y.get_max(),
-            max_z: triples.adjlist_z.get_max(),
+            max_y: triples.adjlist_y.len(), // exclusive
+            max_z: triples.adjlist_z.len(), // exclusive
             triples,
         }
     }
 
+    /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
     pub fn with_s(triples: &'a TriplesBitmap, subject_id: usize) -> Self {
+        /*let ay = &triples.adjlist_y;
+        for i in 1..3 {
+        println!("{} {}",ay.find(i), ay.last(i));
+        }*/
         let min_y = triples.adjlist_y.find(subject_id - 1);
         let min_z = triples.adjlist_z.find(min_y);
-        let max_y = triples.adjlist_y.last(subject_id - 1) + 1;
+        let max_y = triples.adjlist_y.find(subject_id);
         let max_z = triples.adjlist_z.find(max_y);
         println!(
             "BitMapIter::with_s subject_id={} min_y={} max_y={} min_z={} max_z={}",
@@ -306,5 +315,46 @@ mod tests {
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
+
+        let triples_with_s = [
+            vec![(1, 90, 13304), (1, 101, 19384), (1, 111, 75817)],
+            vec![(5, 90, 13017), (5, 101, 14748), (5, 111, 75817)],
+            vec![(7, 90, 15802), (7, 101, 15758), (7, 104, 17490), (7, 105, 18547), (7, 111, 75817)],
+        ];
+        for ts in triples_with_s {
+            assert_eq!(
+                ts.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>(),
+                triples.triples_with_s(ts[0].0).collect::<Vec<TripleId>>()
+            );
+        }
+        //     assert_eq!(v,triples_with_s_7);
+
+        /*
+          *
+                TripleId {
+                subject_id: 7,
+                predicate_id: 90,
+                object_id: 15802,
+            },
+            TripleId {
+                subject_id: 7,
+                predicate_id: 101,
+                object_id: 15758,
+            },
+            TripleId {
+                subject_id: 7,
+                predicate_id: 104,
+                object_id: 17490,
+            },
+            TripleId {
+                subject_id: 7,
+                predicate_id: 105,
+                object_id: 18547,
+            },
+            TripleId {
+                subject_id: 7,
+                predicate_id: 111,
+                object_id: 75817,
+        */
     }
 }
