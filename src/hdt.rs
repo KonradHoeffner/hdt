@@ -68,16 +68,15 @@ impl Hdt {
     }
 
     pub fn triples_with_o(&self, o: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
-        // TODO: optimize
         let object_id = self.dict.string_to_id(o, IdKind::Object);
         println!(
-            "string_to_id({},IdKind::Subject) == {}, reverse test {}",
+            "string_to_id({},IdKind::Object) == {}, reverse test {}",
             o,
             object_id,
             self.dict.id_to_string(object_id, IdKind::Object)
         );
-        let ids = self.triple_sect.read_all_ids();
-        self.translate_ids(ids.into_iter().filter(move |id: &TripleId| id.object_id == object_id))
+        let ids = self.triple_sect.triples_with_o(object_id);
+        self.translate_ids(ids)
     }
 }
 

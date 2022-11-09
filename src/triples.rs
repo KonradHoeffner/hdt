@@ -1,4 +1,5 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
+use crate::object_iter::ObjectIter;
 use crate::ControlInfo;
 use rsdict::RsDict;
 use std::collections::BTreeMap;
@@ -36,11 +37,13 @@ impl TripleSect {
 
     pub fn triples_with_s(&self, subject_id: usize) -> BitmapIter {
         match self {
-            TripleSect::Bitmap(bitmap) => {
-                /*let start_pos = bitmap.adjlist_y.find(sid);
-                let end_pos = bitmap.adjlist_y.find(sid + 1);*/
-                BitmapIter::with_s(bitmap, subject_id)
-            }
+            TripleSect::Bitmap(bitmap) => BitmapIter::with_s(bitmap, subject_id),
+        }
+    }
+
+    pub fn triples_with_o(&self, object_id: usize) -> ObjectIter {
+        match self {
+            TripleSect::Bitmap(bitmap) => ObjectIter::new(bitmap, object_id),
         }
     }
 }
