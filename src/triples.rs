@@ -79,7 +79,7 @@ pub struct TriplesBitmap {
     order: Order,
     pub adjlist_y: AdjList,
     pub adjlist_z: AdjList,
-    op_index: AdjList,
+    pub op_index: AdjList,
 }
 
 impl TriplesBitmap {
@@ -112,6 +112,8 @@ impl TriplesBitmap {
         let entries = adjlist_z.sequence.entries;
 
         // Could import the multimap crate instead but not worth it for single use.
+        // Alternatively, the index could be directly created using sequence which would save memory during index generation.
+        // See https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
         let mut map = BTreeMap::<usize, Vec<usize>>::new();
 
         // Count the number of appearances of each object
@@ -153,6 +155,26 @@ impl TriplesBitmap {
         let op_index = AdjList::new(sequence_index, bitmap_index);
 
         Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index })
+    }
+
+    pub fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
+        use io::Error;
+        use io::ErrorKind::InvalidData;
+        if x == 0 || y == 0 || z == 0 {
+            return Err(Error::new(
+                InvalidData,
+                format!("({},{},{}) none of the components of a triple may be 0.", x, y, z),
+            ));
+        }
+        match self.order {
+            Order::SPO => Ok(TripleId::new(x, y, z)),
+            Order::SOP => Ok(TripleId::new(x, z, y)),
+            Order::PSO => Ok(TripleId::new(y, x, z)),
+            Order::POS => Ok(TripleId::new(y, z, x)),
+            Order::OSP => Ok(TripleId::new(z, x, y)),
+            Order::OPS => Ok(TripleId::new(z, y, x)),
+            Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
+        }
     }
 }
 /*
@@ -210,26 +232,6 @@ impl<'a> BitmapIter<'a> {
         );
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
-
-    fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
-        if x == 0 || y == 0 || z == 0 {
-            return Err(Error::new(
-                InvalidData,
-                format!("({},{},{}) none of the components of a triple may be 0.", x, y, z),
-            ));
-        }
-        match self.triples.order {
-            Order::SPO => Ok(TripleId::new(x, y, z)),
-            Order::SOP => Ok(TripleId::new(x, z, y)),
-            Order::PSO => Ok(TripleId::new(y, x, z)),
-            Order::POS => Ok(TripleId::new(y, z, x)),
-            Order::OSP => Ok(TripleId::new(z, x, y)),
-            Order::OPS => Ok(TripleId::new(z, y, x)),
-            Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
-        }
-    }
 }
 
 impl<'a> Iterator for BitmapIter<'a> {
@@ -249,7 +251,7 @@ impl<'a> Iterator for BitmapIter<'a> {
         let z = self.triples.adjlist_z.get_id(self.pos_z);
         //println!("x y z {} {} {}", self.x,y,z);
         //println!("{} {}", self.triples.adjlist_y.at_last_sibling(self.pos_y), self.triples.adjlist_z.at_last_sibling(self.pos_z));
-        let triple_id = self.coord_to_triple(self.x, y, z).unwrap();
+        let triple_id = self.triples.coord_to_triple(self.x, y, z).unwrap();
 
         // theoretically the second condition should only be true if the first is as well but in practise it wasn't, which screwed up the subject identifiers
         // fixed by moving the second condition inside the first one but there may be another reason for the bug occuring in the first place
