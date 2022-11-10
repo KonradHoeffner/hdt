@@ -112,7 +112,7 @@ impl TriplesBitmap {
 
         // construct object-based index to traverse from the leaves and support O?? queries
         // unfinished
-        print!("Constructing OPS index");
+        println!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
 
         // Could import the multimap crate instead but not worth it for single use.
@@ -127,16 +127,20 @@ impl TriplesBitmap {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            if object == 86 {
-                println!("finland aid found");
+            /*
+             if object == 162 {
+                println!("162 found at adjlist_z pos {}",i);
             }
+            */
             if let Some(indexes) = map.get_mut(&object) {
-                indexes.push(i + 1);
+                indexes.push(i); // hdt index counts from 1 but we count from 0 for simplicity
             } else {
-                map.insert(object, vec![i + 1]);
+                map.insert(object, vec![i]);
             }
         }
+        //println!("pos for 162 {:?}", map.get(&162));
 
+        // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
 
         let mut sequence_index_data = Vec::<usize>::new();
@@ -148,17 +152,29 @@ impl TriplesBitmap {
                 sequence_index_data.push(index);
             }
         }
-
-        // reduce memory consumption of index by using adjacency list
-        //let object_count = Vec::with_capacity();
-        //let max_count: usize = 0;
+        /*
+                println!("index test index pos {}",bitmap_index_dict.select1(162-1).unwrap());
+                println!("index test {}",sequence_index_data.get(bitmap_index_dict.select1(162-1).unwrap() as usize).unwrap());
+                println!("adjlist_z there {}",adjlist_z.sequence.get(91328));
+                let y_pos = adjlist_z.bitmap.dict.rank(91328,true) as usize;
+                println!("y_pos {}",y_pos);
+                let y = adjlist_y.sequence.get(y_pos);
+                println!("y {}",y);
+        */
 
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
+        // we don't actually save space with 64 bits TODO compress into lower bit sequence
         let sequence_index = Sequence {
             entries,
-            bits_per_entry: (entries as f64).log2().ceil() as usize, // is this correct?
+            bits_per_entry: 64, //(entries as f64).log2().ceil() as usize, // is this correct?
             data: sequence_index_data,
         };
+        /*
+        println!(
+            "sequence index test {}",
+            sequence_index.get(bitmap_index.dict.select1(162 - 1).unwrap() as usize)
+        );
+        */
         let op_index = AdjList::new(sequence_index, bitmap_index);
         println!("...finished constructing OPS index");
         Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index })
@@ -238,10 +254,10 @@ impl<'a> BitmapIter<'a> {
         let min_z = triples.adjlist_z.find(min_y);
         let max_y = triples.adjlist_y.find(subject_id);
         let max_z = triples.adjlist_z.find(max_y);
-        println!(
+        /*println!(
             "BitMapIter::with_s subject_id={} min_y={} max_y={} min_z={} max_z={}",
             subject_id, min_y, max_y, min_z, max_z
-        );
+        );*/
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
 }
@@ -311,50 +327,33 @@ mod tests {
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 242256);
-        println!("{:#?}", &v[0..30]);
+        //println!("{:#?}", &v[0..30]);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
-
+        //for i in 1..200  {println!("{:?}",(&v).into_iter().filter(|tid| tid.object_id == i).collect::<Vec<&TripleId>>());}
         let triples_with_s = [
             vec![(1, 90, 13304), (1, 101, 19384), (1, 111, 75817)],
             vec![(5, 90, 13017), (5, 101, 14748), (5, 111, 75817)],
             vec![(7, 90, 15802), (7, 101, 15758), (7, 104, 17490), (7, 105, 18547), (7, 111, 75817)],
         ];
+        // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
         for ts in triples_with_s {
             assert_eq!(
                 ts.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>(),
                 triples.triples_with_s(ts[0].0).collect::<Vec<TripleId>>()
             );
         }
-        //     assert_eq!(v,triples_with_s_7);
 
-        /*
-          *
-                TripleId {
-                subject_id: 7,
-                predicate_id: 90,
-                object_id: 15802,
-            },
-            TripleId {
-                subject_id: 7,
-                predicate_id: 101,
-                object_id: 15758,
-            },
-            TripleId {
-                subject_id: 7,
-                predicate_id: 104,
-                object_id: 17490,
-            },
-            TripleId {
-                subject_id: 7,
-                predicate_id: 105,
-                object_id: 18547,
-            },
-            TripleId {
-                subject_id: 7,
-                predicate_id: 111,
-                object_id: 75817,
-        */
+        let triples_with_o = [
+            vec![(7077, 129, 162), (12288, 150, 162), (23261, 18, 162)],
+            vec![(7088, 129, 184), (19818, 18, 184)],
+            vec![(1364, 14, 193)],
+        ];
+        for to in triples_with_o {
+            let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
+            //println!("{:?}", tids);
+            assert_eq!(tids, triples.triples_with_o(to[0].2).collect::<Vec<TripleId>>());
+        }
     }
 }

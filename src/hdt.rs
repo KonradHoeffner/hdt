@@ -45,17 +45,15 @@ impl Hdt {
         self.translate_ids(ids)
     }
 
-    pub fn triples_with_s(&self, s: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
+    pub fn triples_with_s(&self, s: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
         let subject_id = self.dict.string_to_id(s, IdKind::Subject);
-        println!(
-            "string_to_id({},IdKind::Subject) == {}, reverse test {}",
-            s,
-            subject_id,
-            self.dict.id_to_string(subject_id, IdKind::Subject)
-        );
+        if (subject_id == 0) {
+            return Box::new(std::iter::empty());
+        }
         let mut ids = self.triple_sect.triples_with_s(subject_id);
-        self.translate_ids(ids)
+        Box::new(self.translate_ids(ids))
     }
+
     pub fn triples_with_p(&self, p: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
         // TODO: optimize
         let predicate_id = self.dict.string_to_id(p, IdKind::Predicate);
@@ -67,16 +65,13 @@ impl Hdt {
         self.translate_ids(ids.filter(move |id: &TripleId| id.predicate_id == predicate_id))
     }
 
-    pub fn triples_with_o(&self, o: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
+    pub fn triples_with_o(&self, o: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
         let object_id = self.dict.string_to_id(o, IdKind::Object);
-        println!(
-            "string_to_id({},IdKind::Object) == {}, reverse test {}",
-            o,
-            object_id,
-            self.dict.id_to_string(object_id, IdKind::Object)
-        );
+        if (object_id == 0) {
+            return Box::new(std::iter::empty());
+        }
         let ids = self.triple_sect.triples_with_o(object_id);
-        self.translate_ids(ids)
+        Box::new(self.translate_ids(ids))
     }
 }
 
