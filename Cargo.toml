@@ -15,7 +15,7 @@ iref = "2.2"
 langtag = "^0.3.2"
 ntriple = "^0.1.1"
 rayon = "1.5.3"
-rsdict = "0.0.5"
+rsdict = { version = "0.0.5", features = ["simd"] }
 sophia = { version = "0.7", optional = true }
 
 [features]
