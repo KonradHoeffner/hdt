@@ -1,5 +1,6 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::object_iter::ObjectIter;
+use crate::property_iter::PropertyIter;
 use crate::ControlInfo;
 use rsdict::RsDict;
 use std::collections::BTreeMap;
@@ -8,6 +9,8 @@ use std::io;
 use std::io::BufRead;
 
 #[derive(Debug, Clone)]
+// TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
+// The unnecessary matches make the code more verbose.
 pub enum TripleSect {
     Bitmap(TriplesBitmap),
 }
@@ -44,6 +47,12 @@ impl TripleSect {
     pub fn triples_with_o(&self, object_id: usize) -> ObjectIter {
         match self {
             TripleSect::Bitmap(bitmap) => ObjectIter::new(bitmap, object_id),
+        }
+    }
+
+    pub fn triples_with_p(&self, property_id: usize) -> PropertyIter {
+        match self {
+            TripleSect::Bitmap(bitmap) => PropertyIter::new(bitmap, property_id),
         }
     }
 }
@@ -112,7 +121,7 @@ impl TriplesBitmap {
 
         // construct object-based index to traverse from the leaves and support O?? queries
         // unfinished
-        println!("Constructing OPS index");
+        print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
 
         // Could import the multimap crate instead but not worth it for single use.
@@ -354,6 +363,20 @@ mod tests {
             let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
             //println!("{:?}", tids);
             assert_eq!(tids, triples.triples_with_o(to[0].2).collect::<Vec<TripleId>>());
+        }
+
+        for i in 1..200 {
+            println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());
+        }
+        let triples_with_p = [
+            vec![(7077, 129, 162), (12288, 150, 162), (23261, 18, 162)],
+            vec![(7088, 129, 184), (19818, 18, 184)],
+            vec![(1364, 14, 193)],
+        ];
+        for to in triples_with_p {
+            let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
+            //println!("{:?}", tids);
+            //assert_eq!(tids, triples.triples_with_p(to[0].2).collect::<Vec<TripleId>>());
         }
     }
 }

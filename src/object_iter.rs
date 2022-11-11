@@ -6,6 +6,7 @@ use crate::triples::TriplesBitmap;
 // actually only an object iterator when SPO order is used
 // TODO test with other orders and fix if broken
 
+/// Iterator over all triples with a given object ID, answering an (?S,?P,O) query.
 pub struct ObjectIter<'a> {
     triples: &'a TriplesBitmap,
     o: usize,
@@ -14,6 +15,8 @@ pub struct ObjectIter<'a> {
 }
 
 impl<'a> ObjectIter<'a> {
+    /// Create a new iterator over all triples with the given object ID.
+    /// Panics if the object does not exist.
     pub fn new(triples: &'a TriplesBitmap, o: usize) -> Self {
         if o == 0 {
             panic!("object 0 does not exist, cant iterate");
