@@ -219,6 +219,8 @@ impl TriplesBitmap {
     {
         //let occs = adjlist_y.sequence.select...
     }
+
+    //pub fn find_ob
 }
 /*
 // old iterator without references
@@ -377,6 +379,7 @@ mod tests {
         }
 
         //for i in 1..150 {println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());}
+        println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == 4).collect::<Vec<&TripleId>>());
 
         let triples_with_p = [vec![(3232, 4, 3233), (3545, 4, 3643), (3642, 4, 3643), (6551, 4, 67719)]];
         for to in triples_with_p {

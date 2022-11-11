@@ -54,15 +54,13 @@ impl Hdt {
         Box::new(self.translate_ids(ids))
     }
 
-    pub fn triples_with_p(&self, p: &str) -> impl Iterator<Item = (String, String, String)> + '_ {
-        // TODO: optimize
+    pub fn triples_with_p(&self, p: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
         let predicate_id = self.dict.string_to_id(p, IdKind::Predicate);
-        let test = self.dict.id_to_string(predicate_id, IdKind::Predicate);
-        if test != p {
-            eprintln!("string_to_id({},IdKind::Predicate) == {}, reverse test {}", p, predicate_id, test);
+        if (predicate_id == 0) {
+            return Box::new(std::iter::empty());
         }
-        let ids = self.triple_sect.read_all_ids();
-        self.translate_ids(ids.filter(move |id: &TripleId| id.predicate_id == predicate_id))
+        let mut ids = self.triple_sect.triples_with_p(predicate_id);
+        Box::new(self.translate_ids(ids))
     }
 
     pub fn triples_with_o(&self, o: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
