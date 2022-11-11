@@ -1,12 +1,13 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::object_iter::ObjectIter;
-use crate::property_iter::PropertyIter;
+use crate::predicate_iter::PredicateIter;
 use crate::ControlInfo;
 use rsdict::RsDict;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
+use sucds::WaveletMatrix;
 
 #[derive(Debug, Clone)]
 // TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
@@ -50,9 +51,9 @@ impl TripleSect {
         }
     }
 
-    pub fn triples_with_p(&self, property_id: usize) -> PropertyIter {
+    pub fn triples_with_p(&self, predicate_id: usize) -> PredicateIter {
         match self {
-            TripleSect::Bitmap(bitmap) => PropertyIter::new(bitmap, property_id),
+            TripleSect::Bitmap(bitmap) => PredicateIter::new(bitmap, predicate_id),
         }
     }
 }
@@ -92,6 +93,7 @@ pub struct TriplesBitmap {
     pub adjlist_y: AdjList,
     pub adjlist_z: AdjList,
     pub op_index: AdjList,
+    pub wavelet_y: WaveletMatrix,
 }
 
 impl TriplesBitmap {
@@ -186,7 +188,10 @@ impl TriplesBitmap {
         */
         let op_index = AdjList::new(sequence_index, bitmap_index);
         println!("...finished constructing OPS index");
-        Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index })
+        print!("Start constructing wavelet matrix");
+        let wavelet_y = WaveletMatrix::from_ints(adjlist_y.sequence.into_iter()).unwrap();
+        println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
+        Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index, wavelet_y })
     }
 
     pub fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
@@ -207,6 +212,12 @@ impl TriplesBitmap {
             Order::OPS => Ok(TripleId::new(z, y, x)),
             Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
         }
+    }
+
+    /// Martinez et al. 2012 page 8
+    pub fn find_subj(&self, p: usize) //-> (usize,impl Iterator<usize>)
+    {
+        //let occs = adjlist_y.sequence.select...
     }
 }
 /*
@@ -365,18 +376,13 @@ mod tests {
             assert_eq!(tids, triples.triples_with_o(to[0].2).collect::<Vec<TripleId>>());
         }
 
-        for i in 1..200 {
-            println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());
-        }
-        let triples_with_p = [
-            vec![(7077, 129, 162), (12288, 150, 162), (23261, 18, 162)],
-            vec![(7088, 129, 184), (19818, 18, 184)],
-            vec![(1364, 14, 193)],
-        ];
+        //for i in 1..150 {println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());}
+
+        let triples_with_p = [vec![(3232, 4, 3233), (3545, 4, 3643), (3642, 4, 3643), (6551, 4, 67719)]];
         for to in triples_with_p {
             let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
             //println!("{:?}", tids);
-            //assert_eq!(tids, triples.triples_with_p(to[0].2).collect::<Vec<TripleId>>());
+            assert_eq!(tids, triples.triples_with_p(to[0].1).collect::<Vec<TripleId>>());
         }
     }
 }
