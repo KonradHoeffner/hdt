@@ -13,6 +13,32 @@ pub struct Sequence {
     pub data: Vec<usize>,
 }
 
+pub struct SequenceIter<'a> {
+    sequence: &'a Sequence,
+    i: usize,
+}
+
+impl<'a> Iterator for SequenceIter<'a> {
+    type Item = usize;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.i >= self.sequence.entries {
+            return None;
+        }
+        let e = self.sequence.get(self.i);
+        self.i += 1;
+        Some(e)
+    }
+}
+
+impl<'a> IntoIterator for &'a Sequence {
+    type Item = usize;
+    type IntoIter = SequenceIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        SequenceIter { sequence: self, i: 0 }
+    }
+}
+
 impl Sequence {
     pub fn get(&self, index: usize) -> usize {
         let scaled_index = index * self.bits_per_entry;
