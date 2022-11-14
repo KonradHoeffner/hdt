@@ -4,7 +4,6 @@ pub mod containers;
 // types for representing dictionaries
 pub mod dict;
 // types for representing the header
-pub mod hdt_reader;
 pub mod header;
 // types for representing triple sections
 pub mod hdt;

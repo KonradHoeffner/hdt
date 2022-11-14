@@ -1,7 +1,6 @@
 use crate::containers::ControlInfo;
 use crate::dict::Dict;
 use crate::dict::IdKind;
-use crate::hdt_reader::HdtReader;
 use crate::header::Header;
 use crate::triples::BitmapIter;
 use crate::triples::TripleId;
@@ -17,16 +16,12 @@ pub struct Hdt {
 }
 
 impl Hdt {
-    pub fn new(file: File) -> io::Result<Self> {
-        let mut hdtr = HdtReader::new(file);
-        hdtr.read_meta()?;
-        let triple_sect = TripleSect::read(&mut hdtr.reader)?;
-        Ok(Hdt {
-            global_ci: hdtr.global_ci.unwrap(),
-            header: hdtr.header.unwrap(),
-            dict: hdtr.dict.unwrap(),
-            triple_sect,
-        })
+    pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
+        let global_ci = ControlInfo::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
+        let dict = Dict::read(&mut reader)?;
+        let triple_sect = TripleSect::read(&mut reader)?;
+        Ok(Hdt { global_ci, header, dict, triple_sect })
     }
 
     fn translate_ids<'a>(
@@ -85,7 +80,7 @@ mod tests {
         // let file = File::open("data/wordnet.hdt").expect("error opening file");
         //let file = File::open("tests/resources/qbench2.hdt").expect("error opening file");
         //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
-        let hdt = Hdt::new(file).unwrap();
+        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let mut triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();
         assert_eq!(v.len(), 242256);

@@ -587,7 +587,7 @@ mod tests {
         let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
         //let file = File::open("tests/resources/snik.hdt").expect("error opening file");
         //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
-        let hdt = Hdt::new(file).unwrap();
+        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
         let mut triples = graph.triples();
         println!("first triple: {:?}", triples.next().unwrap());
