@@ -122,7 +122,6 @@ impl TriplesBitmap {
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
         // construct object-based index to traverse from the leaves and support O?? queries
-        // unfinished
         print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
 
@@ -138,18 +137,12 @@ impl TriplesBitmap {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            /*
-             if object == 162 {
-                println!("162 found at adjlist_z pos {}",i);
-            }
-            */
             if let Some(indexes) = map.get_mut(&object) {
                 indexes.push(i); // hdt index counts from 1 but we count from 0 for simplicity
             } else {
                 map.insert(object, vec![i]);
             }
         }
-        //println!("pos for 162 {:?}", map.get(&162));
 
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
@@ -163,15 +156,6 @@ impl TriplesBitmap {
                 sequence_index_data.push(index);
             }
         }
-        /*
-                println!("index test index pos {}",bitmap_index_dict.select1(162-1).unwrap());
-                println!("index test {}",sequence_index_data.get(bitmap_index_dict.select1(162-1).unwrap() as usize).unwrap());
-                println!("adjlist_z there {}",adjlist_z.sequence.get(91328));
-                let y_pos = adjlist_z.bitmap.dict.rank(91328,true) as usize;
-                println!("y_pos {}",y_pos);
-                let y = adjlist_y.sequence.get(y_pos);
-                println!("y {}",y);
-        */
 
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         // we don't actually save space with 64 bits TODO compress into lower bit sequence
@@ -180,12 +164,6 @@ impl TriplesBitmap {
             bits_per_entry: 64, //(entries as f64).log2().ceil() as usize, // is this correct?
             data: sequence_index_data,
         };
-        /*
-        println!(
-            "sequence index test {}",
-            sequence_index.get(bitmap_index.dict.select1(162 - 1).unwrap() as usize)
-        );
-        */
         let op_index = AdjList::new(sequence_index, bitmap_index);
         println!("...finished constructing OPS index");
         print!("Start constructing wavelet matrix");
@@ -213,26 +191,8 @@ impl TriplesBitmap {
             Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
         }
     }
-
-    /// Martinez et al. 2012 page 8
-    pub fn find_subj(&self, p: usize) //-> (usize,impl Iterator<usize>)
-    {
-        //let occs = adjlist_y.sequence.select...
-    }
-
-    //pub fn find_ob
 }
-/*
-// old iterator without references
-impl IntoIterator for TriplesBitmap {
-    type Item = TripleId;
-    type IntoIter = BitmapIter;
 
-    fn into_iter(self) -> Self::IntoIter {
-        BitmapIter::new(self)
-    }
-}
-*/
 impl<'a> IntoIterator for &'a TriplesBitmap {
     type Item = TripleId;
     type IntoIter = BitmapIter<'a>;
@@ -268,18 +228,10 @@ impl<'a> BitmapIter<'a> {
 
     /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
     pub fn with_s(triples: &'a TriplesBitmap, subject_id: usize) -> Self {
-        /*let ay = &triples.adjlist_y;
-        for i in 1..3 {
-        println!("{} {}",ay.find(i), ay.last(i));
-        }*/
         let min_y = triples.adjlist_y.find(subject_id - 1);
         let min_z = triples.adjlist_z.find(min_y);
         let max_y = triples.adjlist_y.find(subject_id);
         let max_z = triples.adjlist_z.find(max_y);
-        /*println!(
-            "BitMapIter::with_s subject_id={} min_y={} max_y={} min_z={} max_z={}",
-            subject_id, min_y, max_y, min_z, max_z
-        );*/
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
 }
@@ -296,11 +248,8 @@ impl<'a> Iterator for BitmapIter<'a> {
             return None;
         }
 
-        //println!("{} pos {} {} ",self.x,self.pos_y,self.pos_z);
         let y = self.triples.adjlist_y.get_id(self.pos_y);
         let z = self.triples.adjlist_z.get_id(self.pos_z);
-        //println!("x y z {} {} {}", self.x,y,z);
-        //println!("{} {}", self.triples.adjlist_y.at_last_sibling(self.pos_y), self.triples.adjlist_z.at_last_sibling(self.pos_z));
         let triple_id = self.triples.coord_to_triple(self.x, y, z).unwrap();
 
         // theoretically the second condition should only be true if the first is as well but in practise it wasn't, which screwed up the subject identifiers
@@ -311,8 +260,6 @@ impl<'a> Iterator for BitmapIter<'a> {
             }
             self.pos_y += 1;
         }
-        //if ! self.triples.adjlist_y.at_last_sibling(self.pos_y) && (!self.triples.adjlist_z.at_last_sibling(self.pos_z)) {self.x-=1;}
-
         self.pos_z += 1;
 
         Some(triple_id)
@@ -349,7 +296,6 @@ mod tests {
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 327);
-        //println!("{:#?}", &v[0..30]);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);

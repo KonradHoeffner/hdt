@@ -45,8 +45,6 @@ impl<'a> Iterator for PredicateIter<'a> {
             println!("**** found predicate {} between {} and {} (exclusive)", self.p, self.pos_z, pos_z_end);
 
             self.os = pos_z_end - self.pos_z;
-            //println!("os os {}",self.os);
-            //                                      self.os = 0;
         } else {
             self.os -= 1;
             self.pos_z += 1;
