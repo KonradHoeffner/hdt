@@ -2,7 +2,6 @@ use crate::triples::TripleId;
 use crate::triples::TriplesBitmap;
 
 /// Iterator over all triples with a given property ID, answering an (?S,P,?O) query.
-/// TODO implement
 pub struct PredicateIter<'a> {
     triples: &'a TriplesBitmap,
     s: usize,
@@ -10,8 +9,7 @@ pub struct PredicateIter<'a> {
     i: usize,
     os: usize,
     pos_z: usize,
-    occs: usize, /*pos_index: usize,
-                 max_index: usize,*/
+    occs: usize,
 }
 
 impl<'a> PredicateIter<'a> {
@@ -22,13 +20,12 @@ impl<'a> PredicateIter<'a> {
             panic!("object 0 does not exist, cant iterate");
         }
         let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p);
-        println!("the predicate {} occurs {} times", p, occs);
+        println!("the predicate {} occurs {} times in the index", p, occs);
         //Self::find_subj(triples, p);
         PredicateIter { triples, p, i: 1, pos_z: 0, os: 0, s: 0, occs }
     }
 }
 
-// TODO: simplify?
 impl<'a> Iterator for PredicateIter<'a> {
     type Item = TripleId;
     fn next(&mut self) -> Option<Self::Item> {
@@ -43,21 +40,22 @@ impl<'a> Iterator for PredicateIter<'a> {
             self.s = self.triples.adjlist_y.bitmap.dict.rank(pos_y, true) as usize + 1;
             // *****************************************************
             // SP can have multiple O
-            self.pos_z = self.triples.adjlist_z.bitmap.dict.select(pos_y, true).unwrap() as usize;
-            let pos_z_end = self.triples.adjlist_z.bitmap.dict.select(pos_y + 1, true).unwrap() as usize;
-            self.os = pos_z_end - self.pos_z - 1; // is this correct? it causes the test to fail. but i think the test is wrong instead.
-                                                  //println!("os os {}",self.os);
+            self.pos_z = self.triples.adjlist_z.bitmap.dict.select(pos_y - 1, true).unwrap() as usize + 1;
+            let pos_z_end = self.triples.adjlist_z.bitmap.dict.select(pos_y, true).unwrap() as usize;
+            println!("**** found predicate {} between {} and {} (exclusive)", self.p, self.pos_z, pos_z_end);
+
+            self.os = pos_z_end - self.pos_z;
+            //println!("os os {}",self.os);
+            //                                      self.os = 0;
         } else {
             self.os -= 1;
             self.pos_z += 1;
         }
+
         let o = self.triples.adjlist_z.sequence.get(self.pos_z);
         if (self.os == 0) {
             self.i += 1;
         }
-        //return None;
-        //return Some(self.triples.coord_to_triple(s as usize, self.p, 99).unwrap());
         return Some(self.triples.coord_to_triple(self.s, self.p, o).unwrap());
-        //Some(self.triples.coord_to_triple(x as usize, self.p, z).unwrap())
     }
 }
