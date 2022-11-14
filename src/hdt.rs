@@ -60,22 +60,10 @@ mod tests {
 
     #[test]
     fn triples() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
-        //let file = File::open("tests/resources/snik.hdt").expect("error opening file");
-        // let file = File::open("data/wordnet.hdt").expect("error opening file");
-        //let file = File::open("tests/resources/qbench2.hdt").expect("error opening file");
-        //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let mut triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();
-        assert_eq!(v.len(), 242256);
-        //assert_eq!(v.len(), 42742);
-        //println!("{:?}",triples.iter().filter(|(s,p,o)| s == "<http://ymatsuo.com/>"));
-        //<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Thing> .
-        let sample = &v[0..8];
-        println!("triples {:#?}", sample);
-        let tws = hdt.triples_with(IdKind::Subject,"http://ymatsuo.com/");
-        let twsv: Vec<(String, String, String)> = tws.collect();
-        println!("{:?}", twsv);
+        assert_eq!(v.len(), 327);
     }
 }

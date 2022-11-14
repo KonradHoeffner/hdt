@@ -341,24 +341,21 @@ mod tests {
 
     #[test]
     fn read_triples() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
-        let _header = Header::read(&mut reader).unwrap();
-        Dict::read(&mut reader).unwrap();
+        Header::read(&mut reader).unwrap();
+        let dict = Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
-        assert_eq!(v.len(), 242256);
+        assert_eq!(v.len(), 327);
         //println!("{:#?}", &v[0..30]);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
-        //for i in 1..200  {println!("{:?}",(&v).into_iter().filter(|tid| tid.object_id == i).collect::<Vec<&TripleId>>());}
-        let triples_with_s = [
-            vec![(1, 90, 13304), (1, 101, 19384), (1, 111, 75817)],
-            vec![(5, 90, 13017), (5, 101, 14748), (5, 111, 75817)],
-            vec![(7, 90, 15802), (7, 101, 15758), (7, 104, 17490), (7, 105, 18547), (7, 111, 75817)],
-        ];
+        //for i in 1..1  {println!("{:?}",(&v).into_iter().filter(|tid| tid.object_id == i).collect::<Vec<&TripleId>>());}
+        let triples_with_s =
+            [vec![(1, 11, 172), (1, 18, 9), (1, 20, 43)], vec![(2, 11, 168), (2, 14, 107), (2, 16, 6)]];
         // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
         for ts in triples_with_s {
             assert_eq!(
@@ -367,25 +364,19 @@ mod tests {
             );
         }
 
-        let triples_with_o = [
-            vec![(7077, 129, 162), (12288, 150, 162), (23261, 18, 162)],
-            vec![(7088, 129, 184), (19818, 18, 184)],
-            vec![(1364, 14, 193)],
-        ];
+        let triples_with_o = [vec![(10, 16, 1)], vec![(44, 1, 5)], vec![(1, 18, 9), (44, 1, 9)]];
         for to in triples_with_o {
-            let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
-            //println!("{:?}", tids);
-            assert_eq!(tids, triples.triples_with_o(to[0].2).collect::<Vec<TripleId>>());
+            let ex = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
+            let rec: Vec<TripleId> = triples.triples_with_o(to[0].2).collect();
+            assert_eq!(ex, rec, "ex {:?} rec {:?}", dict.translate_all_ids(&ex), dict.translate_all_ids(&rec));
         }
 
-        //for i in 1..150 {println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());}
-        println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == 4).collect::<Vec<&TripleId>>());
-
-        let triples_with_p = [vec![(3232, 4, 3233), (3545, 4, 3643), (3642, 4, 3643), (6551, 4, 67719)]];
-        for to in triples_with_p {
-            let tids = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
-            //println!("{:?}", tids);
-            assert_eq!(tids, triples.triples_with_p(to[0].1).collect::<Vec<TripleId>>());
+        //for i in 2..5 {println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());}
+        let triples_with_p = [vec![(44, 2, 64), (44, 2, 78)], vec![(44, 4, 175)]];
+        for tp in triples_with_p {
+            let ex = tp.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
+            let rec: Vec<TripleId> = triples.triples_with_p(tp[0].1).collect();
+            assert_eq!(ex, rec, "ex {:?} rec {:?}", dict.translate_all_ids(&ex), dict.translate_all_ids(&rec));
         }
     }
 }

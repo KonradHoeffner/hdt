@@ -43,6 +43,7 @@ impl DictSectPFC {
 
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
+    // 0 means not found
     pub fn locate(&self, element: &str) -> usize {
         // binary search
         let mut low: usize = 0;
@@ -61,9 +62,13 @@ impl DictSectPFC {
                 cmp = element.cmp(text);
                 //println!("mid: {} text: {} cmp: {:?}", mid, text, cmp);
             }
-
             match cmp {
-                Ordering::Less => high = mid - 1,
+                Ordering::Less => {
+                    if (mid == 0) {
+                        return 0;
+                    }
+                    high = mid - 1
+                }
                 Ordering::Greater => low = mid + 1,
                 Ordering::Equal => {
                     return (mid * self.block_size) + 1;
@@ -73,7 +78,6 @@ impl DictSectPFC {
         if high < mid {
             mid = high;
         }
-        //println!("block {} but not first", mid);
         let idblock = self.locate_in_block(mid, element);
         if idblock == 0 {
             return 0;
@@ -266,7 +270,7 @@ mod tests {
 
     #[test]
     fn test_section_read() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
@@ -286,17 +290,13 @@ mod tests {
 
         let shared = DictSectPFC::read(&mut reader).unwrap();
         // the file contains IRIs that are used both as subject and object 23128
-        assert_eq!(shared.num_strings, 23128);
-        assert_eq!(shared.packed_length, 396479);
-        assert_eq!(shared.block_size, 8);
-        for term in [
-            "http://ymatsuo.com/", "_:b5", "_:b1", "_:b10", "_:b6", "http://www.uni-koblenz.de/~sschenk",
-            "http://www-sop.inria.fr/acacia/personnel/Fabien.Gandon/",
-        ] {
+        assert_eq!(shared.num_strings, 43);
+        assert_eq!(shared.packed_length, 614);
+        assert_eq!(shared.block_size, 16);
+        for term in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta/Function", "_:b1"] {
             let id = shared.locate(term);
             let back = shared.extract(id);
-            println!("{} -> {} -> {}", term, id, back);
-            assert_eq!(term, back);
+            assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
@@ -311,21 +311,15 @@ mod tests {
         }
 
         let subjects = DictSectPFC::read(&mut reader).unwrap();
-        //println!("{}", subjects.num_strings);
-        assert_eq!(subjects.num_strings, 182);
+        assert_eq!(subjects.num_strings, 5);
         for term in [
-            "http://www.eswc2006.org/topics/#topic2.7.8", "http://xmlns.com/foaf/0.1/",
-            "http://www.eswc2006.org/topics/#topic3.0", "http://www.eswc2006.org/topics/#topic3.2",
-            "http://www.eswc2006.org/topics/#topic3.4", "http://www.eswc2006.org/topics/#topic3.5",
-            "http://www.eswc2006.org/topics/#topic3.6", "http://www.eswc2006.org/topics/#topic3.7",
-            "http://www.eswc2006.org/topics/#topic3.8", "http://sdow2008.semanticweb.org/#cfp",
-            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/authors",
-            "file:///copiaotros/rdf/datasets/SWDF/28-11-2012/data.semanticweb.org/dumps/conferences/demos",
+            "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
+            "http://www.snik.eu/ontology/meta/homonym", "http://www.snik.eu/ontology/meta/master",
+            "http://www.snik.eu/ontology/meta/typicalFeature",
         ] {
             let id = subjects.locate(term);
             let back = subjects.extract(id);
-            println!("{} -> {} -> {}", term, id, back);
-            assert_eq!(term, back);
+            assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;

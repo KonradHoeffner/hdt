@@ -586,7 +586,7 @@ mod tests {
 
     #[test]
     fn test_graph() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         //let file = File::open("tests/resources/snik.hdt").expect("error opening file");
         //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();

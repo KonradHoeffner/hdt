@@ -109,30 +109,33 @@ mod tests {
 
     #[test]
     fn read_dict() {
-        let file = File::open("tests/resources/swdf.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
         match Dict::read(&mut reader).unwrap() {
             Dict::FourSectDict(dict) => {
                 assert_eq!("_:b1", dict.id_to_string(1, IdKind::Subject));
-                assert_eq!("_:b10", dict.id_to_string(2, IdKind::Subject));
-                assert_eq!("_:b11", dict.id_to_string(3, IdKind::Subject));
-                assert_eq!("http://ymatsuo.com/", dict.id_to_string(23128, IdKind::Subject));
+                assert_eq!(
+                    "http://www.snik.eu/ontology/meta/ApplicationComponent",
+                    dict.id_to_string(2, IdKind::Subject)
+                );
+                assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, IdKind::Subject));
+                assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, IdKind::Subject));
                 match dict.shared {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23128),
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 43),
                 };
 
                 match dict.subjects {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 182),
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 5),
                 };
 
                 match dict.predicates {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 170),
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23),
                 };
 
                 match dict.objects {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 53401),
+                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 132),
                 };
             }
         };
