@@ -38,7 +38,7 @@ impl<'a> Iterator for ObjectIter<'a> {
         let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
         let y = self.triples.adjlist_y.sequence.get(pos_y as usize);
-        let x = self.triples.adjlist_y.bitmap.dict.inclusive_rank(pos_y, true) + 1;
+        let x = self.triples.adjlist_y.bitmap.dict.rank(pos_y, true) + 1;
         self.pos_index += 1;
         Some(self.triples.coord_to_triple(x as usize, y, self.o).unwrap())
     }
