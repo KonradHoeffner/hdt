@@ -40,31 +40,16 @@ impl Hdt {
         self.translate_ids(ids)
     }
 
-    pub fn triples_with_s(&self, s: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
-        let subject_id = self.dict.string_to_id(s, IdKind::Subject);
-        if (subject_id == 0) {
+    pub fn triples_with(&self, kind: IdKind, s: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
+        let id = self.dict.string_to_id(s, IdKind::Subject);
+        if (id == 0) {
             return Box::new(std::iter::empty());
         }
-        let mut ids = self.triple_sect.triples_with_s(subject_id);
-        Box::new(self.translate_ids(ids))
-    }
-
-    pub fn triples_with_p(&self, p: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
-        let predicate_id = self.dict.string_to_id(p, IdKind::Predicate);
-        if (predicate_id == 0) {
-            return Box::new(std::iter::empty());
+        match kind {
+            IdKind::Subject => Box::new(self.translate_ids(self.triple_sect.triples_with_s(id))),
+            IdKind::Predicate => Box::new(self.translate_ids(self.triple_sect.triples_with_p(id))),
+            IdKind::Object => Box::new(self.translate_ids(self.triple_sect.triples_with_o(id))),
         }
-        let mut ids = self.triple_sect.triples_with_p(predicate_id);
-        Box::new(self.translate_ids(ids))
-    }
-
-    pub fn triples_with_o(&self, o: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
-        let object_id = self.dict.string_to_id(o, IdKind::Object);
-        if (object_id == 0) {
-            return Box::new(std::iter::empty());
-        }
-        let ids = self.triple_sect.triples_with_o(object_id);
-        Box::new(self.translate_ids(ids))
     }
 }
 
@@ -89,7 +74,7 @@ mod tests {
         //<http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#Thing> .
         let sample = &v[0..8];
         println!("triples {:#?}", sample);
-        let tws = hdt.triples_with_s("http://ymatsuo.com/");
+        let tws = hdt.triples_with(IdKind::Subject,"http://ymatsuo.com/");
         let twsv: Vec<(String, String, String)> = tws.collect();
         println!("{:?}", twsv);
     }

@@ -1,3 +1,4 @@
+use crate::dict::IdKind;
 use crate::hdt::Hdt;
 use sophia::graph::*;
 use sophia::term::ns::rdf::value;
@@ -61,16 +62,17 @@ impl Graph for HdtGraph {
 
     fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
         println!("triples_with_s {}", s.value());
-        triple_source(self.hdt.triples_with_s(&term_string(s)))
+        triple_source(self.hdt.triples_with(IdKind::Subject, &term_string(s)))
     }
 
     fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
         println!("triples_with_p {}", p.value());
-        triple_source(self.hdt.triples_with_p(&p.value()))
+        triple_source(self.hdt.triples_with(IdKind::Predicate, &p.value()))
     }
+
     fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
         println!("triples_with_o {}", o.value());
-        triple_source(self.hdt.triples_with_o(&term_string(o)))
+        triple_source(self.hdt.triples_with(IdKind::Object, &term_string(o)))
     }
 }
 /*
