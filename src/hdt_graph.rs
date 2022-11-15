@@ -7,6 +7,7 @@ use sophia::term::ns::rdf::value;
 use sophia::term::*;
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
+use sophia::triple::Triple;
 use std::convert::Infallible;
 
 //use std::hash::Hash;
@@ -599,17 +600,29 @@ mod tests {
     #[test]
     fn test_graph() {
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-        //let file = File::open("tests/resources/snik.hdt").expect("error opening file");
-        //let file = File::open("tests/resources/lscomplete20143.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
-        let mut triples = graph.triples();
-        println!("first triple: {:?}", triples.next().unwrap());
-        //println!("meta {:?}", graph.triples_with_s(&BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta")).next());
-        //let binding = BoxTerm::new_bnode_unchecked("b1");
-        for binding in [BoxTerm::new_iri_unchecked("http://ymatsuo.com/"), BoxTerm::new_bnode_unchecked("b1")] {
-            let tws: Vec<_> = graph.triples_with_s(&binding).collect();
-            println!("{:?}", tws);
+        let triples: Vec<_> = graph.triples().collect();
+        assert_eq!(triples.len(), 327);
+        //println!("{}",triples[0].as_ref().unwrap().s().value());
+        for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta"] {
+            let term = BoxTerm::from(uri.to_owned());
+            let filtered: Vec<_> = triples
+                .iter()
+                .map(|triple| triple.as_ref().unwrap())
+                .filter(|triple| triple.s().value().to_string() == uri)
+                .map(|x| x)
+                .collect();
+            let with_s: Vec<_> = graph.triples_with_s(&term).map(|x| x.unwrap()).collect();
+            // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
+            // could break in the future e.g. because of ordering
+            let filtered_string = format!("{:?}", filtered);
+            let with_s_string = format!("{:?}", with_s);
+            assert_eq!(
+                filtered_string, with_s_string,
+                "different results between triples() and triples_with_s() for {}",
+                uri
+            );
         }
     }
 }

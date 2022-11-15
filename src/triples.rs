@@ -282,7 +282,7 @@ impl TripleId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ControlInfo, Dict, Header};
+    use crate::{dict::IdKind, ControlInfo, Dict, Header};
     use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
     use std::io::BufReader;
@@ -296,18 +296,33 @@ mod tests {
         let dict = Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
+        println!(
+            "{:?}",
+            v.iter()
+                .filter(|tripleid| tripleid.subject_id == 1)
+                .map(|tripleid| (
+                    dict.id_to_string(tripleid.subject_id, IdKind::Subject),
+                    dict.id_to_string(tripleid.predicate_id, IdKind::Predicate),
+                    dict.id_to_string(tripleid.object_id, IdKind::Object),
+                ))
+                .collect::<Vec<_>>()
+        );
         assert_eq!(v.len(), 327);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
-        //for i in 1..1  {println!("{:?}",(&v).into_iter().filter(|tid| tid.object_id == i).collect::<Vec<&TripleId>>());}
+        /*for i in 1..2 {
+            println!("{:?}", (&v).into_iter().filter(|tid| tid.subject_id == i).collect::<Vec<&TripleId>>());
+        }*/
+        /*
         let triples_with_s =
             [vec![(1, 11, 172), (1, 18, 9), (1, 20, 43)], vec![(2, 11, 168), (2, 14, 107), (2, 16, 6)]];
+        */
         // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
-        for ts in triples_with_s {
+        for i in 1..43 {
             assert_eq!(
-                ts.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>(),
-                triples.triples_with_s(ts[0].0).collect::<Vec<TripleId>>()
+                v.clone().into_iter().filter(|tid| tid.subject_id == i).collect::<Vec<TripleId>>(),
+                triples.triples_with_s(i).collect::<Vec<TripleId>>()
             );
         }
 
@@ -325,5 +340,6 @@ mod tests {
             let rec: Vec<TripleId> = triples.triples_with_p(tp[0].1).collect();
             assert_eq!(ex, rec, "ex {:?} rec {:?}", dict.translate_all_ids(&ex), dict.translate_all_ids(&rec));
         }
+        //println!("{:?}", dict.string_to_id("http://www.snik.eu/ontology/meta", crate::dict::IdKind::Subject));
     }
 }

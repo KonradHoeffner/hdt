@@ -66,5 +66,10 @@ mod tests {
         let mut triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();
         assert_eq!(v.len(), 327);
+        for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta"] {
+            let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0 == uri).collect();
+            let with_s: Vec<_> = hdt.triples_with(IdKind::Subject, uri).collect();
+            assert_eq!(filtered, with_s, "different results between triples() and triples_with_s() for {}", uri);
+        }
     }
 }

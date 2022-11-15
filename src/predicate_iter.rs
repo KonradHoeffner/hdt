@@ -20,7 +20,7 @@ impl<'a> PredicateIter<'a> {
             panic!("object 0 does not exist, cant iterate");
         }
         let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p);
-        println!("the predicate {} occurs {} times in the index", p, occs);
+        //println!("the predicate {} occurs {} times in the index", p, occs);
         //Self::find_subj(triples, p);
         PredicateIter { triples, p, i: 1, pos_z: 0, os: 0, s: 0, occs }
     }
@@ -42,7 +42,7 @@ impl<'a> Iterator for PredicateIter<'a> {
             // SP can have multiple O
             self.pos_z = self.triples.adjlist_z.bitmap.dict.select(pos_y - 1, true).unwrap() as usize + 1;
             let pos_z_end = self.triples.adjlist_z.bitmap.dict.select(pos_y, true).unwrap() as usize;
-            println!("**** found predicate {} between {} and {} (exclusive)", self.p, self.pos_z, pos_z_end);
+            //println!("**** found predicate {} between {} and {} (exclusive)", self.p, self.pos_z, pos_z_end);
 
             self.os = pos_z_end - self.pos_z;
         } else {
