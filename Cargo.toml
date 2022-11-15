@@ -9,6 +9,9 @@ keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
 edition = "2021"
 
+[lib]
+doctest = false
+
 [dependencies]
 crc-any = "2.3"
 iref = "2.2"
