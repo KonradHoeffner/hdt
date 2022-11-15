@@ -1,6 +1,8 @@
 use crate::dict::IdKind;
 use crate::hdt::Hdt;
 use sophia::graph::*;
+use sophia::term::iri::Iri;
+use sophia::term::literal::Literal;
 use sophia::term::ns::rdf::value;
 use sophia::term::*;
 use sophia::triple::stream::*;
@@ -22,7 +24,20 @@ impl HdtGraph {
 fn auto_term(s: String) -> Result<BoxTerm, TermError> {
     match s.chars().next() {
         None => Err(TermError::InvalidIri("".to_owned())),
-        Some('"') => Ok(BoxTerm::from(s)),
+        Some('"') => {
+            let mut dt_split = s.split("^^");
+            let mut before_dt = dt_split.next().unwrap().split("@");
+            let quoted = before_dt.next().unwrap();
+            let lex = quoted[1..quoted.len() - 1].to_owned();
+            if let Some(lang) = before_dt.next() {
+                return Ok(BoxTerm::from(Literal::new_lang_unchecked(lex, lang)));
+            }
+            if let Some(uri_ref) = dt_split.next() {
+                let dt = &uri_ref[1..uri_ref.len() - 1];
+                return Ok(BoxTerm::from(Literal::new_dt(lex, Iri::<&str>::new(dt)?)));
+            }
+            Ok(BoxTerm::from(lex))
+        }
         Some('_') => BoxTerm::new_bnode(s[2..].to_owned()),
         _ => BoxTerm::new_iri(s),
     }
