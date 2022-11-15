@@ -283,6 +283,7 @@ impl TripleId {
 mod tests {
     use super::*;
     use crate::{ControlInfo, Dict, Header};
+    use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
     use std::io::BufReader;
 

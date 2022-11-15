@@ -103,6 +103,7 @@ pub enum IdKind {
 mod tests {
     use super::*;
     use crate::{ControlInfo, Header};
+    use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
     use std::io::BufReader;
     use std::io::Read;

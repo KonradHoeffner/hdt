@@ -28,3 +28,6 @@ sophia_graph = ["sophia"]
 
 [profile.test]
 opt-level = 1
+
+[dev-dependencies]
+pretty_assertions = "1.3"
