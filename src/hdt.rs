@@ -9,8 +9,8 @@ use std::fs::File;
 use std::io;
 
 pub struct Hdt {
-    global_ci: ControlInfo,
-    header: Header,
+    //global_ci: ControlInfo,
+    //header: Header,
     dict: Dict,
     triple_sect: TripleSect,
 }
@@ -21,7 +21,8 @@ impl Hdt {
         let header = Header::read(&mut reader)?;
         let dict = Dict::read(&mut reader)?;
         let triple_sect = TripleSect::read(&mut reader)?;
-        Ok(Hdt { global_ci, header, dict, triple_sect })
+        //Ok(Hdt { global_ci, header, dict, triple_sect })
+        Ok(Hdt { dict, triple_sect })
     }
 
     fn translate_ids<'a>(
