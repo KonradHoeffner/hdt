@@ -1,18 +1,27 @@
 use crate::containers::vbyte::read_vbyte;
+use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};
 use rsdict::RsDict;
 use std::convert::TryFrom;
+use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Bitmap {
     //num_bits: usize,
     pub dict: RsDict,
     //pub data: Vec<u64>,
+}
+
+impl fmt::Debug for Bitmap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        //write!(f, "Bitmap size {}", ByteSize(self.size_in_bytes() as u64))
+        write!(f, "Bitmap size unknown")
+    }
 }
 
 impl Bitmap {
@@ -20,6 +29,11 @@ impl Bitmap {
         let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
         //let dict = RsDict::from_blocks((data.clone() as Vec<u64>).into_iter()); // keep data. faster get_bit but more RAM.
         Bitmap { dict }
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        // TODO figure out how to measure the size of an RsDict
+        0
     }
 
     pub fn at_last_sibling(&self, word_index: usize) -> bool {

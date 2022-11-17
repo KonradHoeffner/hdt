@@ -5,9 +5,11 @@ use crate::triples::BitmapIter;
 use crate::triples::TripleId;
 use crate::triples::TripleSect;
 use crate::FourSectDict;
+use bytesize::ByteSize;
 use std::fs::File;
 use std::io;
 
+#[derive(Debug)]
 pub struct Hdt {
     //global_ci: ControlInfo,
     //header: Header,
@@ -17,12 +19,18 @@ pub struct Hdt {
 
 impl Hdt {
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
-        let global_ci = ControlInfo::read(&mut reader)?;
-        let header = Header::read(&mut reader)?;
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
         let dict = FourSectDict::read(&mut reader)?;
         let triple_sect = TripleSect::read(&mut reader)?;
-        //Ok(Hdt { global_ci, header, dict, triple_sect })
-        Ok(Hdt { dict, triple_sect })
+        let hdt = Hdt { dict, triple_sect };
+        println!("HDT size in memory > {}, details:", ByteSize(hdt.size_in_bytes() as u64));
+        println!("{:#?}", hdt);
+        Ok(hdt)
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.dict.size_in_bytes() + self.triple_sect.size_in_bytes()
     }
 
     fn translate_ids<'a>(
@@ -62,7 +70,8 @@ mod tests {
 
     #[test]
     fn triples() {
-        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+        let filename = "tests/resources/snikmeta.hdt";
+        let file = File::open(filename).expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let mut triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();

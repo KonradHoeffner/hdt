@@ -1,16 +1,30 @@
 use crate::containers::vbyte::read_vbyte;
+use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};
+use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Sequence {
     pub entries: usize,
     pub bits_per_entry: usize,
     pub data: Vec<usize>,
+}
+
+impl fmt::Debug for Sequence {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} with {} entries, {} bits per entry",
+            ByteSize(self.size_in_bytes() as u64),
+            self.entries,
+            self.bits_per_entry
+        )
+    }
 }
 
 pub struct SequenceIter<'a> {
@@ -56,8 +70,11 @@ impl Sequence {
             result = self.data[block_index] >> bit_index;
             result |= (self.data[(block_index + 1)] << block_shift) >> result_shift;
         }
-
         result
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.data.len() * USIZE_BITS >> 3
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {

@@ -2,12 +2,14 @@ use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::object_iter::ObjectIter;
 use crate::predicate_iter::PredicateIter;
 use crate::ControlInfo;
+use bytesize::ByteSize;
 use rsdict::RsDict;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
+use std::fmt;
 use std::io;
 use std::io::BufRead;
-use sucds::WaveletMatrix;
+use sucds::{Searial, WaveletMatrix};
 
 #[derive(Debug, Clone)]
 // TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
@@ -30,6 +32,12 @@ impl TripleSect {
                 Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
             }
             _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
+        }
+    }
+
+    pub fn size_in_bytes(&self) -> usize {
+        match self {
+            TripleSect::Bitmap(bitmap) => bitmap.size_in_bytes(),
         }
     }
 
@@ -87,7 +95,7 @@ impl TryFrom<u32> for Order {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
     pub adjlist_y: AdjList,
@@ -96,7 +104,24 @@ pub struct TriplesBitmap {
     pub wavelet_y: WaveletMatrix,
 }
 
+impl fmt::Debug for TriplesBitmap {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
+        writeln!(f, "adjlist_y {:#?}", self.adjlist_y);
+        writeln!(f, "adjlist_z {:#?}", self.adjlist_z);
+        writeln!(f, "op_index {:#?}", self.op_index);
+        writeln!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
+    }
+}
+
 impl TriplesBitmap {
+    pub fn size_in_bytes(&self) -> usize {
+        self.adjlist_y.size_in_bytes()
+            + self.adjlist_z.size_in_bytes()
+            + self.op_index.size_in_bytes()
+            + self.wavelet_y.size_in_bytes()
+    }
+
     pub fn read<R: BufRead>(reader: &mut R, triples_ci: ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;

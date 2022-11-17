@@ -89,7 +89,15 @@ impl FourSectDict {
             })
             .collect()
     }
+
+    pub fn size_in_bytes(&self) -> usize {
+        self.shared.size_in_bytes()
+            + self.subjects.size_in_bytes()
+            + self.predicates.size_in_bytes()
+            + self.objects.size_in_bytes()
+    }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

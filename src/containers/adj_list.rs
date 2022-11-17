@@ -12,6 +12,10 @@ impl AdjList {
         AdjList { sequence, bitmap }
     }
 
+    pub fn size_in_bytes(&self) -> usize {
+        self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
+    }
+
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
         self.bitmap.at_last_sibling(word_index)
     }

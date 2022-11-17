@@ -1,13 +1,15 @@
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
+use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};
 use std::cmp::{min, Ordering};
+use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::str;
 
 /// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DictSectPFC {
     num_strings: usize,
     packed_length: usize,
@@ -16,7 +18,23 @@ pub struct DictSectPFC {
     packed_data: Vec<u8>,
 }
 
+impl fmt::Debug for DictSectPFC {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "total size {}, sequence {:?}, packed data {}",
+            ByteSize(self.size_in_bytes() as u64),
+            self.sequence,
+            ByteSize(self.packed_data.len() as u64)
+        )
+    }
+}
+
 impl DictSectPFC {
+    pub fn size_in_bytes(&self) -> usize {
+        self.sequence.size_in_bytes() + self.packed_data.len()
+    }
+
     pub fn id_to_string(&self, id: usize) -> String {
         self.extract(id)
         // Self::decode(self.extract(id))
