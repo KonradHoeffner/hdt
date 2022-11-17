@@ -114,30 +114,37 @@ mod tests {
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
+
         match Dict::read(&mut reader).unwrap() {
             Dict::FourSectDict(dict) => {
-                assert_eq!("_:b1", dict.id_to_string(1, IdKind::Subject));
-                assert_eq!(
-                    "http://www.snik.eu/ontology/meta/ApplicationComponent",
-                    dict.id_to_string(2, IdKind::Subject)
-                );
+                assert_eq!(dict.shared.num_strings(), 43, "wrong number of strings in the shared section");
+                assert_eq!(dict.subjects.num_strings(), 5, "wrong number of strings in the subject section");
+                assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");
+                assert_eq!(dict.objects.num_strings(), 132, "wrong number of strings in the objects section");
+                assert_eq!(dict.string_to_id("_:b1", IdKind::Subject), 1);
+                assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, IdKind::Subject));
                 assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, IdKind::Subject));
                 assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, IdKind::Subject));
-                match dict.shared {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 43),
-                };
+                for id in 1..dict.shared.num_strings() {
+                    let s = dict.id_to_string(id, IdKind::Subject);
+                    let back = dict.string_to_id(&s, IdKind::Subject);
+                    assert_eq!(id, back, "shared id {} -> subject {} -> id {}", id, s, back);
 
-                match dict.subjects {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 5),
-                };
-
-                match dict.predicates {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 23),
-                };
-
-                match dict.objects {
-                    DictSect::PFC(sect) => assert_eq!(sect.num_strings(), 132),
-                };
+                    let s = dict.id_to_string(id, IdKind::Object);
+                    let back = dict.string_to_id(&s, IdKind::Object);
+                    assert_eq!(id, back, "shared id {} -> object {} -> id {}", id, s, back);
+                }
+                for (sect, kind, name, offset) in [
+                    (&dict.subjects, IdKind::Subject, "subject", dict.shared.num_strings()),
+                    (&dict.objects, IdKind::Object, "object", dict.shared.num_strings()),
+                    (&dict.predicates, IdKind::Predicate, "predicate", 0),
+                ] {
+                    for id in offset + 1..offset + sect.num_strings() {
+                        let s = dict.id_to_string(id, kind.clone());
+                        let back = dict.string_to_id(&s, kind.clone());
+                        assert_eq!(id, back, "{} id {} -> {} {} -> id {}", name, id, name, s, back);
+                    }
+                }
             }
         };
     }

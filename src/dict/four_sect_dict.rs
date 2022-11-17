@@ -16,17 +16,14 @@ impl FourSectDict {
         match id_kind {
             IdKind::Subject => {
                 if id <= shared_size {
-                    //println!("shared {} {}",id, self.shared.id_to_string(id));
                     self.shared.id_to_string(id)
                 } else {
-                    //println!("not shared {} {} {} {} {}",id, id - shared_size, self.subjects.id_to_string((id - shared_size) ), shared_size, self.objects.num_strings());
                     self.subjects.id_to_string(id - shared_size)
-                    //self.subjects.id_to_string(id)
                 }
             }
             IdKind::Predicate => self.predicates.id_to_string(id),
             IdKind::Object => {
-                if id < shared_size {
+                if id <= shared_size {
                     self.shared.id_to_string(id)
                 } else {
                     self.objects.id_to_string(id - shared_size)
@@ -41,7 +38,7 @@ impl FourSectDict {
             IdKind::Subject => {
                 let mut id = self.shared.string_to_id(s);
                 if id == 0 {
-                    id = self.subjects.string_to_id(s);
+                    id = self.subjects.string_to_id(s) + shared_size;
                 }
                 id
             }
@@ -49,7 +46,7 @@ impl FourSectDict {
             IdKind::Object => {
                 let mut id = self.shared.string_to_id(s);
                 if id == 0 {
-                    id = self.objects.string_to_id(s);
+                    id = self.objects.string_to_id(s) + shared_size;
                 }
                 id
             }

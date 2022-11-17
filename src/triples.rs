@@ -296,6 +296,7 @@ mod tests {
         let dict = Dict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
+        println!("{:?}", v.iter().filter(|tripleid| tripleid.subject_id == 1).collect::<Vec<&TripleId>>());
         println!(
             "{:?}",
             v.iter()
@@ -311,13 +312,6 @@ mod tests {
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
-        /*for i in 1..2 {
-            println!("{:?}", (&v).into_iter().filter(|tid| tid.subject_id == i).collect::<Vec<&TripleId>>());
-        }*/
-        /*
-        let triples_with_s =
-            [vec![(1, 11, 172), (1, 18, 9), (1, 20, 43)], vec![(2, 11, 168), (2, 14, 107), (2, 16, 6)]];
-        */
         // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
         for i in 1..43 {
             assert_eq!(
