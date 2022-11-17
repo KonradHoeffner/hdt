@@ -1,4 +1,4 @@
-use crate::dict::IdKind;
+use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use sophia::graph::*;
 use sophia::term::iri::Iri;

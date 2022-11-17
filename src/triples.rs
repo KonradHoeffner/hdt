@@ -282,7 +282,7 @@ impl TripleId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{dict::IdKind, ControlInfo, Dict, Header};
+    use crate::{ControlInfo, FourSectDict, Header, IdKind};
     use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
     use std::io::BufReader;
@@ -293,7 +293,7 @@ mod tests {
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
-        let dict = Dict::read(&mut reader).unwrap();
+        let dict = FourSectDict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
         println!("{:?}", v.iter().filter(|tripleid| tripleid.subject_id == 1).collect::<Vec<&TripleId>>());

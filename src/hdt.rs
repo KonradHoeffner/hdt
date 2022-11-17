@@ -1,17 +1,17 @@
 use crate::containers::ControlInfo;
-use crate::dict::Dict;
-use crate::dict::IdKind;
+use crate::four_sect_dict::IdKind;
 use crate::header::Header;
 use crate::triples::BitmapIter;
 use crate::triples::TripleId;
 use crate::triples::TripleSect;
+use crate::FourSectDict;
 use std::fs::File;
 use std::io;
 
 pub struct Hdt {
     //global_ci: ControlInfo,
     //header: Header,
-    dict: Dict,
+    dict: FourSectDict,
     triple_sect: TripleSect,
 }
 
@@ -19,7 +19,7 @@ impl Hdt {
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
         let global_ci = ControlInfo::read(&mut reader)?;
         let header = Header::read(&mut reader)?;
-        let dict = Dict::read(&mut reader)?;
+        let dict = FourSectDict::read(&mut reader)?;
         let triple_sect = TripleSect::read(&mut reader)?;
         //Ok(Hdt { global_ci, header, dict, triple_sect })
         Ok(Hdt { dict, triple_sect })

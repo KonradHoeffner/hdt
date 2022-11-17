@@ -44,7 +44,7 @@ impl DictSectPFC {
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     // 0 means not found
-    pub fn locate(&self, element: &str) -> usize {
+    pub fn string_to_id(&self, element: &str) -> usize {
         // binary search
         let mut low: usize = 0;
         let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
@@ -206,6 +206,14 @@ impl DictSectPFC {
         use io::Error;
         use io::ErrorKind::InvalidData;
 
+        let mut preamble = [0_u8];
+        reader.read_exact(&mut preamble)?;
+        if preamble[0] != 2 {
+            return Err(Error::new(
+                InvalidData, "Implementation only supports plain front coded dictionary sections.",
+            ));
+        }
+
         // read section meta data
         // The CRC includes the type of the block, inaccuracy in the spec, careful.
         let mut buffer = vec![0x02_u8];
@@ -282,20 +290,13 @@ mod tests {
             panic!("invalid dictionary type: {:?}", dict_ci.format);
         }
 
-        // read section preamble
-        let mut preamble: [u8; 1] = [0; 1];
-        reader.read_exact(&mut preamble).unwrap();
-        if preamble[0] != 2 {
-            panic!("invalid section type: {:?}", preamble);
-        }
-
         let shared = DictSectPFC::read(&mut reader).unwrap();
         // the file contains IRIs that are used both as subject and object 23128
         assert_eq!(shared.num_strings, 43);
         assert_eq!(shared.packed_length, 614);
         assert_eq!(shared.block_size, 16);
         for term in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta/Function", "_:b1"] {
-            let id = shared.locate(term);
+            let id = shared.string_to_id(term);
             let back = shared.extract(id);
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
@@ -304,13 +305,6 @@ mod tests {
         assert_eq!(sequence.data.len(), data_size);
         assert_eq!(shared.packed_data.len(), shared.packed_length);
 
-        // read section preamble
-        let mut preamble: [u8; 1] = [0; 1];
-        reader.read_exact(&mut preamble).unwrap();
-        if preamble[0] != 2 {
-            panic!("invalid section type: {:?}", preamble);
-        }
-
         let subjects = DictSectPFC::read(&mut reader).unwrap();
         assert_eq!(subjects.num_strings, 5);
         for term in [
@@ -318,7 +312,7 @@ mod tests {
             "http://www.snik.eu/ontology/meta/homonym", "http://www.snik.eu/ontology/meta/master",
             "http://www.snik.eu/ontology/meta/typicalFeature",
         ] {
-            let id = subjects.locate(term);
+            let id = subjects.string_to_id(term);
             let back = subjects.extract(id);
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
