@@ -27,7 +27,7 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
         None => Err(TermError::InvalidIri("".to_owned())),
         Some('"') => {
             let mut dt_split = s.split("^^");
-            let mut before_dt = dt_split.next().unwrap().split("@");
+            let mut before_dt = dt_split.next().unwrap().split('@');
             let quoted = before_dt.next().unwrap();
             let lex = quoted[1..quoted.len() - 1].to_owned();
             if let Some(lang) = before_dt.next() {

@@ -155,7 +155,7 @@ impl Sequence {
             bits_read += size_of::<usize>();
         }
         data.push(last_value);
-
+        data.shrink_to_fit();
         // read entry body CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;

@@ -54,6 +54,6 @@ impl<'a> Iterator for PredicateIter<'a> {
         if (self.os == 0) {
             self.i += 1;
         }
-        return Some(self.triples.coord_to_triple(self.s, self.p, o).unwrap());
+        Some(self.triples.coord_to_triple(self.s, self.p, o).unwrap())
     }
 }

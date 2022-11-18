@@ -29,7 +29,7 @@ impl AdjList {
     }
 
     pub fn find(&self, x: usize) -> usize {
-        if (x <= 0) {
+        if (x == 0) {
             return 0;
         }
         // hdt counts from 1
