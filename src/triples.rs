@@ -106,7 +106,7 @@ impl fmt::Debug for OpIndex {
         writeln!(
             f,
             "sequence {} with {} bits",
-            ByteSize(self.sequence.len() as u64 * self.sequence.width() / 8 as u64),
+            ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
             self.sequence.width()
         );
         writeln!(f, "bitmap{:#?}", self.bitmap)
@@ -164,6 +164,10 @@ impl TriplesBitmap {
 
         // read sequences
         let sequence_y = Sequence::read(reader)?;
+        // generate wavelet matrix early to reduce memory peak consumption
+        print!("Start constructing wavelet matrix");
+        let wavelet_y = WaveletMatrix::from_ints(sequence_y.into_iter()).unwrap();
+        println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
         let sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
@@ -173,7 +177,6 @@ impl TriplesBitmap {
         // construct object-based index to traverse from the leaves and support O?? queries
         print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
-
         // Could import the multimap crate instead but not worth it for single use.
         // Alternatively, the index could be directly created using sequence which would save memory during index generation.
         // See https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
@@ -211,9 +214,6 @@ impl TriplesBitmap {
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
 
-        print!("Start constructing wavelet matrix");
-        let wavelet_y = WaveletMatrix::from_ints(adjlist_y.sequence.into_iter()).unwrap();
-        println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
         Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index, wavelet_y })
     }
 
