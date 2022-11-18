@@ -106,7 +106,7 @@ impl fmt::Debug for OpIndex {
         writeln!(
             f,
             "sequence {} with {} bits",
-            ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64),
+            ByteSize(self.sequence.len() as u64 * self.sequence.width() / 8 as u64),
             self.sequence.width()
         );
         writeln!(f, "bitmap{:#?}", self.bitmap)
@@ -177,25 +177,23 @@ impl TriplesBitmap {
         // Could import the multimap crate instead but not worth it for single use.
         // Alternatively, the index could be directly created using sequence which would save memory during index generation.
         // See https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
-        let mut map = BTreeMap::<usize, Vec<usize>>::new();
-
+        let mut map = BTreeMap::<u32, Vec<u32>>::new();
         // Count the number of appearances of each object
         for i in 0..entries - 1 {
-            let object = adjlist_z.sequence.get(i);
+            let object = adjlist_z.sequence.get(i) as u32;
             if object == 0 {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
             if let Some(indexes) = map.get_mut(&object) {
-                indexes.push(i); // hdt index counts from 1 but we count from 0 for simplicity
+                indexes.push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
             } else {
-                map.insert(object, vec![i]);
+                map.insert(object, vec![i as u32]);
             }
         }
-
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-        let mut sequence_index = Vec::<usize>::new();
+        let mut sequence_index = Vec::<u32>::new();
         for (object, indexes) in map {
             let mut first = true;
             for index in indexes {
@@ -204,10 +202,15 @@ impl TriplesBitmap {
                 sequence_index.push(index);
             }
         }
-
+        let max_int = sequence_index.iter().max().unwrap().to_owned() as usize;
+        let mut cv = CompactVector::with_len(sequence_index.len(), sucds::util::needed_bits(max_int));
+        for (i, x) in sequence_index.into_iter().enumerate() {
+            cv.set(i, x as usize);
+        }
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
-        let op_index = OpIndex { sequence: CompactVector::from_slice(&sequence_index), bitmap: bitmap_index };
+        let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
+
         print!("Start constructing wavelet matrix");
         let wavelet_y = WaveletMatrix::from_ints(adjlist_y.sequence.into_iter()).unwrap();
         println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
