@@ -1,3 +1,4 @@
+//! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};

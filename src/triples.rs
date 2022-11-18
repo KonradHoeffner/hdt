@@ -11,7 +11,7 @@ use std::io;
 use std::io::BufRead;
 use sucds::{Searial, WaveletMatrix};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 // TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
 // The unnecessary matches make the code more verbose.
 pub enum TripleSect {
@@ -95,12 +95,31 @@ impl TryFrom<u32> for Order {
     }
 }
 
-#[derive(Clone)]
+pub struct OpIndex {
+    pub sequence: Vec<u32>,
+    pub bitmap: Bitmap,
+}
+
+impl fmt::Debug for OpIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
+        writeln!(f, "sequence {:#?}", ByteSize(self.sequence.len() as u64 * 4));
+        writeln!(f, "bitmap{:#?}", self.bitmap)
+    }
+}
+
+impl OpIndex {
+    pub fn size_in_bytes(&self) -> usize {
+        self.sequence.len() * 4 + self.bitmap.size_in_bytes()
+    }
+}
+
+//#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
     pub adjlist_y: AdjList,
     pub adjlist_z: AdjList,
-    pub op_index: AdjList,
+    pub op_index: OpIndex,
     pub wavelet_y: WaveletMatrix,
 }
 
@@ -171,25 +190,19 @@ impl TriplesBitmap {
 
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-
-        let mut sequence_index_data = Vec::<usize>::new();
+        // always use 32 bit for simplicity because we can't generate our own variable integer sequences yet
+        let mut sequence_index = Vec::<u32>::new();
         for (object, indexes) in map {
             let mut first = true;
             for index in indexes {
                 bitmap_index_dict.push(first);
                 first = false;
-                sequence_index_data.push(index);
+                sequence_index.push(index as u32);
             }
         }
 
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
-        // we don't actually save space with 64 bits TODO compress into lower bit sequence
-        let sequence_index = Sequence {
-            entries,
-            bits_per_entry: 64, //(entries as f64).log2().ceil() as usize, // is this correct?
-            data: sequence_index_data,
-        };
-        let op_index = AdjList::new(sequence_index, bitmap_index);
+        let op_index = OpIndex { sequence: sequence_index, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
         print!("Start constructing wavelet matrix");
         let wavelet_y = WaveletMatrix::from_ints(adjlist_y.sequence.into_iter()).unwrap();
