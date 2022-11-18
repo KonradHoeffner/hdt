@@ -9,7 +9,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
-use sucds::{Searial, WaveletMatrix};
+use sucds::{CompactVector, Searial, WaveletMatrix};
 
 #[derive(Debug)]
 // TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
@@ -96,21 +96,26 @@ impl TryFrom<u32> for Order {
 }
 
 pub struct OpIndex {
-    pub sequence: Vec<u32>,
+    pub sequence: CompactVector,
     pub bitmap: Bitmap,
 }
 
 impl fmt::Debug for OpIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
-        writeln!(f, "sequence {:#?}", ByteSize(self.sequence.len() as u64 * 4));
+        writeln!(
+            f,
+            "sequence {} with {} bits",
+            ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64),
+            self.sequence.width()
+        );
         writeln!(f, "bitmap{:#?}", self.bitmap)
     }
 }
 
 impl OpIndex {
     pub fn size_in_bytes(&self) -> usize {
-        self.sequence.len() * 4 + self.bitmap.size_in_bytes()
+        self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
     }
 }
 
@@ -190,19 +195,18 @@ impl TriplesBitmap {
 
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-        // always use 32 bit for simplicity because we can't generate our own variable integer sequences yet
-        let mut sequence_index = Vec::<u32>::new();
+        let mut sequence_index = Vec::<usize>::new();
         for (object, indexes) in map {
             let mut first = true;
             for index in indexes {
                 bitmap_index_dict.push(first);
                 first = false;
-                sequence_index.push(index as u32);
+                sequence_index.push(index);
             }
         }
 
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
-        let op_index = OpIndex { sequence: sequence_index, bitmap: bitmap_index };
+        let op_index = OpIndex { sequence: CompactVector::from_slice(&sequence_index), bitmap: bitmap_index };
         println!("...finished constructing OPS index");
         print!("Start constructing wavelet matrix");
         let wavelet_y = WaveletMatrix::from_ints(adjlist_y.sequence.into_iter()).unwrap();

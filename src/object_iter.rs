@@ -35,7 +35,7 @@ impl<'a> Iterator for ObjectIter<'a> {
         if self.pos_index >= self.max_index {
             return None;
         }
-        let pos_z = self.triples.op_index.sequence[self.pos_index] as u64;
+        let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
         let y = self.triples.adjlist_y.sequence.get(pos_y as usize);
         let x = self.triples.adjlist_y.bitmap.dict.rank(pos_y, true) + 1;
