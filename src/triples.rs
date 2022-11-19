@@ -171,42 +171,43 @@ impl TriplesBitmap {
         let sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
+        // do we still need sequence_y when we have wavelet_y?
         let adjlist_y = AdjList::new(sequence_y, bitmap_y);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
         // construct object-based index to traverse from the leaves and support O?? queries
         print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
-        // Could import the multimap crate instead but not worth it for single use.
-        // Alternatively, the index could be directly created using sequence which would save memory during index generation.
-        // See https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
-        let mut map = BTreeMap::<u32, Vec<u32>>::new();
-        // Count the number of appearances of each object
+        // if it takes too long to calculate, can also pass in as parameter
+        //println!("{:?}",adjlist_y.sequence.into_iter());
+        let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
+        println!("max_object {}", max_object);
+        let mut indices = vec![Vec::<u32>::new(); max_object];
+
+        // Count the indexes of appearance of each object
         for i in 0..entries - 1 {
-            let object = adjlist_z.sequence.get(i) as u32;
+            let object = adjlist_z.sequence.get(i);
             if object == 0 {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            if let Some(indexes) = map.get_mut(&object) {
-                indexes.push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
-            } else {
-                map.insert(object, vec![i as u32]);
-            }
+            indices[object - 1].push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
         let mut sequence_index = Vec::<u32>::new();
-        for (object, indexes) in map {
+        for i in 0..max_object {
             let mut first = true;
-            for index in indexes {
+            let sorted = &mut indices[i];
+            sorted.sort();
+            for index in sorted {
                 bitmap_index_dict.push(first);
                 first = false;
-                sequence_index.push(index);
+                sequence_index.push(index.to_owned() + 1);
             }
         }
-        let max_int = sequence_index.iter().max().unwrap().to_owned() as usize;
-        let mut cv = CompactVector::with_len(sequence_index.len(), sucds::util::needed_bits(max_int));
+
+        let mut cv = CompactVector::with_len(sequence_index.len(), sucds::util::needed_bits(entries as usize));
         for (i, x) in sequence_index.into_iter().enumerate() {
             cv.set(i, x as usize);
         }
