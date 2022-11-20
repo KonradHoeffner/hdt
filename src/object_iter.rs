@@ -21,10 +21,12 @@ impl<'a> ObjectIter<'a> {
         if o == 0 {
             panic!("object 0 does not exist, cant iterate");
         }
-        let pos_index = triples.op_index.bitmap.dict.select1(o as u64 - 1).unwrap() as usize;
-        // mathematically, a maximum is inclusive, but use exclusive like in the C++ code to reduce confusion
-        let max_index = triples.op_index.bitmap.dict.select1(o as u64).unwrap() as usize;
-        //println!("ObjectIter o={} pos_index={} max_index={}", o, pos_index, max_index);
+        //let pos_index = triples.op_index.bitmap.dict.select1(o as u64 -1).unwrap() as usize ;
+        let pos_index = triples.op_index.find(o);
+        let pos_z = triples.op_index.sequence.get(pos_index) as u64;
+        debug_assert_eq!(o, triples.adjlist_z.get_id(pos_z as usize));
+        let max_index = triples.op_index.last(o);
+        println!("ObjectIter o={} pos_index={} max_index={}", o, pos_index, max_index);
         ObjectIter { pos_index, max_index, triples, o }
     }
 }
@@ -32,7 +34,7 @@ impl<'a> ObjectIter<'a> {
 impl<'a> Iterator for ObjectIter<'a> {
     type Item = TripleId;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos_index >= self.max_index {
+        if self.pos_index > self.max_index {
             return None;
         }
         let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;

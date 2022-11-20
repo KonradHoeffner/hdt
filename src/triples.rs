@@ -117,6 +117,15 @@ impl OpIndex {
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
     }
+    pub fn find(&self, o: usize) -> usize {
+        self.bitmap.dict.select1(o as u64 - 1).unwrap() as usize
+    }
+    pub fn last(&self, o: usize) -> usize {
+        match self.bitmap.dict.select1(o as u64) {
+            Some(index) => index as usize - 1,
+            None => self.bitmap.dict.len() - 1,
+        }
+    }
 }
 
 //#[derive(Clone)]
@@ -185,7 +194,7 @@ impl TriplesBitmap {
         let mut indices = vec![Vec::<u32>::new(); max_object];
 
         // Count the indexes of appearance of each object
-        for i in 0..entries - 1 {
+        for i in 0..entries {
             let object = adjlist_z.sequence.get(i);
             if object == 0 {
                 eprintln!("ERROR: There is a zero value in the Z level.");
@@ -203,7 +212,7 @@ impl TriplesBitmap {
             for index in sorted {
                 bitmap_index_dict.push(first);
                 first = false;
-                sequence_index.push(index.to_owned() + 1);
+                sequence_index.push(index.to_owned());
             }
         }
 
@@ -312,7 +321,7 @@ impl<'a> Iterator for BitmapIter<'a> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TripleId {
     pub subject_id: usize,
     pub predicate_id: usize,
@@ -342,44 +351,33 @@ mod tests {
         let dict = FourSectDict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
-        println!("{:?}", v.iter().filter(|tripleid| tripleid.subject_id == 1).collect::<Vec<&TripleId>>());
-        println!(
-            "{:?}",
-            v.iter()
-                .filter(|tripleid| tripleid.subject_id == 1)
-                .map(|tripleid| (
-                    dict.id_to_string(tripleid.subject_id, IdKind::Subject),
-                    dict.id_to_string(tripleid.predicate_id, IdKind::Predicate),
-                    dict.id_to_string(tripleid.object_id, IdKind::Object),
-                ))
-                .collect::<Vec<_>>()
-        );
         assert_eq!(v.len(), 327);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
+        let num_subjects = 48;
+        let num_predicates = 23;
+        let num_objects = 175;
         // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
-        for i in 1..43 {
-            assert_eq!(
-                v.clone().into_iter().filter(|tid| tid.subject_id == i).collect::<Vec<TripleId>>(),
-                triples.triples_with_s(i).collect::<Vec<TripleId>>()
-            );
+        let mut filtered: Vec<TripleId>;
+        for i in 1..num_subjects + 1 {
+            filtered = v.iter().filter(|tid| tid.subject_id == i).copied().collect();
+            assert_eq!(filtered, triples.triples_with_s(i).collect::<Vec<TripleId>>(), "triples_with_s({})", i);
         }
-
-        let triples_with_o = [vec![(10, 16, 1)], vec![(44, 1, 5)], vec![(1, 18, 9), (44, 1, 9)]];
-        for to in triples_with_o {
-            let ex = to.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
-            let rec: Vec<TripleId> = triples.triples_with_o(to[0].2).collect();
-            assert_eq!(ex, rec, "ex {:?} rec {:?}", dict.translate_all_ids(&ex), dict.translate_all_ids(&rec));
+        for i in 1..num_predicates + 1 {
+            filtered = v.iter().filter(|tid| tid.predicate_id == i).copied().collect();
+            assert_eq!(filtered, triples.triples_with_p(i).collect::<Vec<TripleId>>(), "triples_with_p({})", i);
         }
-
-        //for i in 2..5 {println!("{:?}", (&v).into_iter().filter(|tid| tid.predicate_id == i).collect::<Vec<&TripleId>>());}
-        let triples_with_p = [vec![(44, 2, 64), (44, 2, 78)], vec![(44, 4, 175)]];
-        for tp in triples_with_p {
-            let ex = tp.clone().into_iter().map(|(x, y, z)| TripleId::new(x, y, z)).collect::<Vec<TripleId>>();
-            let rec: Vec<TripleId> = triples.triples_with_p(tp[0].1).collect();
-            assert_eq!(ex, rec, "ex {:?} rec {:?}", dict.translate_all_ids(&ex), dict.translate_all_ids(&rec));
+        match &triples {
+            TripleSect::Bitmap(triples_bitmap) => {
+                println!("{:?}", triples_bitmap.op_index.sequence);
+                println!("{:?}", triples_bitmap.adjlist_z.sequence.into_iter().collect::<Vec<_>>());
+            }
         }
-        //println!("{:?}", dict.string_to_id("http://www.snik.eu/ontology/meta", crate::dict::IdKind::Subject));
+        for i in 1..num_objects + 1 {
+            filtered = v.iter().filter(|tid| tid.object_id == i).copied().collect();
+            println!("{:?}", filtered);
+            assert_eq!(filtered, triples.triples_with_o(i).collect::<Vec<TripleId>>(), "triples_with_o({})", i);
+        }
     }
 }
