@@ -14,6 +14,7 @@ const USIZE_BITS: usize = usize::BITS as usize;
 #[derive(Clone)]
 pub struct Bitmap {
     //num_bits: usize,
+    // could also use sucds::rs_bit_vector::RsBitVector, that would be -1 dependency but that doesn't seem to have from_blocks
     pub dict: RsDict,
     //pub data: Vec<u64>,
 }

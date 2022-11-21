@@ -4,7 +4,6 @@ use crate::predicate_iter::PredicateIter;
 use crate::ControlInfo;
 use bytesize::ByteSize;
 use rsdict::RsDict;
-use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
@@ -191,7 +190,8 @@ impl TriplesBitmap {
         //println!("{:?}",adjlist_y.sequence.into_iter());
         let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
         println!("max_object {}", max_object);
-        let mut indices = vec![Vec::<u32>::new(); max_object];
+        // limited to < 2^32 objects
+        let mut indicess = vec![Vec::<u32>::new(); max_object];
 
         // Count the indexes of appearance of each object
         for i in 0..entries {
@@ -200,25 +200,19 @@ impl TriplesBitmap {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            indices[object - 1].push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
+            indicess[object - 1].push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-        let mut sequence_index = Vec::<u32>::new();
-        for i in 0..max_object {
+        let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries as usize));
+        for mut indices in indicess.into_iter() {
             let mut first = true;
-            let sorted = &mut indices[i];
-            sorted.sort();
-            for index in sorted {
+            indices.sort();
+            for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;
-                sequence_index.push(index.to_owned());
+                cv.push(index as usize);
             }
-        }
-
-        let mut cv = CompactVector::with_len(sequence_index.len(), sucds::util::needed_bits(entries as usize));
-        for (i, x) in sequence_index.into_iter().enumerate() {
-            cv.set(i, x as usize);
         }
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
