@@ -48,10 +48,15 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
 fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + 's) -> GTripleSource<'s, HdtGraph> {
     Box::new(
         triples
-            .map(|(s, p, o)| Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?])))
-            .filter_map(|r| {
+            .map(|(s, p, o)| {
+            debug_assert_ne!("",s,"triple_source subject is empty   ({}, {}, {})",s,p,o);
+            debug_assert_ne!("",p,"triple_source predicate is empty ({}, {}, {})",s,p,o);
+            debug_assert_ne!("",o,"triple_source object is empty    ({}, {}, {})",s,p,o);
+            StreamedTriple::by_value([auto_term(s).unwrap(), auto_term(p).unwrap(), auto_term(o).unwrap()])})
+            //Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?]))})
+            /*.filter_map(|r| {
                 r.map_err(|e: TermError| eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)).ok()
-            })
+            })*/
             .into_triple_source(),
     )
 }
@@ -59,6 +64,7 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &(impl TTerm + ?Sized)) -> String {
+    debug_assert!(t.value().to_string() != "");
     match t.kind() {
         TermKind::BlankNode => "_:".to_owned() + &t.value(),
         _ => t.value().to_string(),

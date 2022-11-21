@@ -6,6 +6,7 @@ use crate::triples::TripleId;
 use crate::triples::TripleSect;
 use crate::FourSectDict;
 use bytesize::ByteSize;
+use std::error::Error;
 use std::fs::File;
 use std::io;
 
@@ -37,9 +38,11 @@ impl Hdt {
         &'a self, ids: impl Iterator<Item = TripleId> + 'a,
     ) -> impl Iterator<Item = (String, String, String)> + 'a {
         ids.map(move |id: TripleId| {
-            let subject = self.dict.id_to_string(id.subject_id, IdKind::Subject);
-            let predicate = self.dict.id_to_string(id.predicate_id, IdKind::Predicate);
-            let object = self.dict.id_to_string(id.object_id, IdKind::Object);
+            let subject =
+                self.dict.id_to_string(id.subject_id, IdKind::Subject).unwrap_or_else(|e| panic!("{}", e));
+            let predicate =
+                self.dict.id_to_string(id.predicate_id, IdKind::Predicate).unwrap_or_else(|e| panic!("{}", e));
+            let object = self.dict.id_to_string(id.object_id, IdKind::Object).unwrap_or_else(|e| panic!("{}", e));
             (subject, predicate, object)
         })
     }
@@ -50,6 +53,7 @@ impl Hdt {
     }
 
     pub fn triples_with(&self, kind: IdKind, s: &str) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
+        debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, IdKind::Subject);
         if (id == 0) {
             return Box::new(std::iter::empty());

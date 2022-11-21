@@ -7,6 +7,7 @@ use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::str;
+use thiserror::Error;
 
 /// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 #[derive(Clone)]
@@ -30,16 +31,20 @@ impl fmt::Debug for DictSectPFC {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum ExtractError {
+    #[error("index out of bounds: id {id} > dictionary section len {len}")]
+    IdOutOfBounds { id: usize, len: usize },
+    #[error("Read invalid UTF-8 sequence in {data:?}, recovered: '{recovered}'")]
+    InvalidUtf8 { source: std::str::Utf8Error, data: Vec<u8>, recovered: String },
+}
+
 impl DictSectPFC {
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.size_in_bytes() + self.packed_data.len()
     }
 
-    pub fn id_to_string(&self, id: usize) -> String {
-        self.extract(id)
-        // Self::decode(self.extract(id))
-    }
-
+    /*
     // TODO: fix this
     fn decode(string: String) -> String {
         let mut split: Vec<String> = string.rsplit('"').map(String::from).collect();
@@ -52,6 +57,7 @@ impl DictSectPFC {
             split[0].clone()
         }
     }
+    */
 
     fn index_str(&self, index: usize) -> &str {
         let position: usize = self.sequence.get(index);
@@ -170,9 +176,10 @@ impl DictSectPFC {
         id_in_block
     }
 
-    fn extract(&self, id: usize) -> String {
-        if id > self.num_strings {
-            return String::from("");
+    /// extract the string with the given ID from the dictionary
+    pub fn extract(&self, id: usize) -> Result<String, ExtractError> {
+        if (id > self.num_strings) {
+            return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
         }
 
         let block_index = id.saturating_sub(1) / self.block_size;
@@ -192,16 +199,12 @@ impl DictSectPFC {
         }
         // tried simdutf8::basic::from_utf8 but that didn't speed up extract that much
         match str::from_utf8(&string) {
-            Ok(string) => String::from(string),
-            Err(e) => {
-                eprintln!(
-                    "Read invalid UTF-8 sequence: {} in {:?} '{}'",
-                    e,
-                    string,
-                    String::from_utf8_lossy(&string)
-                );
-                "".to_owned()
-            }
+            Ok(string) => Ok(String::from(string)),
+            Err(e) => Err(ExtractError::InvalidUtf8 {
+                source: e,
+                data: string.clone(),
+                recovered: String::from_utf8_lossy(&string).into_owned(),
+            }),
         }
     }
 
@@ -287,14 +290,14 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
     use std::io::Read;
-
+    /* unused
     #[test]
     fn test_decode() {
         let s = String::from("^^<http://www.w3.org/2001/XMLSchema#integer>\"123\"");
         let d = DictSectPFC::decode(s);
         assert_eq!(d, "\"123\"^^<http://www.w3.org/2001/XMLSchema#integer>");
     }
-
+    */
     #[test]
     fn test_section_read() {
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
@@ -315,7 +318,7 @@ mod tests {
         assert_eq!(shared.block_size, 16);
         for term in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta/Function", "_:b1"] {
             let id = shared.string_to_id(term);
-            let back = shared.extract(id);
+            let back = shared.extract(id).unwrap();
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
@@ -331,7 +334,7 @@ mod tests {
             "http://www.snik.eu/ontology/meta/typicalFeature",
         ] {
             let id = subjects.string_to_id(term);
-            let back = subjects.extract(id);
+            let back = subjects.extract(id).unwrap();
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
