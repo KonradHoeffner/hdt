@@ -101,14 +101,14 @@ pub struct OpIndex {
 
 impl fmt::Debug for OpIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
+        writeln!(f, "total size {} {{", ByteSize(self.size_in_bytes() as u64));
         writeln!(
             f,
-            "sequence: {} with {} bits",
+            "    sequence: {} with {} bits,",
             ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
             self.sequence.width()
         );
-        writeln!(f, "bitmap: {:#?}", self.bitmap)
+        write!(f, "    bitmap: {:#?}\n}}", self.bitmap)
     }
 }
 
@@ -142,7 +142,7 @@ impl fmt::Debug for TriplesBitmap {
         writeln!(f, "adjlist_y {:#?}", self.adjlist_y);
         writeln!(f, "adjlist_z {:#?}", self.adjlist_z);
         writeln!(f, "op_index {:#?}", self.op_index);
-        writeln!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
+        write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
     }
 }
 
@@ -187,9 +187,7 @@ impl TriplesBitmap {
         print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
-        //println!("{:?}",adjlist_y.sequence.into_iter());
         let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
-        println!("max_object {}", max_object);
         // limited to < 2^32 objects
         let mut indicess = vec![Vec::<u32>::new(); max_object];
 
@@ -362,15 +360,8 @@ mod tests {
             filtered = v.iter().filter(|tid| tid.predicate_id == i).copied().collect();
             assert_eq!(filtered, triples.triples_with_p(i).collect::<Vec<TripleId>>(), "triples_with_p({})", i);
         }
-        match &triples {
-            TripleSect::Bitmap(triples_bitmap) => {
-                println!("{:?}", triples_bitmap.op_index.sequence);
-                println!("{:?}", triples_bitmap.adjlist_z.sequence.into_iter().collect::<Vec<_>>());
-            }
-        }
         for i in 1..num_objects + 1 {
             filtered = v.iter().filter(|tid| tid.object_id == i).copied().collect();
-            println!("{:?}", filtered);
             assert_eq!(filtered, triples.triples_with_o(i).collect::<Vec<TripleId>>(), "triples_with_o({})", i);
         }
     }

@@ -24,7 +24,7 @@ impl Hdt {
         let dict = FourSectDict::read(&mut reader)?;
         let triple_sect = TripleSect::read(&mut reader)?;
         let hdt = Hdt { dict, triple_sect };
-        println!("HDT size in memory > {}, details:", ByteSize(hdt.size_in_bytes() as u64));
+        println!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         println!("{:#?}", hdt);
         Ok(hdt)
     }
