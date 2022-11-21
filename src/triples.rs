@@ -105,11 +105,11 @@ impl fmt::Debug for OpIndex {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
         writeln!(
             f,
-            "sequence {} with {} bits",
+            "sequence: {} with {} bits",
             ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
             self.sequence.width()
         );
-        writeln!(f, "bitmap{:#?}", self.bitmap)
+        writeln!(f, "bitmap: {:#?}", self.bitmap)
     }
 }
 

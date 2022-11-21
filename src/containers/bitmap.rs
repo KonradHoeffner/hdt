@@ -20,8 +20,7 @@ pub struct Bitmap {
 
 impl fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        //write!(f, "Bitmap size {}", ByteSize(self.size_in_bytes() as u64))
-        write!(f, "Bitmap size unknown")
+        write!(f, "{}", ByteSize(self.dict.heap_size() as u64))
     }
 }
 
@@ -33,8 +32,7 @@ impl Bitmap {
     }
 
     pub fn size_in_bytes(&self) -> usize {
-        // TODO figure out how to measure the size of an RsDict
-        0
+        self.dict.heap_size()
     }
 
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
