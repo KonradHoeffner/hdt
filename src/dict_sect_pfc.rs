@@ -77,15 +77,14 @@ impl DictSectPFC {
         while low <= high {
             mid = (low + high) / 2;
 
-            let cmp: Ordering;
-            if mid > max {
+            let cmp: Ordering = if mid > max {
                 mid = max;
                 break;
             } else {
                 let text = self.index_str(mid);
-                cmp = element.cmp(text);
+                element.cmp(text)
                 //println!("mid: {} text: {} cmp: {:?}", mid, text, cmp);
-            }
+            };
             match cmp {
                 Ordering::Less => {
                     if (mid == 0) {

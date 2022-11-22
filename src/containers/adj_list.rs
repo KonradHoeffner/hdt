@@ -29,6 +29,10 @@ impl AdjList {
         self.sequence.entries
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.sequence.data.is_empty()
+    }
+
     pub fn find(&self, x: usize) -> usize {
         if (x == 0) {
             return 0;

@@ -13,6 +13,12 @@ pub struct Header {
     pub body: BTreeSet<Triple>,
 }
 
+impl Default for Header {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Header {
     pub fn new() -> Self {
         Header { format: String::new(), length: 0, body: BTreeSet::new() }

@@ -1,5 +1,4 @@
 use crate::dict_sect_pfc::ExtractError;
-use crate::four_sect_dict::DictError::*;
 use crate::triples::TripleId;
 use crate::ControlInfo;
 use crate::DictSectPFC;
@@ -23,35 +22,44 @@ pub struct FourSectDict {
     pub objects: DictSectPFC,
 }
 
+#[derive(Debug)]
+pub enum SectKind {
+    Shared,
+    Subject,
+    Predicate,
+    Object,
+}
+
 #[derive(Error, Debug)]
-pub enum DictError {
-    #[error("dictionary error in the shared section: {0}")]
-    SharedError(#[source] ExtractError),
-    #[error("dictionary error in the subject section: {0}")]
-    SubjectError(#[source] ExtractError),
-    #[error("dictionary error in the predicate section: {0}")]
-    PredicateError(#[source] ExtractError),
-    #[error("dictionary error in the object section: {0}")]
-    ObjectError(#[source] ExtractError),
+#[error("four sect dict error id_to_string({id},IdKind::{id_kind:?}) in the {sect_kind:?} section, caused by {e}")]
+pub struct DictErr {
+    #[source]
+    e: ExtractError,
+    id: usize,
+    id_kind: IdKind,
+    sect_kind: SectKind,
 }
 
 impl FourSectDict {
-    pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> Result<String, DictError> {
+    pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> Result<String, DictErr> {
         let shared_size = self.shared.num_strings();
+        let d = id.saturating_sub(shared_size);
         match id_kind {
             IdKind::Subject => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| SharedError(e))
+                    self.shared.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Shared })
                 } else {
-                    self.subjects.extract(id - shared_size).map_err(|e| SharedError(e))
+                    self.subjects.extract(d).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Subject })
                 }
             }
-            IdKind::Predicate => self.predicates.extract(id).map_err(|e| SharedError(e)),
+            IdKind::Predicate => {
+                self.predicates.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Predicate })
+            }
             IdKind::Object => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| SharedError(e))
+                    self.shared.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Shared })
                 } else {
-                    self.objects.extract(id - shared_size).map_err(|e| SharedError(e))
+                    self.objects.extract(d).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Object })
                 }
             }
         }
@@ -63,7 +71,10 @@ impl FourSectDict {
             IdKind::Subject => {
                 let mut id = self.shared.string_to_id(s);
                 if id == 0 {
-                    id = self.subjects.string_to_id(s) + shared_size;
+                    id = self.subjects.string_to_id(s);
+                    if id > 0 {
+                        id += shared_size;
+                    }
                 }
                 id
             }
@@ -71,7 +82,10 @@ impl FourSectDict {
             IdKind::Object => {
                 let mut id = self.shared.string_to_id(s);
                 if id == 0 {
-                    id = self.objects.string_to_id(s) + shared_size;
+                    id = self.objects.string_to_id(s);
+                    if id > 0 {
+                        id += shared_size;
+                    }
                 }
                 id
             }

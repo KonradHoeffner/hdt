@@ -39,6 +39,12 @@ pub struct ControlInfo {
     properties: HashMap<String, String>,
 }
 
+impl Default for ControlInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ControlInfo {
     pub fn new() -> Self {
         ControlInfo { control_type: ControlType::Unknown, format: String::new(), properties: HashMap::new() }

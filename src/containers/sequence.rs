@@ -74,7 +74,7 @@ impl Sequence {
     }
 
     pub fn size_in_bytes(&self) -> usize {
-        self.data.len() * USIZE_BITS >> 3
+        (self.data.len() * USIZE_BITS) >> 3
     }
 
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {

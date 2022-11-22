@@ -1,7 +1,7 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::object_iter::ObjectIter;
 use crate::predicate_iter::PredicateIter;
-use crate::ControlInfo;
+use crate::{ControlInfo, IdKind};
 use bytesize::ByteSize;
 use rsdict::RsDict;
 use std::convert::TryFrom;
@@ -46,21 +46,13 @@ impl TripleSect {
         }
     }
 
-    pub fn triples_with_s(&self, subject_id: usize) -> BitmapIter {
+    pub fn triples_with_id(&self, id: usize, id_kind: IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
         match self {
-            TripleSect::Bitmap(bitmap) => BitmapIter::with_s(bitmap, subject_id),
-        }
-    }
-
-    pub fn triples_with_o(&self, object_id: usize) -> ObjectIter {
-        match self {
-            TripleSect::Bitmap(bitmap) => ObjectIter::new(bitmap, object_id),
-        }
-    }
-
-    pub fn triples_with_p(&self, predicate_id: usize) -> PredicateIter {
-        match self {
-            TripleSect::Bitmap(bitmap) => PredicateIter::new(bitmap, predicate_id),
+            TripleSect::Bitmap(bitmap) => match id_kind {
+                IdKind::Subject => Box::new(BitmapIter::with_s(bitmap, id)),
+                IdKind::Predicate => Box::new(PredicateIter::new(bitmap, id)),
+                IdKind::Object => Box::new(ObjectIter::new(bitmap, id)),
+            },
         }
     }
 }
@@ -352,17 +344,20 @@ mod tests {
         let num_objects = 175;
         // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
         let mut filtered: Vec<TripleId>;
-        for i in 1..num_subjects + 1 {
-            filtered = v.iter().filter(|tid| tid.subject_id == i).copied().collect();
-            assert_eq!(filtered, triples.triples_with_s(i).collect::<Vec<TripleId>>(), "triples_with_s({})", i);
-        }
-        for i in 1..num_predicates + 1 {
-            filtered = v.iter().filter(|tid| tid.predicate_id == i).copied().collect();
-            assert_eq!(filtered, triples.triples_with_p(i).collect::<Vec<TripleId>>(), "triples_with_p({})", i);
-        }
-        for i in 1..num_objects + 1 {
-            filtered = v.iter().filter(|tid| tid.object_id == i).copied().collect();
-            assert_eq!(filtered, triples.triples_with_o(i).collect::<Vec<TripleId>>(), "triples_with_o({})", i);
+        let kinds = [IdKind::Subject, IdKind::Predicate, IdKind::Object];
+        let lens = [num_subjects, num_predicates, num_objects];
+        let funs = [|t: TripleId| t.subject_id, |t: TripleId| t.predicate_id, |t: TripleId| t.object_id];
+        for j in 0..kinds.len() {
+            for i in 1..lens[j] + 1 {
+                filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
+                assert_eq!(
+                    filtered,
+                    triples.triples_with_id(i, kinds[j].clone()).collect::<Vec<TripleId>>(),
+                    "triples_with({},{:?})",
+                    i,
+                    kinds[j]
+                );
+            }
         }
     }
 }

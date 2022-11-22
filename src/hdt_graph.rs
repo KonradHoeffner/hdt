@@ -10,8 +10,6 @@ use sophia::triple::streaming_mode::*;
 use sophia::triple::Triple;
 use std::convert::Infallible;
 
-//use std::hash::Hash;
-
 pub struct HdtGraph {
     hdt: Hdt,
 }
@@ -25,20 +23,28 @@ impl HdtGraph {
 fn auto_term(s: String) -> Result<BoxTerm, TermError> {
     match s.chars().next() {
         None => Err(TermError::InvalidIri("".to_owned())),
-        Some('"') => {
-            let mut dt_split = s.split("^^");
-            let mut before_dt = dt_split.next().unwrap().split('@');
-            let quoted = before_dt.next().unwrap();
-            let lex = quoted[1..quoted.len() - 1].to_owned();
-            if let Some(lang) = before_dt.next() {
-                return Ok(BoxTerm::from(Literal::new_lang_unchecked(lex, lang)));
+        Some('"') => match s.rfind('"') {
+            None => Err(TermError::UnsupportedDatatype(s)),
+            Some(index) => {
+                let lex = s[1..index].to_owned();
+                let rest = &s[index + 1..];
+                // literal with no language tag and no datatype
+                if (rest.is_empty()) {
+                    return Ok(BoxTerm::from(lex));
+                }
+                // either language tag or datatype
+                if let Some(tag_index) = rest.find('@') {
+                    return Ok(BoxTerm::from(Literal::new_lang_unchecked(lex, rest[tag_index + 1..].to_owned())));
+                }
+                // datatype
+                let mut dt_split = rest.split("^^");
+                dt_split.next(); // empty
+                match dt_split.next() {
+                    Some(dt) => Ok(BoxTerm::from(Literal::new_dt(lex, Iri::<&str>::new(&dt[1..dt.len() - 1])?))),
+                    None => Err(TermError::UnsupportedDatatype(s)),
+                }
             }
-            if let Some(uri_ref) = dt_split.next() {
-                let dt = &uri_ref[1..uri_ref.len() - 1];
-                return Ok(BoxTerm::from(Literal::new_dt(lex, Iri::<&str>::new(dt)?)));
-            }
-            Ok(BoxTerm::from(lex))
-        }
+        },
         Some('_') => BoxTerm::new_bnode(s[2..].to_owned()),
         _ => BoxTerm::new_iri(s),
     }
@@ -48,15 +54,13 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
 fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + 's) -> GTripleSource<'s, HdtGraph> {
     Box::new(
         triples
-            .map(|(s, p, o)| {
-            debug_assert_ne!("",s,"triple_source subject is empty   ({}, {}, {})",s,p,o);
-            debug_assert_ne!("",p,"triple_source predicate is empty ({}, {}, {})",s,p,o);
-            debug_assert_ne!("",o,"triple_source object is empty    ({}, {}, {})",s,p,o);
-            StreamedTriple::by_value([auto_term(s).unwrap(), auto_term(p).unwrap(), auto_term(o).unwrap()])})
-            //Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?]))})
-            /*.filter_map(|r| {
-                r.map_err(|e: TermError| eprintln!("hdt::HdtGraph::triples() skipping invalid IRI {}", e)).ok()
-            })*/
+            .map(|(s, p, o)| -> Result<_> {
+                debug_assert_ne!("", s, "triple_source subject is empty   ({}, {}, {})", s, p, o);
+                debug_assert_ne!("", p, "triple_source predicate is empty ({}, {}, {})", s, p, o);
+                debug_assert_ne!("", o, "triple_source object is empty    ({}, {}, {})", s, p, o);
+                Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?]))
+            })
+            .filter_map(|r| r.map_err(|e| eprintln!("{}", e)).ok())
             .into_triple_source(),
     )
 }
@@ -64,7 +68,6 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &(impl TTerm + ?Sized)) -> String {
-    debug_assert!(t.value().to_string() != "");
     match t.kind() {
         TermKind::BlankNode => "_:".to_owned() + &t.value(),
         _ => t.value().to_string(),
@@ -83,15 +86,15 @@ impl Graph for HdtGraph {
     }
 
     fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(IdKind::Subject, &term_string(s)))
+        triple_source(self.hdt.triples_with(&term_string(s), IdKind::Subject))
     }
 
     fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(IdKind::Predicate, &p.value()))
+        triple_source(self.hdt.triples_with(&p.value(), IdKind::Predicate))
     }
 
     fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(IdKind::Object, &term_string(o)))
+        triple_source(self.hdt.triples_with(&term_string(o), IdKind::Object))
     }
 }
 /*
@@ -611,7 +614,11 @@ mod tests {
         let triples: Vec<_> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
         //println!("{}",triples[0].as_ref().unwrap().s().value());
-        for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta"] {
+        assert!(graph
+            .triples_with_s(&BoxTerm::from("http://www.snik.eu/ontology/meta".to_owned()))
+            .next()
+            .is_some());
+        for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let term = BoxTerm::from(uri.to_owned());
             let filtered: Vec<_> = triples
                 .iter()
@@ -619,6 +626,7 @@ mod tests {
                 .filter(|triple| triple.s().value().to_string() == uri)
                 .map(|x| x)
                 .collect();
+            println!("{} results for {}", filtered.len(), uri);
             let with_s: Vec<_> = graph.triples_with_s(&term).map(|x| x.unwrap()).collect();
             // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
             // could break in the future e.g. because of ordering
