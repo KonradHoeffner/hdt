@@ -16,9 +16,7 @@ impl<'a> PredicateIter<'a> {
     /// Create a new iterator over all triples with the given property ID.
     /// Panics if the object does not exist.
     pub fn new(triples: &'a TriplesBitmap, p: usize) -> Self {
-        if p == 0 {
-            panic!("object 0 does not exist, cant iterate");
-        }
+        assert!(p != 0, "object 0 does not exist, cant iterate");
         let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p);
         //println!("the predicate {} is used by {} subjects in the index", p, occs);
         PredicateIter { triples, p, i: 0, pos_z: 0, os: 0, s: 0, occs }

@@ -305,9 +305,11 @@ mod tests {
 
         // read dictionary control information
         let dict_ci = ControlInfo::read(&mut reader).unwrap();
-        if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-            panic!("invalid dictionary type: {:?}", dict_ci.format);
-        }
+        assert!(
+            !(dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>"),
+            "invalid dictionary type: {:?}",
+            dict_ci.format
+        );
 
         let shared = DictSectPFC::read(&mut reader).unwrap();
         // the file contains IRIs that are used both as subject and object 23128
