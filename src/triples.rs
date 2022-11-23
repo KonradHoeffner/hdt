@@ -359,7 +359,7 @@ mod tests {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
                 assert_eq!(
                     filtered,
-                    triples.triples_with_id(i, kinds[j].clone()).collect::<Vec<TripleId>>(),
+                    triples.triples_with_id(i, &kinds[j]).collect::<Vec<TripleId>>(),
                     "triples_with({},{:?})",
                     i,
                     kinds[j]

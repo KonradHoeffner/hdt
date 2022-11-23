@@ -34,9 +34,9 @@ impl Hdt {
     }
 
     fn translate_id(&self, t: TripleId) -> Result<(String, String, String), DictErr> {
-        let subject = self.dict.id_to_string(t.subject_id, IdKind::Subject)?;
-        let predicate = self.dict.id_to_string(t.predicate_id, IdKind::Predicate)?;
-        let object = self.dict.id_to_string(t.object_id, IdKind::Object)?;
+        let subject = self.dict.id_to_string(t.subject_id, &IdKind::Subject)?;
+        let predicate = self.dict.id_to_string(t.predicate_id, &IdKind::Predicate)?;
+        let object = self.dict.id_to_string(t.object_id, &IdKind::Object)?;
         Ok((subject, predicate, object))
     }
 
@@ -76,10 +76,10 @@ mod tests {
         let triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();
         assert_eq!(v.len(), 327);
-        assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", IdKind::Subject));
+        assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0 == uri).collect();
-            let with_s: Vec<_> = hdt.triples_with(uri, IdKind::Subject).collect();
+            let with_s: Vec<_> = hdt.triples_with(uri, &IdKind::Subject).collect();
             assert_eq!(filtered, with_s, "different results between triples() and triples_with_s() for {}", uri);
         }
     }

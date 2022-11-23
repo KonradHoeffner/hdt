@@ -36,12 +36,12 @@ pub struct DictErr {
     #[source]
     e: ExtractError,
     id: usize,
-    id_kind: IdKind,
+    id_kind: &'static IdKind,
     sect_kind: SectKind,
 }
 
 impl FourSectDict {
-    pub fn id_to_string(&self, id: usize, id_kind: IdKind) -> Result<String, DictErr> {
+    pub fn id_to_string(&self, id: usize, id_kind: &'static IdKind) -> Result<String, DictErr> {
         let shared_size = self.shared.num_strings();
         let d = id.saturating_sub(shared_size);
         match id_kind {
@@ -149,23 +149,26 @@ mod tests {
         assert_eq!(dict.subjects.num_strings(), 5, "wrong number of strings in the subject section");
         assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");
         assert_eq!(dict.objects.num_strings(), 132, "wrong number of strings in the objects section");
-        assert_eq!(dict.string_to_id("_:b1", IdKind::Subject), 1);
-        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, IdKind::Subject).unwrap());
-        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, IdKind::Subject).unwrap());
-        assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, IdKind::Subject).unwrap());
+        assert_eq!(dict.string_to_id("_:b1", &IdKind::Subject), 1);
+        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, &IdKind::Subject).unwrap());
+        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, &IdKind::Subject).unwrap());
+        assert_eq!(
+            "http://www.snik.eu/ontology/meta/DataSetType",
+            dict.id_to_string(5, &IdKind::Subject).unwrap()
+        );
         for id in 1..dict.shared.num_strings() {
-            let s = dict.id_to_string(id, IdKind::Subject).unwrap();
-            let back = dict.string_to_id(&s, IdKind::Subject);
+            let s = dict.id_to_string(id, &IdKind::Subject).unwrap();
+            let back = dict.string_to_id(&s, &IdKind::Subject);
             assert_eq!(id, back, "shared id {} -> subject {} -> id {}", id, s, back);
 
-            let s = dict.id_to_string(id, IdKind::Object).unwrap();
-            let back = dict.string_to_id(&s, IdKind::Object);
+            let s = dict.id_to_string(id, &IdKind::Object).unwrap();
+            let back = dict.string_to_id(&s, &IdKind::Object);
             assert_eq!(id, back, "shared id {} -> object {} -> id {}", id, s, back);
         }
         for (sect, kind, name, offset) in [
-            (&dict.subjects, IdKind::Subject, "subject", dict.shared.num_strings()),
-            (&dict.objects, IdKind::Object, "object", dict.shared.num_strings()),
-            (&dict.predicates, IdKind::Predicate, "predicate", 0),
+            (&dict.subjects, &IdKind::Subject, "subject", dict.shared.num_strings()),
+            (&dict.objects, &IdKind::Object, "object", dict.shared.num_strings()),
+            (&dict.predicates, &IdKind::Predicate, "predicate", 0),
         ] {
             for id in offset + 1..offset + sect.num_strings() {
                 let s = dict.id_to_string(id, kind).unwrap();
