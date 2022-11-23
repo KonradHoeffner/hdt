@@ -86,15 +86,15 @@ impl Graph for HdtGraph {
     }
 
     fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&term_string(s), IdKind::Subject))
+        triple_source(self.hdt.triples_with(&term_string(s), &IdKind::Subject))
     }
 
     fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&p.value(), IdKind::Predicate))
+        triple_source(self.hdt.triples_with(&p.value(), &IdKind::Predicate))
     }
 
     fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&term_string(o), IdKind::Object))
+        triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
     }
 }
 /*

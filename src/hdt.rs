@@ -44,16 +44,18 @@ impl Hdt {
         self.triple_sect.read_all_ids().map(|id| self.translate_id(id).unwrap())
     }
 
-    pub fn triples_with(&self, s: &str, kind: IdKind) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
+    pub fn triples_with(
+        &self, s: &str, kind: &'static IdKind,
+    ) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
         debug_assert_ne!("", s);
-        let id = self.dict.string_to_id(s, kind.clone());
+        let id = self.dict.string_to_id(s, kind);
         if id == 0 {
             return Box::new(std::iter::empty());
         }
         let owned = s.to_owned();
         Box::new(
             self.triple_sect
-                .triples_with_id(id, kind.clone())
+                .triples_with_id(id, kind)
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| r.map_err(|e| eprintln!("Error on triple with {kind:?} {owned}: {e}")).ok()),
         )

@@ -25,7 +25,7 @@ impl TripleSect {
 
         match &triples_ci.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => {
-                Ok(TripleSect::Bitmap(TriplesBitmap::read(reader, triples_ci)?))
+                Ok(TripleSect::Bitmap(TriplesBitmap::read(reader, &triples_ci)?))
             }
             "<http://purl.org/HDT/hdt#triplesList>" => {
                 Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
@@ -46,7 +46,7 @@ impl TripleSect {
         }
     }
 
-    pub fn triples_with_id(&self, id: usize, id_kind: IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
+    pub fn triples_with_id(&self, id: usize, id_kind: &IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
         match self {
             TripleSect::Bitmap(bitmap) => match id_kind {
                 IdKind::Subject => Box::new(BitmapIter::with_s(bitmap, id)),
@@ -149,7 +149,7 @@ impl TriplesBitmap {
         self.bitmap_y.dict.select1(subject_id as u64 - 1).unwrap() as usize + 1
     }
 
-    pub fn read<R: BufRead>(reader: &mut R, triples_ci: ControlInfo) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
 

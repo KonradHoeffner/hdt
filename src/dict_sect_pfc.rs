@@ -89,7 +89,7 @@ impl DictSectPFC {
                     if mid == 0 {
                         return 0;
                     }
-                    high = mid - 1
+                    high = mid - 1;
                 }
                 Ordering::Greater => low = mid + 1,
                 Ordering::Equal => {

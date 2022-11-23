@@ -65,7 +65,7 @@ impl FourSectDict {
         }
     }
 
-    pub fn string_to_id(&self, s: &str, id_kind: IdKind) -> usize {
+    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> usize {
         let shared_size = self.shared.num_strings();
         match id_kind {
             IdKind::Subject => {
@@ -168,8 +168,8 @@ mod tests {
             (&dict.predicates, IdKind::Predicate, "predicate", 0),
         ] {
             for id in offset + 1..offset + sect.num_strings() {
-                let s = dict.id_to_string(id, kind.clone()).unwrap();
-                let back = dict.string_to_id(&s, kind.clone());
+                let s = dict.id_to_string(id, kind).unwrap();
+                let back = dict.string_to_id(&s, kind);
                 assert_eq!(id, back, "{} id {} -> {} {} -> id {}", name, id, name, s, back);
             }
         }
