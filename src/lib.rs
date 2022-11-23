@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::missing_errors_doc)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::wildcard_imports)]
 // types for storing and reading data
 pub mod containers;
 // types for representing dictionaries
