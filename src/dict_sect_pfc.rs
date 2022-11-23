@@ -13,7 +13,6 @@ use thiserror::Error;
 #[derive(Clone)]
 pub struct DictSectPFC {
     num_strings: usize,
-    packed_length: usize,
     block_size: usize,
     sequence: Sequence,
     packed_data: Vec<u8>,
@@ -87,7 +86,7 @@ impl DictSectPFC {
             };
             match cmp {
                 Ordering::Less => {
-                    if (mid == 0) {
+                    if mid == 0 {
                         return 0;
                     }
                     high = mid - 1
@@ -177,7 +176,7 @@ impl DictSectPFC {
 
     /// extract the string with the given ID from the dictionary
     pub fn extract(&self, id: usize) -> Result<String, ExtractError> {
-        if (id > self.num_strings) {
+        if id > self.num_strings {
             return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
         }
 
@@ -277,18 +276,18 @@ impl DictSectPFC {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
-        Ok(DictSectPFC { num_strings, packed_length, block_size, sequence, packed_data })
+        Ok(DictSectPFC { num_strings, block_size, sequence, packed_data })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ControlInfo, Header};
-    use pretty_assertions::{assert_eq, assert_ne};
+    use crate::header::Header;
+    use crate::ControlInfo;
+    use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::BufReader;
-    use std::io::Read;
     /* unused
     #[test]
     fn test_decode() {
@@ -313,7 +312,7 @@ mod tests {
         let shared = DictSectPFC::read(&mut reader).unwrap();
         // the file contains IRIs that are used both as subject and object 23128
         assert_eq!(shared.num_strings, 43);
-        assert_eq!(shared.packed_length, 614);
+        assert_eq!(shared.packed_data.len(), 614);
         assert_eq!(shared.block_size, 16);
         for term in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta/Function", "_:b1"] {
             let id = shared.string_to_id(term);
@@ -323,7 +322,6 @@ mod tests {
         let sequence = shared.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
         assert_eq!(sequence.data.len(), data_size);
-        assert_eq!(shared.packed_data.len(), shared.packed_length);
 
         let subjects = DictSectPFC::read(&mut reader).unwrap();
         assert_eq!(subjects.num_strings, 5);
@@ -339,6 +337,5 @@ mod tests {
         let sequence = subjects.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
         assert_eq!(sequence.data.len(), data_size);
-        assert_eq!(shared.packed_data.len(), shared.packed_length);
     }
 }

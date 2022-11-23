@@ -1,4 +1,3 @@
-#![allow(unused)]
 // types for storing and reading data
 pub mod containers;
 // types for representing dictionaries
@@ -21,4 +20,3 @@ use four_sect_dict::FourSectDict;
 use four_sect_dict::IdKind;
 #[cfg(feature = "sophia_graph")]
 pub use hdt_graph::HdtGraph;
-use header::Header;

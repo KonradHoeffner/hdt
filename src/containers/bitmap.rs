@@ -9,7 +9,7 @@ use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
-const USIZE_BITS: usize = usize::BITS as usize;
+//const USIZE_BITS: usize = usize::BITS as usize;
 
 #[derive(Clone)]
 pub struct Bitmap {

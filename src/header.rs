@@ -8,8 +8,8 @@ use std::str;
 
 #[derive(Debug, Clone)]
 pub struct Header {
-    format: String,
-    length: usize,
+    pub format: String,
+    pub length: usize,
     pub body: BTreeSet<Triple>,
 }
 

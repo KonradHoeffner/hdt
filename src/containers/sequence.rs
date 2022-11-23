@@ -59,7 +59,7 @@ impl Sequence {
         let block_index = scaled_index / USIZE_BITS;
         let bit_index = scaled_index % USIZE_BITS;
 
-        let mut result = 0;
+        let mut result;
 
         let result_shift = USIZE_BITS - self.bits_per_entry;
         if bit_index + self.bits_per_entry <= USIZE_BITS {
@@ -81,7 +81,6 @@ impl Sequence {
         use io::Error;
         use io::ErrorKind::InvalidData;
         use io::ErrorKind::Other;
-        use std::convert::TryFrom;
 
         // read entry metadata
         // keep track of history for CRC8
@@ -130,7 +129,7 @@ impl Sequence {
         let total_bits = bits_per_entry * entries;
         let full_byte_amount = (((total_bits + USIZE_BITS - 1) / USIZE_BITS) - 1) * size_of::<usize>();
         let mut full_words = vec![0_u8; full_byte_amount];
-        reader.read_exact(&mut full_words);
+        reader.read_exact(&mut full_words)?;
         history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize values

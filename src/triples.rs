@@ -93,13 +93,13 @@ pub struct OpIndex {
 
 impl fmt::Debug for OpIndex {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "total size {} {{", ByteSize(self.size_in_bytes() as u64));
+        writeln!(f, "total size {} {{", ByteSize(self.size_in_bytes() as u64))?;
         writeln!(
             f,
             "    sequence: {} with {} bits,",
             ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
             self.sequence.width()
-        );
+        )?;
         write!(f, "    bitmap: {:#?}\n}}", self.bitmap)
     }
 }
@@ -130,9 +130,9 @@ pub struct TriplesBitmap {
 
 impl fmt::Debug for TriplesBitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
-        writeln!(f, "adjlist_z {:#?}", self.adjlist_z);
-        writeln!(f, "op_index {:#?}", self.op_index);
+        writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64))?;
+        writeln!(f, "adjlist_z {:#?}", self.adjlist_z)?;
+        writeln!(f, "op_index {:#?}", self.op_index)?;
         write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
     }
 }
@@ -200,7 +200,7 @@ impl TriplesBitmap {
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-        let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries as usize));
+        let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
         for mut indices in indicess.into_iter() {
             let mut first = true;
             indices.sort();
@@ -327,8 +327,9 @@ impl TripleId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ControlInfo, FourSectDict, Header, IdKind};
-    use pretty_assertions::{assert_eq, assert_ne};
+    use crate::header::Header;
+    use crate::{ControlInfo, FourSectDict, IdKind};
+    use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::BufReader;
 
@@ -338,7 +339,7 @@ mod tests {
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
-        let dict = FourSectDict::read(&mut reader).unwrap();
+        let _dict = FourSectDict::read(&mut reader).unwrap();
         let triples = TripleSect::read(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 327);

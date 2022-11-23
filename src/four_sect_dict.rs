@@ -1,8 +1,8 @@
 use crate::dict_sect_pfc::ExtractError;
-use crate::triples::TripleId;
+
 use crate::ControlInfo;
 use crate::DictSectPFC;
-use rayon::prelude::*;
+
 use std::io;
 use std::io::BufRead;
 use thiserror::Error;
@@ -107,6 +107,7 @@ impl FourSectDict {
             objects: DictSectPFC::read(reader)?,
         })
     }
+    /*
     pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
         triple_ids
             .into_par_iter()
@@ -118,7 +119,7 @@ impl FourSectDict {
             })
             .collect()
     }
-
+    */
     pub fn size_in_bytes(&self) -> usize {
         self.shared.size_in_bytes()
             + self.subjects.size_in_bytes()
@@ -130,11 +131,11 @@ impl FourSectDict {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ControlInfo, Header};
-    use pretty_assertions::{assert_eq, assert_ne};
+    use crate::header::Header;
+    use crate::ControlInfo;
+    use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::BufReader;
-    use std::io::Read;
 
     #[test]
     fn read_dict() {

@@ -22,7 +22,7 @@ impl<'a> ObjectIter<'a> {
             panic!("object 0 does not exist, cant iterate");
         }
         let pos_index = triples.op_index.find(o);
-        let pos_z = triples.op_index.sequence.get(pos_index) as u64;
+        let _pos_z = triples.op_index.sequence.get(pos_index) as u64;
         //debug_assert_eq!(o, triples.adjlist_z.get_id(pos_z as usize));
         let max_index = triples.op_index.last(o);
         //println!("ObjectIter o={} pos_index={} max_index={}", o, pos_index, max_index);

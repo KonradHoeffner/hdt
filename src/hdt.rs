@@ -1,13 +1,12 @@
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
-use crate::triples::BitmapIter;
+
 use crate::triples::TripleId;
 use crate::triples::TripleSect;
 use crate::FourSectDict;
 use bytesize::ByteSize;
-use std::error::Error;
-use std::fs::File;
+
 use std::io;
 
 #[derive(Debug)]
@@ -48,7 +47,7 @@ impl Hdt {
     pub fn triples_with(&self, s: &str, kind: IdKind) -> Box<dyn Iterator<Item = (String, String, String)> + '_> {
         debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, kind.clone());
-        if (id == 0) {
+        if id == 0 {
             return Box::new(std::iter::empty());
         }
         let owned = s.to_owned();
@@ -71,7 +70,7 @@ mod tests {
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename).expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
-        let mut triples = hdt.triples();
+        let triples = hdt.triples();
         let v: Vec<(String, String, String)> = triples.collect();
         assert_eq!(v.len(), 327);
         assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", IdKind::Subject));

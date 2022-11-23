@@ -47,7 +47,7 @@ impl<'a> Iterator for PredicateIter<'a> {
         }
 
         let o = self.triples.adjlist_z.sequence.get(self.pos_z);
-        if (self.os == 0) {
+        if self.os == 0 {
             self.i += 1;
         }
         Some(self.triples.coord_to_triple(self.s, self.p, o).unwrap())

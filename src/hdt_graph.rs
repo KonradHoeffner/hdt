@@ -3,11 +3,11 @@ use crate::hdt::Hdt;
 use sophia::graph::*;
 use sophia::term::iri::Iri;
 use sophia::term::literal::Literal;
-use sophia::term::ns::rdf::value;
+
 use sophia::term::*;
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
-use sophia::triple::Triple;
+
 use std::convert::Infallible;
 
 pub struct HdtGraph {
@@ -29,7 +29,7 @@ fn auto_term(s: String) -> Result<BoxTerm, TermError> {
                 let lex = s[1..index].to_owned();
                 let rest = &s[index + 1..];
                 // literal with no language tag and no datatype
-                if (rest.is_empty()) {
+                if rest.is_empty() {
                     return Ok(BoxTerm::from(lex));
                 }
                 // either language tag or datatype
@@ -604,6 +604,7 @@ pub trait MutableGraph: Graph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sophia::triple::Triple;
     use std::fs::File;
 
     #[test]
@@ -623,8 +624,7 @@ mod tests {
             let filtered: Vec<_> = triples
                 .iter()
                 .map(|triple| triple.as_ref().unwrap())
-                .filter(|triple| triple.s().value().to_string() == uri)
-                .map(|x| x)
+                .filter(|triple| triple.s().value() == uri)
                 .collect();
             println!("{} results for {}", filtered.len(), uri);
             let with_s: Vec<_> = graph.triples_with_s(&term).map(|x| x.unwrap()).collect();

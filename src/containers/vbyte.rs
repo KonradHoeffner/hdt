@@ -7,13 +7,12 @@ const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     use io::Error;
     use io::ErrorKind::InvalidData;
-    use std::convert::TryFrom;
 
     let mut n: u128 = 0;
     let mut shift = 0;
     let mut buffer = [0u8];
     let mut bytes_read = Vec::new();
-    reader.read_exact(&mut buffer);
+    reader.read_exact(&mut buffer)?;
     bytes_read.extend_from_slice(&buffer);
 
     while (buffer[0] & 0x80) == 0 {
@@ -22,7 +21,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
         }
 
         n |= ((buffer[0] & 127) as u128) << shift;
-        reader.read_exact(&mut buffer);
+        reader.read_exact(&mut buffer)?;
         bytes_read.extend_from_slice(&buffer);
         // IMPORTANT: The original implementation has an off-by-one error here, hence we
         // have to copy the same off-by-one error in order to read the file format.
