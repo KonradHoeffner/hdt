@@ -39,7 +39,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     }
 }
 
-pub fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
+pub const fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     let mut n: usize = 0;
     let mut shift: usize = 0;
     let mut byte_amount = 0;

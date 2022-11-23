@@ -260,7 +260,7 @@ pub struct BitmapIter<'a> {
 }
 
 impl<'a> BitmapIter<'a> {
-    pub fn new(triples: &'a TriplesBitmap) -> Self {
+    pub const fn new(triples: &'a TriplesBitmap) -> Self {
         BitmapIter {
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
@@ -319,7 +319,7 @@ pub struct TripleId {
 }
 
 impl TripleId {
-    pub fn new(subject_id: usize, predicate_id: usize, object_id: usize) -> Self {
+    pub const fn new(subject_id: usize, predicate_id: usize, object_id: usize) -> Self {
         TripleId { subject_id, predicate_id, object_id }
     }
 }

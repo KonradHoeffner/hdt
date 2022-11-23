@@ -217,7 +217,7 @@ impl DictSectPFC {
         position - offset
     }
 
-    pub fn num_strings(&self) -> usize {
+    pub const fn num_strings(&self) -> usize {
         self.num_strings
     }
 

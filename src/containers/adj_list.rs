@@ -9,7 +9,7 @@ pub struct AdjList {
 }
 
 impl AdjList {
-    pub fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
+    pub const fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
         AdjList { sequence, bitmap }
     }
 
@@ -25,7 +25,7 @@ impl AdjList {
         self.sequence.get(word_index)
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.sequence.entries
     }
 

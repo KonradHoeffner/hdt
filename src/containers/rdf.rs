@@ -9,7 +9,7 @@ pub struct Triple {
 }
 
 impl Triple {
-    pub fn new(subject: Id, predicate: String, object: Term) -> Self {
+    pub const fn new(subject: Id, predicate: String, object: Term) -> Self {
         Triple { subject, predicate, object }
     }
 }
@@ -113,12 +113,12 @@ impl fmt::Debug for Literal {
 impl Literal {
     /// Create a new literal with type [xs:string](http://www.w3.org/2001/XMLSchema#string) (which
     /// we do not store since it is the default type).
-    pub fn new(form: String) -> Self {
+    pub const fn new(form: String) -> Self {
         Literal { form, datatype: None, lang: None }
     }
 
     /// Create a new literal with a given form and datatype.
-    pub fn new_typed(form: String, datatype: String) -> Self {
+    pub const fn new_typed(form: String, datatype: String) -> Self {
         Literal { form, datatype: Some(datatype), lang: None }
     }
 

@@ -15,7 +15,7 @@ pub struct HdtGraph {
 }
 
 impl HdtGraph {
-    pub fn new(hdt: Hdt) -> Self {
+    pub const fn new(hdt: Hdt) -> Self {
         HdtGraph { hdt }
     }
 }
