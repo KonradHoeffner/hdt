@@ -201,7 +201,7 @@ impl TriplesBitmap {
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
-        for mut indices in indicess.into_iter() {
+        for mut indices in indicess {
             let mut first = true;
             indices.sort();
             for index in indices {

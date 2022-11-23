@@ -306,7 +306,7 @@ mod tests {
         // read dictionary control information
         let dict_ci = ControlInfo::read(&mut reader).unwrap();
         assert!(
-            !(dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>"),
+            dict_ci.format == "<http://purl.org/HDT/hdt#dictionaryFour>",
             "invalid dictionary type: {:?}",
             dict_ci.format
         );

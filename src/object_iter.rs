@@ -24,7 +24,7 @@ impl<'a> ObjectIter<'a> {
         //debug_assert_eq!(o, triples.adjlist_z.get_id(pos_z as usize));
         let max_index = triples.op_index.last(o);
         //println!("ObjectIter o={} pos_index={} max_index={}", o, pos_index, max_index);
-        ObjectIter { pos_index, max_index, triples, o }
+        ObjectIter { triples, o, pos_index, max_index }
     }
 }
 

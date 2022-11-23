@@ -22,7 +22,7 @@ impl HdtGraph {
 
 fn auto_term(s: String) -> Result<BoxTerm, TermError> {
     match s.chars().next() {
-        None => Err(TermError::InvalidIri("".to_owned())),
+        None => Err(TermError::InvalidIri(String::new())),
         Some('"') => match s.rfind('"') {
             None => Err(TermError::UnsupportedDatatype(s)),
             Some(index) => {

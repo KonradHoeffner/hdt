@@ -110,8 +110,7 @@ mod tests {
         buffer[MAX_VBYTE_BYTES - 1] &= 0x7F;
         buffer.push(0x7F);
         let mut reader = BufReader::new(&buffer[..]);
-        let (val, _buffer) = read_vbyte(&mut reader).unwrap();
-        assert!(val > usize::MAX);
+        read_vbyte(&mut reader).unwrap();
     }
 
     // These tests show the off-by-one bug in the current implementation, but
