@@ -55,12 +55,12 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
     Box::new(
         triples
             .map(|(s, p, o)| -> Result<_> {
-                debug_assert_ne!("", s, "triple_source subject is empty   ({}, {}, {})", s, p, o);
-                debug_assert_ne!("", p, "triple_source predicate is empty ({}, {}, {})", s, p, o);
-                debug_assert_ne!("", o, "triple_source object is empty    ({}, {}, {})", s, p, o);
+                debug_assert_ne!("", s, "triple_source subject is empty   ({s}, {p}, {o})");
+                debug_assert_ne!("", p, "triple_source predicate is empty ({s}, {p}, {o})");
+                debug_assert_ne!("", o, "triple_source object is empty    ({s}, {p}, {o})");
                 Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?]))
             })
-            .filter_map(|r| r.map_err(|e| eprintln!("{}", e)).ok())
+            .filter_map(|r| r.map_err(|e| eprintln!("{e}")).ok())
             .into_triple_source(),
     )
 }
@@ -626,12 +626,12 @@ mod tests {
                 .map(|triple| triple.as_ref().unwrap())
                 .filter(|triple| triple.s().value() == uri)
                 .collect();
-            println!("{} results for {}", filtered.len(), uri);
-            let with_s: Vec<_> = graph.triples_with_s(&term).map(|x| x.unwrap()).collect();
+            println!("{} results for {uri}", filtered.len());
+            let with_s: Vec<_> = graph.triples_with_s(&term).map(std::result::Result::unwrap).collect();
             // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
             // could break in the future e.g. because of ordering
-            let filtered_string = format!("{:?}", filtered);
-            let with_s_string = format!("{:?}", with_s);
+            let filtered_string = format!("{filtered:?}");
+            let with_s_string = format!("{with_s:?}");
             assert_eq!(
                 filtered_string, with_s_string,
                 "different results between triples() and triples_with_s() for {}",

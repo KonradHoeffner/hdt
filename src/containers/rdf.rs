@@ -34,8 +34,8 @@ pub enum Id {
 impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Id::Named(iri) => write!(f, "\"{}\"", iri),
-            Id::Blank(id) => write!(f, "\"{}\"", id),
+            Id::Named(iri) => write!(f, "\"{iri}\""),
+            Id::Blank(id) => write!(f, "\"{id}\""),
         }
     }
 }
@@ -101,9 +101,9 @@ pub struct Literal {
 impl fmt::Debug for Literal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(lang) = &self.lang {
-            write!(f, "\"{}\"@{}", self.form, lang)
+            write!(f, "\"{}\"@{lang}", self.form)
         } else if let Some(dtype) = &self.datatype {
-            write!(f, "\"{}\"^^{}", self.form, dtype)
+            write!(f, "\"{}\"^^{dtype}", self.form)
         } else {
             write!(f, "\"{}\"", self.form)
         }

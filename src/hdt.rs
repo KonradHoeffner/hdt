@@ -25,7 +25,7 @@ impl Hdt {
         let triple_sect = TripleSect::read(&mut reader)?;
         let hdt = Hdt { dict, triple_sect };
         println!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
-        println!("{:#?}", hdt);
+        println!("{hdt:#?}");
         Ok(hdt)
     }
 
@@ -52,9 +52,10 @@ impl Hdt {
         }
         let owned = s.to_owned();
         Box::new(
-            self.triple_sect.triples_with_id(id, kind.clone()).map(move |tid| self.translate_id(tid)).filter_map(
-                move |r| r.map_err(|e| eprintln!("Error on triple with {:?} {}: {}", kind, owned, e)).ok(),
-            ),
+            self.triple_sect
+                .triples_with_id(id, kind.clone())
+                .map(move |tid| self.translate_id(tid))
+                .filter_map(move |r| r.map_err(|e| eprintln!("Error on triple with {kind:?} {owned}: {e}")).ok()),
         )
     }
 }

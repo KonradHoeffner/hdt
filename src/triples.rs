@@ -203,7 +203,7 @@ impl TriplesBitmap {
         let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
         for mut indices in indicess {
             let mut first = true;
-            indices.sort();
+            indices.sort_unstable();
             for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;
@@ -223,7 +223,7 @@ impl TriplesBitmap {
         if x == 0 || y == 0 || z == 0 {
             return Err(Error::new(
                 InvalidData,
-                format!("({},{},{}) none of the components of a triple may be 0.", x, y, z),
+                format!("({x},{y},{z}) none of the components of a triple may be 0."),
             ));
         }
         match self.order {
@@ -355,7 +355,7 @@ mod tests {
         let lens = [num_subjects, num_predicates, num_objects];
         let funs = [|t: TripleId| t.subject_id, |t: TripleId| t.predicate_id, |t: TripleId| t.object_id];
         for j in 0..kinds.len() {
-            for i in 1..lens[j] + 1 {
+            for i in 1..=lens[j] {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
                 assert_eq!(
                     filtered,
