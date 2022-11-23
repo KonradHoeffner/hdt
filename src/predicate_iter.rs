@@ -34,7 +34,7 @@ impl<'a> Iterator for PredicateIter<'a> {
         if self.os == 0 {
             // Algorithm 1 findSubj from Martinez et al. 2012 ******
             let pos_y = self.triples.wavelet_y.select(self.i, self.p) as u64;
-            self.s = self.triples.adjlist_y.bitmap.dict.rank(pos_y, true) as usize + 1;
+            self.s = self.triples.bitmap_y.dict.rank(pos_y, true) as usize + 1;
             // *****************************************************
             // SP can have multiple O
             self.pos_z = self.triples.adjlist_z.find(pos_y as usize);

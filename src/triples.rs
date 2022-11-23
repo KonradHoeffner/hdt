@@ -122,7 +122,7 @@ impl OpIndex {
 //#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
-    pub adjlist_y: AdjList,
+    pub bitmap_y: Bitmap,
     pub adjlist_z: AdjList,
     pub op_index: OpIndex,
     pub wavelet_y: WaveletMatrix,
@@ -131,7 +131,6 @@ pub struct TriplesBitmap {
 impl fmt::Debug for TriplesBitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64));
-        writeln!(f, "adjlist_y {:#?}", self.adjlist_y);
         writeln!(f, "adjlist_z {:#?}", self.adjlist_z);
         writeln!(f, "op_index {:#?}", self.op_index);
         write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
@@ -140,10 +139,14 @@ impl fmt::Debug for TriplesBitmap {
 
 impl TriplesBitmap {
     pub fn size_in_bytes(&self) -> usize {
-        self.adjlist_y.size_in_bytes()
-            + self.adjlist_z.size_in_bytes()
-            + self.op_index.size_in_bytes()
-            + self.wavelet_y.size_in_bytes()
+        self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
+    }
+
+    pub fn find_y(&self, subject_id: usize) -> usize {
+        if subject_id == 0 {
+            return 0;
+        }
+        self.bitmap_y.dict.select1(subject_id as u64 - 1).unwrap() as usize + 1
     }
 
     pub fn read<R: BufRead>(reader: &mut R, triples_ci: ControlInfo) -> io::Result<Self> {
@@ -170,13 +173,12 @@ impl TriplesBitmap {
         for x in &sequence_y {
             wavelet_builder.push(x);
         }
+        drop(sequence_y);
         let wavelet_y = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
         println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
         let sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
-        // do we still need sequence_y when we have wavelet_y?
-        let adjlist_y = AdjList::new(sequence_y, bitmap_y);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
         // construct object-based index to traverse from the leaves and support O?? queries
@@ -212,7 +214,7 @@ impl TriplesBitmap {
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
 
-        Ok(TriplesBitmap { order, adjlist_y, adjlist_z, op_index, wavelet_y })
+        Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 
     pub fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
@@ -263,7 +265,7 @@ impl<'a> BitmapIter<'a> {
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
             pos_z: 0,
-            max_y: triples.adjlist_y.len(), // exclusive
+            max_y: triples.wavelet_y.len(), // exclusive
             max_z: triples.adjlist_z.len(), // exclusive
             triples,
         }
@@ -271,9 +273,9 @@ impl<'a> BitmapIter<'a> {
 
     /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
     pub fn with_s(triples: &'a TriplesBitmap, subject_id: usize) -> Self {
-        let min_y = triples.adjlist_y.find(subject_id - 1);
+        let min_y = triples.find_y(subject_id - 1);
         let min_z = triples.adjlist_z.find(min_y);
-        let max_y = triples.adjlist_y.find(subject_id);
+        let max_y = triples.find_y(subject_id);
         let max_z = triples.adjlist_z.find(max_y);
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
@@ -291,14 +293,14 @@ impl<'a> Iterator for BitmapIter<'a> {
             return None;
         }
 
-        let y = self.triples.adjlist_y.get_id(self.pos_y);
+        let y = self.triples.wavelet_y.get(self.pos_y);
         let z = self.triples.adjlist_z.get_id(self.pos_z);
         let triple_id = self.triples.coord_to_triple(self.x, y, z).unwrap();
 
         // theoretically the second condition should only be true if the first is as well but in practise it wasn't, which screwed up the subject identifiers
         // fixed by moving the second condition inside the first one but there may be another reason for the bug occuring in the first place
         if self.triples.adjlist_z.at_last_sibling(self.pos_z) {
-            if self.triples.adjlist_y.at_last_sibling(self.pos_y) {
+            if self.triples.bitmap_y.at_last_sibling(self.pos_y) {
                 self.x += 1;
             }
             self.pos_y += 1;
