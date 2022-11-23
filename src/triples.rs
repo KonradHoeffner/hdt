@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
-use sucds::{CompactVector, Searial, WaveletMatrix};
+use sucds::{CompactVector, Searial, WaveletMatrix, WaveletMatrixBuilder};
 
 #[derive(Debug)]
 // TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
@@ -166,7 +166,11 @@ impl TriplesBitmap {
         let sequence_y = Sequence::read(reader)?;
         // generate wavelet matrix early to reduce memory peak consumption
         print!("Start constructing wavelet matrix");
-        let wavelet_y = WaveletMatrix::from_ints(sequence_y.into_iter()).unwrap();
+        let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence_y.bits_per_entry);
+        for x in &sequence_y {
+            wavelet_builder.push(x);
+        }
+        let wavelet_y = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
         println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
         let sequence_z = Sequence::read(reader)?;
 
