@@ -18,6 +18,9 @@ impl HdtGraph {
     pub const fn new(hdt: Hdt) -> Self {
         HdtGraph { hdt }
     }
+    pub fn size_in_bytes(&self) -> usize {
+        self.hdt.size_in_bytes()
+    }
 }
 
 fn auto_term(s: String) -> Result<BoxTerm, TermError> {
