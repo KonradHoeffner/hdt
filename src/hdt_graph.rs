@@ -73,7 +73,24 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
 fn term_string(t: &(impl TTerm + ?Sized)) -> String {
     match t.kind() {
         TermKind::BlankNode => "_:".to_owned() + &t.value(),
-        _ => t.value().to_string(),
+        TermKind::Iri => t.value().to_string(),
+        TermKind::Literal => {
+            let value = format!("\"{}\"", t.value());
+            if let Some(lang) = t.language() {
+                return format!("{value}@{lang}");
+            }
+            if let Some(dt) = t.datatype() {
+                // handle implicit xsd:string datatype
+                // TODO check if this breaks triples that have explicit xsd:string datattype
+                if dt.value() != "http://www.w3.org/2001/XMLSchema#string" {
+                    return format!("{value}^^{dt}");
+                }
+            }
+            value
+        }
+        TermKind::Variable => {
+            panic!("Variable term strings are not supported.");
+        }
     }
 }
 
@@ -99,510 +116,28 @@ impl Graph for HdtGraph {
     fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
         triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
     }
-}
-/*
+
     /// An iterator visiting all triples with the given subject and predicate.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    fn triples_with_sp<'s, TS, TP>(&'s self, s: &'s TS, p: &'s TP) -> GTripleSource<'s, Self>
-    where
-        TS: TTerm + ?Sized,
-        TP: TTerm + ?Sized,
-    {
-        Box::new(self.triples_with_s(s).filter_ok(move |t| term_eq(t.p(), p)))
+    fn triples_with_sp<'s, TS: TTerm + ?Sized, TP: TTerm + ?Sized>(
+        &'s self, s: &'s TS, p: &'s TP,
+    ) -> GTripleSource<'s, Self> {
+        triple_source(self.hdt.triples_with_sp(&term_string(s), &term_string(p)))
     }
+
     /// An iterator visiting all triples with the given subject and object.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    fn triples_with_so<'s, TS, TO>(&'s self, s: &'s TS, o: &'s TO) -> GTripleSource<'s, Self>
-    where
-        TS: TTerm + ?Sized,
-        TO: TTerm + ?Sized,
-    {
-        Box::new(self.triples_with_s(s).filter_ok(move |t| term_eq(t.o(), o)))
+    fn triples_with_so<'s, TS: TTerm + ?Sized, TO: TTerm + ?Sized>(
+        &'s self, s: &'s TS, o: &'s TO,
+    ) -> GTripleSource<'s, Self> {
+        triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
     }
+
     /// An iterator visiting all triples with the given predicate and object.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    fn triples_with_po<'s, TP, TO>(&'s self, p: &'s TP, o: &'s TO) -> GTripleSource<'s, Self>
-    where
-        TP: TTerm + ?Sized,
-        TO: TTerm + ?Sized,
-    {
-        Box::new(self.triples_with_p(p).filter_ok(move |t| term_eq(t.o(), o)))
-    }
-    /// An iterator visiting all triples with the given subject, predicate and object.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    fn triples_with_spo<'s, TS, TP, TO>(
-        &'s self,
-        s: &'s TS,
-        p: &'s TP,
-        o: &'s TO,
-    ) -> GTripleSource<'s, Self>
-    where
-        TS: TTerm + ?Sized,
-        TP: TTerm + ?Sized,
-        TO: TTerm + ?Sized,
-    {
-        Box::new(
-            self.triples_with_sp(s, p)
-                .filter_ok(move |t| term_eq(t.o(), o)),
-        )
-    }
-
-    /// Return `true` if this graph contains the given triple.
-    fn contains<TS, TP, TO>(&self, s: &TS, p: &TP, o: &TO) -> GResult<Self, bool>
-    where
-        TS: TTerm + ?Sized,
-        TP: TTerm + ?Sized,
-        TO: TTerm + ?Sized,
-    {
-        match self.triples_with_spo(s, p, o).next() {
-            None => Ok(false),
-            Some(Ok(_)) => Ok(true),
-            Some(Err(err)) => Err(err),
-        }
-    }
-
-    /// An iterator visiting all triples matching the given subject, predicate and object.
-    ///
-    /// See also [`triples`](#tymethod.triples).
-    ///
-    /// # Usage
-    ///
-    /// Term references or arrays of term references are typically used as term matchers.
-    /// The special `ANY` matcher can also be used to match anything.
-    ///
-    /// ```
-    /// # use sophia_api::graph::{Graph, GTerm};
-    /// # use sophia_api::ns::{Namespace, rdf};
-    /// # use sophia_api::triple::Triple;
-    /// #
-    /// # fn test<G>(graph: &G) -> Result<(), Box<dyn std::error::Error>>
-    /// # where
-    /// #     G: Graph,
-    /// #     GTerm<G>: std::fmt::Display,
-    /// # {
-    /// #
-    /// use sophia_api::term::matcher::ANY;
-    ///
-    /// let s = Namespace::new("http://schema.org/")?;
-    /// let city = s.get("City")?;
-    /// let country = s.get("Country")?;
-    ///
-    /// for t in graph.triples_matching(&ANY, &rdf::type_, &[&city, &country]) {
-    ///     println!("{} was found", t?.s());
-    /// }
-    /// # Ok(()) }
-    /// ```
-    ///
-    /// Closures (accepting `&dyn TTerm`) can also be used, but notice that,
-    /// for technical reasons, they must be enclosed in a 1-sized array.
-    ///
-    /// ```
-    /// # use sophia_api::graph::{Graph, GTerm};
-    /// # use sophia_api::ns::rdfs;
-    /// # use sophia_api::term::{TTerm, TermKind::Literal};
-    /// # use sophia_api::triple::Triple;
-    /// #
-    /// # fn test<G>(graph: &G) -> Result<(), Box<dyn std::error::Error>>
-    /// # where
-    /// #     G: Graph,
-    /// #     GTerm<G>: std::fmt::Display,
-    /// # {
-    /// #
-    /// use sophia_api::term::matcher::ANY;
-    ///
-    /// for t in graph.triples_matching(
-    ///     &ANY,
-    ///     &rdfs::label,
-    ///     &[|t: &dyn TTerm| t.kind() == Literal && t.value().contains("needle")]
-    /// ) {
-    ///     println!("{} was found", t?.s());
-    /// }
-    /// # Ok(()) }
-    /// ```
-    fn triples_matching<'s, S, P, O>(
-        &'s self,
-        ms: &'s S,
-        mp: &'s P,
-        mo: &'s O,
-    ) -> GTripleSource<'s, Self>
-    where
-        S: TermMatcher + ?Sized,
-        P: TermMatcher + ?Sized,
-        O: TermMatcher + ?Sized,
-    {
-        match (&ms.constant(), &mp.constant(), &mo.constant()) {
-            (None, None, None) => {
-                Box::from(self.triples().filter_ok(move |t| {
-                    ms.matches(t.s()) && mp.matches(t.p()) && mo.matches(t.o())
-                }))
-            }
-            (Some(s), None, None) => Box::from(
-                self.triples_with_s(*s)
-                    .filter_ok(move |t| mp.matches(t.p()) && mo.matches(t.o())),
-            ),
-            (None, Some(p), None) => Box::from(
-                self.triples_with_p(*p)
-                    .filter_ok(move |t| ms.matches(t.s()) && mo.matches(t.o())),
-            ),
-            (None, None, Some(o)) => Box::from(
-                self.triples_with_o(*o)
-                    .filter_ok(move |t| ms.matches(t.s()) && mp.matches(t.p())),
-            ),
-            (Some(s), Some(p), None) => Box::from(
-                self.triples_with_sp(*s, *p)
-                    .filter_ok(move |t| mo.matches(t.o())),
-            ),
-            (Some(s), None, Some(o)) => Box::from(
-                self.triples_with_so(*s, *o)
-                    .filter_ok(move |t| mp.matches(t.p())),
-            ),
-            (None, Some(p), Some(o)) => Box::from(
-                self.triples_with_po(*p, *o)
-                    .filter_ok(move |t| ms.matches(t.s())),
-            ),
-            (Some(s), Some(p), Some(o)) => self.triples_with_spo(*s, *p, *o),
-        }
-    }
-
-    /// Build a Hashset of all the terms used as subject in this Graph.
-    fn subjects(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            insert_if_absent(&mut res, t?.s());
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the terms used as predicate in this Graph.
-    fn predicates(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            insert_if_absent(&mut res, t?.p());
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the terms used as object in this Graph.
-    fn objects(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            insert_if_absent(&mut res, t?.o());
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the IRIs used in this Graph.
-    fn iris(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            for i in t?.components() {
-                if matches!(i.kind(), TermKind::Iri) {
-                    insert_if_absent(&mut res, i)
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the BNodes used in this Graph.
-    fn bnodes(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            for i in t?.components() {
-                if matches!(i.kind(), TermKind::BlankNode) {
-                    insert_if_absent(&mut res, i)
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the Literals used in this Graph.
-    fn literals(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            for i in t?.components() {
-                if matches!(i.kind(), TermKind::Literal) {
-                    insert_if_absent(&mut res, i)
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// Build a Hashset of all the variables used in this Graph.
-    fn variables(&self) -> GResultTermSet<Self>
-    where
-        GTerm<Self>: Clone + Eq + Hash,
-    {
-        let mut res = std::collections::HashSet::new();
-        for t in self.triples() {
-            for i in t?.components() {
-                if matches!(i.kind(), TermKind::Variable) {
-                    insert_if_absent(&mut res, i)
-                }
-            }
-        }
-        Ok(res)
-    }
-
-    /// [`Dataset`](../dataset/trait.Dataset.html) adapter borrowing this graph
-    fn as_dataset(&self) -> GraphAsDataset<Self, &Self> {
-        GraphAsDataset::new(self)
-    }
-
-    /// [`Dataset`](../dataset/trait.Dataset.html) adapter borrowing this graph mutably
-    fn as_dataset_mut(&mut self) -> GraphAsDataset<Self, &mut Self> {
-        GraphAsDataset::new(self)
-    }
-
-    /// [`Dataset`](../dataset/trait.Dataset.html) adapter taking ownership of this graph
-    fn into_dataset(self) -> GraphAsDataset<Self>
-    where
-        Self: Sized,
-    {
-        GraphAsDataset::new(self)
+    fn triples_with_po<'s, TP: TTerm + ?Sized, TO: TTerm + ?Sized>(
+        &'s self, p: &'s TP, o: &'s TO,
+    ) -> GTripleSource<'s, Self> {
+        triple_source(self.hdt.triples_with_po(&term_string(p), &term_string(o)))
     }
 }
-
-/// A graph that can be constructed from a
-/// [`TripleSource`](../triple/stream/trait.TripleSource.html)
-pub trait CollectibleGraph: Graph + Sized {
-    fn from_triple_source<TS: TripleSource>(
-        triples: TS,
-    ) -> StreamResult<Self, TS::Error, Self::Error>;
-}
-
-/// Type alias for results produced by a mutable graph.
-pub type MGResult<G, T> = std::result::Result<T, <G as MutableGraph>::MutationError>;
-
-/// Generic trait for mutable RDF graphs.
-///
-/// NB: the semantics of this trait allows a graph to contain duplicate triples;
-/// see also [`SetGraph`](trait.SetGraph.html).
-///
-pub trait MutableGraph: Graph {
-    /// The error type that this graph may raise during mutations.
-    type MutationError: 'static + Error;
-
-    /// Insert the given triple in this graph.
-    ///
-    /// # Return value
-    /// The `bool` value returned in case of success is
-    /// **not significant unless** this graph also implements [`SetGraph`].
-    ///
-    /// If it does,
-    /// `true` is returned iff the insertion actually changed the graph.
-    /// In other words,
-    /// a return value of `false` means that the graph was not changed,
-    /// because the triple was already present in this [`SetGraph`].
-    ///
-    /// # Usage
-    /// ```
-    /// # use sophia_api::ns::{Namespace, rdf, rdfs, xsd};
-    /// # use sophia_api::graph::{MutableGraph, MGResult};
-    ///
-    /// # fn populate<G: MutableGraph>(graph: &mut G) -> MGResult<G, ()> {
-    /// let schema = Namespace::new("http://schema.org/").unwrap();
-    /// let s_name = schema.get("name").unwrap();
-    ///
-    /// graph.insert(&s_name, &rdf::type_, &rdf::Property)?;
-    /// graph.insert(&s_name, &rdfs::range, &xsd::string)?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    ///
-    /// [`SetGraph`]: trait.SetGraph.html
-    fn insert<TS, TP, TO>(&mut self, s: &TS, p: &TP, o: &TO) -> MGResult<Self, bool>
-    where
-        TS: TTerm + ?Sized,
-        TP: TTerm + ?Sized,
-        TO: TTerm + ?Sized;
-
-    /// Remove the given triple from this graph.
-    ///
-    /// # Return value
-    /// The `bool` value returned in case of success is
-    /// **not significant unless** this graph also implements [`SetGraph`].
-    ///
-    /// If it does,
-    /// `true` is returned iff the removal actually changed the graph.
-    /// In other words,
-    /// a return value of `false` means that the graph was not changed,
-    /// because the triple was already absent from this [`SetGraph`].
-    ///
-    /// [`SetGraph`]: trait.SetGraph.html
-    fn remove<TS, TP, TO>(&mut self, s: &TS, p: &TP, o: &TO) -> MGResult<Self, bool>
-    where
-        TS: TTerm + ?Sized,
-        TP: TTerm + ?Sized,
-        TO: TTerm + ?Sized;
-
-    /// Insert into this graph all triples from the given source.
-    ///
-    /// # Blank node scope
-    /// The blank nodes contained in the triple source will be inserted as is.
-    /// If they happen to have the same identifier as blank nodes already present,
-    /// they will be considered equal.
-    /// This might *not* be what you want,
-    /// especially if the graph contains data from a file,
-    /// and you are inserting data from a different file.
-    /// In that case, you should first transform the triple source,
-    /// in order to get fresh blank node identifiers.
-    ///
-    /// # Return value
-    /// The `usize` value returned in case of success is
-    /// **not significant unless** this graph also implements [`SetGraph`].
-    ///
-    /// If it does,
-    /// the number of triples that were *actually* inserted
-    /// (i.e. that were not already present in this [`SetGraph`])
-    /// is returned.
-    ///
-    /// [`SetGraph`]: trait.SetGraph.html
-    #[inline]
-    fn insert_all<TS>(
-        &mut self,
-        src: TS,
-    ) -> StreamResult<usize, TS::Error, <Self as MutableGraph>::MutationError>
-    where
-        TS: TripleSource,
-    {
-        let mut src = src;
-        let mut c = 0;
-        src.try_for_each_triple(|t| -> MGResult<Self, ()> {
-            if self.insert(t.s(), t.p(), t.o())? {
-                c += 1;
-            }
-            Ok(())
-        })
-        .and(Ok(c))
-    }
-
-    /// Remove from this graph all triples from the given source.
-    ///
-    /// # Return value
-    /// The `usize` value returned in case of success is
-    /// **not significant unless** this graph also implements [`SetGraph`].
-    ///
-    /// If it does,
-    /// the number of triples that were *actually* removed
-    /// (i.e. that were not already absent from this [`SetGraph`])
-    /// is returned.
-    ///
-    /// [`SetGraph`]: trait.SetGraph.html
-    #[inline]
-    fn remove_all<TS>(
-        &mut self,
-        src: TS,
-    ) -> StreamResult<usize, TS::Error, <Self as MutableGraph>::MutationError>
-    where
-        TS: TripleSource,
-    {
-        let mut src = src;
-        let mut c = 0;
-        src.try_for_each_triple(|t| -> MGResult<Self, ()> {
-            if self.remove(t.s(), t.p(), t.o())? {
-                c += 1;
-            }
-            Ok(())
-        })
-        .and(Ok(c))
-    }
-
-    /// Remove all triples matching the given matchers.
-    ///
-    /// # Return value
-    /// The `usize` value returned in case of success is
-    /// **not significant unless** this graph also implements [`SetGraph`].
-    ///
-    /// If it does,
-    /// the number of triples that were *actually* removed
-    /// (i.e. that were not already absent from this [`SetGraph`])
-    /// is returned.
-    ///
-    /// # Note to implementors
-    /// The default implementation is rather naive,
-    /// and could be improved in specific implementations of the trait.
-    ///
-    /// [`SetGraph`]: trait.SetGraph.html
-    fn remove_matching<'s, S, P, O>(
-        &'s mut self,
-        ms: &S,
-        mp: &P,
-        mo: &O,
-    ) -> Result<usize, Self::MutationError>
-    where
-        S: TermMatcher + ?Sized,
-        P: TermMatcher + ?Sized,
-        O: TermMatcher + ?Sized,
-        GTerm<Self>: Clone,
-        <Self as Graph>::Error: Into<Self::MutationError>,
-    {
-        let to_remove = self
-            .triples_matching(ms, mp, mo)
-            .map_ok(|t| [t.s().clone(), t.p().clone(), t.o().clone()])
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(Into::into)?;
-        let mut to_remove = to_remove.into_iter().as_triple_source();
-        Ok(self
-            .remove_all(&mut to_remove)
-            .map_err(|err| err.unwrap_sink_error())?)
-    }
-
-    /// Keep only the triples matching the given matchers.
-    ///
-    /// # Note to implementors
-    /// The default implementation is rather naive,
-    /// and could be improved in specific implementations of the trait.
-    fn retain_matching<'s, S, P, O>(
-        &'s mut self,
-        ms: &S,
-        mp: &P,
-        mo: &O,
-    ) -> Result<(), Self::MutationError>
-    where
-        S: TermMatcher + ?Sized,
-        P: TermMatcher + ?Sized,
-        O: TermMatcher + ?Sized,
-        GTerm<Self>: Clone,
-        <Self as Graph>::Error: Into<Self::MutationError>,
-    {
-        let to_remove = self
-            .triples()
-            .filter_ok(|t| !(ms.matches(t.s()) && mp.matches(t.p()) && mo.matches(t.o())))
-            .map_ok(|t| [t.s().clone(), t.p().clone(), t.o().clone()])
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(Into::into)?;
-        let mut to_remove = to_remove.into_iter().as_triple_source();
-        self.remove_all(&mut to_remove)
-            .map_err(|err| err.unwrap_sink_error())?;
-        Ok(())
-    }
-}
-*/
 
 #[cfg(test)]
 mod tests {
@@ -617,19 +152,17 @@ mod tests {
         let graph = HdtGraph::new(hdt);
         let triples: Vec<_> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
-        //println!("{}",triples[0].as_ref().unwrap().s().value());
         assert!(graph
-            .triples_with_s(&BoxTerm::from("http://www.snik.eu/ontology/meta".to_owned()))
+            .triples_with_s(&BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta".to_owned()))
             .next()
             .is_some());
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
-            let term = BoxTerm::from(uri.to_owned());
+            let term = BoxTerm::new_iri_unchecked(uri.to_owned());
             let filtered: Vec<_> = triples
                 .iter()
                 .map(|triple| triple.as_ref().unwrap())
                 .filter(|triple| triple.s().value() == uri)
                 .collect();
-            println!("{} results for {uri}", filtered.len());
             let with_s: Vec<_> = graph.triples_with_s(&term).map(std::result::Result::unwrap).collect();
             // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
             // could break in the future e.g. because of ordering
@@ -641,5 +174,40 @@ mod tests {
                 uri
             );
         }
+        let s = BoxTerm::new_iri_unchecked("http://www.snik.eu/ontology/meta/Top".to_owned());
+        let p = BoxTerm::new_iri_unchecked("http://www.w3.org/2000/01/rdf-schema#label".to_owned());
+        let o = BoxTerm::from(Literal::new_lang_unchecked("top class", "en"));
+        assert!(graph.triples_with_o(&o).next().is_some());
+        let triple = (&s, &p, &o);
+
+        let sp = graph.triples_with_sp(&s, &p).map(std::result::Result::unwrap).collect::<Vec<_>>();
+        let so = graph.triples_with_so(&s, &o).map(std::result::Result::unwrap).collect::<Vec<_>>();
+        let po = graph.triples_with_po(&p, &o).map(std::result::Result::unwrap).collect::<Vec<_>>();
+        // can't use assert_eq! directly on streaming triple mode to compare triple with result of triples_with_...
+        // let triple_vec = vec![(&s,&p,&o)];
+        // assert_eq!(triple_vec,graph.triples_with_sp(&s,&p).map(std::result::Result::unwrap).collect::<Vec<_>>());
+        // assert_eq!(triple_vec,graph.triples_with_so(&s,&o).map(std::result::Result::unwrap).collect::<Vec<_>>());
+        // assert_eq!(triple_vec,graph.triples_with_po(&p,&o).map(std::result::Result::unwrap).collect::<Vec<_>>());
+        for vec in [sp, so, po] {
+            assert_eq!(1, vec.len());
+            let e = &vec[0];
+            assert_eq!(e.s(), triple.0);
+            assert_eq!(e.p(), triple.1);
+            assert_eq!(e.o(), triple.2);
+        }
+        assert!(graph.triples_with_o(&BoxTerm::from("22.10".to_owned())).count() == 1);
+        let date = &BoxTerm::from(Literal::new_dt(
+            "2022-10-20",
+            Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#date"),
+        ));
+        assert!(graph.triples_with_o(date).count() == 1);
+        // not in snik meta but only in local test file to make sure explicit xsd:string works
+        /*
+        let testo = &BoxTerm::from(Literal::new_dt(
+            "testo",
+            Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#string"),
+        ));
+        assert!(graph.triples_with_o(testo).count() == 1);
+        */
     }
 }

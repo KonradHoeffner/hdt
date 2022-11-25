@@ -1,8 +1,6 @@
 use crate::dict_sect_pfc::ExtractError;
-
 use crate::ControlInfo;
 use crate::DictSectPFC;
-
 use std::io;
 use std::io::BufRead;
 use thiserror::Error;

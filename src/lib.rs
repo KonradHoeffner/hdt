@@ -6,6 +6,7 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::wildcard_imports)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::similar_names)]
 #![warn(clippy::missing_const_for_fn)]
 // types for storing and reading data
 pub mod containers;
