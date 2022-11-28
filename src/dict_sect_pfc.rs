@@ -1,5 +1,6 @@
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
+use crate::triples::Id;
 use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};
 use std::cmp::{min, Ordering};
@@ -33,7 +34,7 @@ impl fmt::Debug for DictSectPFC {
 #[derive(Error, Debug)]
 pub enum ExtractError {
     #[error("index out of bounds: id {id} > dictionary section len {len}")]
-    IdOutOfBounds { id: usize, len: usize },
+    IdOutOfBounds { id: Id, len: usize },
     #[error("Read invalid UTF-8 sequence in {data:?}, recovered: '{recovered}'")]
     InvalidUtf8 { source: std::str::Utf8Error, data: Vec<u8>, recovered: String },
 }
@@ -67,7 +68,7 @@ impl DictSectPFC {
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     // 0 means not found
-    pub fn string_to_id(&self, element: &str) -> usize {
+    pub fn string_to_id(&self, element: &str) -> Id {
         // binary search
         let mut low: usize = 0;
         let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
@@ -92,9 +93,7 @@ impl DictSectPFC {
                     high = mid - 1;
                 }
                 Ordering::Greater => low = mid + 1,
-                Ordering::Equal => {
-                    return (mid * self.block_size) + 1;
-                }
+                Ordering::Equal => return ((mid * self.block_size) + 1) as Id,
             }
         }
         if high < mid {
@@ -104,7 +103,7 @@ impl DictSectPFC {
         if idblock == 0 {
             return 0;
         }
-        (mid * self.block_size) + idblock + 1
+        ((mid * self.block_size) + idblock + 1) as Id
     }
 
     fn longest_common_prefix(a: &[u8], b: &[u8]) -> usize {
@@ -175,13 +174,13 @@ impl DictSectPFC {
     }
 
     /// extract the string with the given ID from the dictionary
-    pub fn extract(&self, id: usize) -> Result<String, ExtractError> {
-        if id > self.num_strings {
+    pub fn extract(&self, id: Id) -> Result<String, ExtractError> {
+        if id as usize > self.num_strings {
             return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
         }
 
-        let block_index = id.saturating_sub(1) / self.block_size;
-        let string_index = id.saturating_sub(1) % self.block_size;
+        let block_index = id.saturating_sub(1) as usize / self.block_size;
+        let string_index = id.saturating_sub(1) as usize % self.block_size;
         let mut position = self.sequence.get(block_index);
         let mut slen = self.strlen(position);
         let mut string: Vec<u8> = self.packed_data[position..position + slen].to_owned();

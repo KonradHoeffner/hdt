@@ -1,3 +1,4 @@
+use crate::triples::Id;
 use crate::triples::TripleId;
 use crate::triples::TriplesBitmap;
 
@@ -9,7 +10,7 @@ use crate::triples::TriplesBitmap;
 /// Iterator over all triples with a given object ID, answering an (?S,?P,O) query.
 pub struct ObjectIter<'a> {
     triples: &'a TriplesBitmap,
-    o: usize,
+    o: Id,
     pos_index: usize,
     max_index: usize,
 }
@@ -17,7 +18,7 @@ pub struct ObjectIter<'a> {
 impl<'a> ObjectIter<'a> {
     /// Create a new iterator over all triples with the given object ID.
     /// Panics if the object does not exist.
-    pub fn new(triples: &'a TriplesBitmap, o: usize) -> Self {
+    pub fn new(triples: &'a TriplesBitmap, o: Id) -> Self {
         assert!(o != 0, "object 0 does not exist, cant iterate");
         let pos_index = triples.op_index.find(o);
         let _pos_z = triples.op_index.sequence.get(pos_index) as u64;
@@ -36,9 +37,9 @@ impl<'a> Iterator for ObjectIter<'a> {
         }
         let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
-        let y = self.triples.wavelet_y.get(pos_y as usize);
-        let x = self.triples.bitmap_y.dict.rank(pos_y, true) + 1;
+        let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
+        let x = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
         self.pos_index += 1;
-        Some(self.triples.coord_to_triple(x as usize, y, self.o).unwrap())
+        Some(self.triples.coord_to_triple(x, y, self.o).unwrap())
     }
 }
