@@ -1,7 +1,7 @@
-// in-memory RDF representation
+/// In-memory RDF representation.
 pub mod rdf;
 
-// variable length numbers
+/// Variable length numbers.
 pub mod vbyte;
 
 // byte containers
