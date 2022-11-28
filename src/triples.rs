@@ -386,6 +386,8 @@ impl<'a> Iterator for BitmapIter<'a> {
     }
 }
 
+/// Type for a triple encoded as numeric IDs for subject, predicate and object, respectively.
+/// See <https://www.rdfhdt.org/hdt-binary-format/#triples>.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TripleId {
     pub subject_id: usize,
