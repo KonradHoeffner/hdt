@@ -57,6 +57,8 @@ impl TripleSect {
     }
 }
 
+/// Order of the triple sections.
+/// Only SPO is tested, others probably don't work correctly.
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Order {
@@ -86,8 +88,12 @@ impl TryFrom<u32> for Order {
     }
 }
 
+/// Inverse index from object id to positions in the object adjacency list.
+/// Used for logarithmic (?) time access instead of linear time sequential search.
 pub struct OpIndex {
+    /// Compact integer vector of object positions.
     pub sequence: CompactVector,
+    /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
 }
 
@@ -105,12 +111,15 @@ impl fmt::Debug for OpIndex {
 }
 
 impl OpIndex {
+    /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
     }
+    /// Find the first position in the OP index of the given object ID.
     pub fn find(&self, o: Id) -> usize {
         self.bitmap.dict.select1(o as u64 - 1).unwrap() as usize
     }
+    /// Find the last position in the object index of the given object ID.
     pub fn last(&self, o: Id) -> usize {
         match self.bitmap.dict.select1(o as u64) {
             Some(index) => index as usize - 1,
@@ -119,6 +128,7 @@ impl OpIndex {
     }
 }
 
+/// BitmapTriples variant of the triples section.
 //#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
@@ -260,6 +270,7 @@ pub struct BitmapIter<'a> {
 }
 
 impl<'a> BitmapIter<'a> {
+    /// Create an iterator over all triples.
     pub const fn new(triples: &'a TriplesBitmap) -> Self {
         BitmapIter {
             x: 1, // was 0 in the old code but it should start at 1
@@ -317,12 +328,16 @@ pub type Id = usize;
 /// See <https://www.rdfhdt.org/hdt-binary-format/#triples>.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TripleId {
+    /// Index starting at 1 in the combined shared and subject section.
     pub subject_id: Id,
+    /// Index starting at 1 in the predicate section.
     pub predicate_id: Id,
+    /// Index starting at 1 in the combined shared and object section.
     pub object_id: Id,
 }
 
 impl TripleId {
+    /// Create a new triple ID.
     pub const fn new(subject_id: Id, predicate_id: Id, object_id: Id) -> Self {
         TripleId { subject_id, predicate_id, object_id }
     }
