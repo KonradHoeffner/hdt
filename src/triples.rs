@@ -62,10 +62,10 @@ impl OpIndex {
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
     }
-    pub fn find(&self, o: usize) -> usize {
+    pub fn find(&self, o: Id) -> usize {
         self.bitmap.dict.select1(o as u64 - 1).unwrap() as usize
     }
-    pub fn last(&self, o: usize) -> usize {
+    pub fn last(&self, o: Id) -> usize {
         match self.bitmap.dict.select1(o as u64) {
             Some(index) => index as usize - 1,
             None => self.bitmap.dict.len() - 1,
@@ -118,7 +118,7 @@ impl TriplesBitmap {
         self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
     }
 
-    pub fn find_y(&self, subject_id: usize) -> usize {
+    pub fn find_y(&self, subject_id: Id) -> usize {
         if subject_id == 0 {
             return 0;
         }
@@ -225,7 +225,7 @@ impl TriplesBitmap {
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 
-    pub fn coord_to_triple(&self, x: usize, y: usize, z: usize) -> io::Result<TripleId> {
+    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> io::Result<TripleId> {
         use io::Error;
         use io::ErrorKind::InvalidData;
         if x == 0 || y == 0 || z == 0 {
@@ -260,7 +260,7 @@ pub struct BitmapIter<'a> {
     // triples data
     triples: &'a TriplesBitmap,
     // x-coordinate identifier
-    x: usize,
+    x: Id,
     // current position
     pos_y: usize,
     pos_z: usize,
@@ -285,11 +285,11 @@ impl<'a> BitmapIter<'a> {
     }
 
     /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
-    pub fn with_s(triples: &'a TriplesBitmap, subject_id: usize) -> Self {
+    pub fn with_s(triples: &'a TriplesBitmap, subject_id: Id) -> Self {
         let min_y = triples.find_y(subject_id - 1);
-        let min_z = triples.adjlist_z.find(min_y);
+        let min_z = triples.adjlist_z.find(min_y as Id);
         let max_y = triples.find_y(subject_id);
-        let max_z = triples.adjlist_z.find(max_y);
+        let max_z = triples.adjlist_z.find(max_y as Id);
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
 
@@ -368,7 +368,7 @@ impl<'a> Iterator for BitmapIter<'a> {
             return None;
         }
 
-        let y = self.triples.wavelet_y.get(self.pos_y);
+        let y = self.triples.wavelet_y.get(self.pos_y) as Id;
         let z = self.triples.adjlist_z.get_id(self.pos_z);
         let triple_id = self.triples.coord_to_triple(self.x, y, z).unwrap();
 
@@ -386,17 +386,19 @@ impl<'a> Iterator for BitmapIter<'a> {
     }
 }
 
+pub type Id = usize;
+
 /// Type for a triple encoded as numeric IDs for subject, predicate and object, respectively.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#triples>.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct TripleId {
-    pub subject_id: usize,
-    pub predicate_id: usize,
-    pub object_id: usize,
+    pub subject_id: Id,
+    pub predicate_id: Id,
+    pub object_id: Id,
 }
 
 impl TripleId {
-    pub const fn new(subject_id: usize, predicate_id: usize, object_id: usize) -> Self {
+    pub const fn new(subject_id: Id, predicate_id: Id, object_id: Id) -> Self {
         TripleId { subject_id, predicate_id, object_id }
     }
 }

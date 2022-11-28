@@ -1,6 +1,7 @@
 //! Adjacency list containing an integer sequence and a bitmap with rank and select support.
 use crate::containers::Bitmap;
 use crate::containers::Sequence;
+use crate::triples::Id;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone)]
@@ -14,16 +15,18 @@ impl AdjList {
         AdjList { sequence, bitmap }
     }
 
+    /// Combined size in bytes of the sequence and the bitmap on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
     }
 
+    /// Whether the given position represents the last child of the parent node.
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
         self.bitmap.at_last_sibling(word_index)
     }
 
-    pub fn get_id(&self, word_index: usize) -> usize {
-        self.sequence.get(word_index)
+    pub fn get_id(&self, word_index: usize) -> Id {
+        self.sequence.get(word_index) as Id
     }
 
     pub const fn len(&self) -> usize {
@@ -34,7 +37,8 @@ impl AdjList {
         self.sequence.data.is_empty()
     }
 
-    pub fn find(&self, x: usize) -> usize {
+    /// Find the position of the given ID, counting from 1.
+    pub fn find(&self, x: Id) -> usize {
         if x == 0 {
             return 0;
         }
@@ -65,7 +69,7 @@ impl AdjList {
         self.bin_search(y, self.find(x), self.last(x))
     }
 
-    pub fn last(&self, x: usize) -> usize {
+    pub fn last(&self, x: Id) -> usize {
         self.find(x + 1) - 1
     }
 }

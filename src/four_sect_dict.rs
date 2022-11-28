@@ -1,4 +1,5 @@
 use crate::dict_sect_pfc::ExtractError;
+use crate::triples::Id;
 use crate::ControlInfo;
 use crate::DictSectPFC;
 use std::io;
@@ -33,14 +34,14 @@ pub enum SectKind {
 pub struct DictErr {
     #[source]
     e: ExtractError,
-    id: usize,
+    id: Id,
     id_kind: &'static IdKind,
     sect_kind: SectKind,
 }
 
 impl FourSectDict {
-    pub fn id_to_string(&self, id: usize, id_kind: &'static IdKind) -> Result<String, DictErr> {
-        let shared_size = self.shared.num_strings();
+    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> Result<String, DictErr> {
+        let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);
         match id_kind {
             IdKind::Subject => {
@@ -63,7 +64,7 @@ impl FourSectDict {
         }
     }
 
-    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> usize {
+    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> Id {
         let shared_size = self.shared.num_strings();
         match id_kind {
             IdKind::Subject => {
@@ -71,7 +72,7 @@ impl FourSectDict {
                 if id == 0 {
                     id = self.subjects.string_to_id(s);
                     if id > 0 {
-                        id += shared_size;
+                        id += shared_size as Id;
                     }
                 }
                 id
@@ -82,7 +83,7 @@ impl FourSectDict {
                 if id == 0 {
                     id = self.objects.string_to_id(s);
                     if id > 0 {
-                        id += shared_size;
+                        id += shared_size as Id;
                     }
                 }
                 id
