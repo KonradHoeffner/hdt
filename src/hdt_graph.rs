@@ -1,13 +1,13 @@
+//! *This module is available only if HDT is built with the `"sophia"` feature.*
+#[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use sophia::graph::*;
 use sophia::term::iri::Iri;
 use sophia::term::literal::Literal;
-
 use sophia::term::*;
 use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
-
 use std::convert::Infallible;
 
 pub struct HdtGraph {
