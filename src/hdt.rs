@@ -8,6 +8,8 @@ use bytesize::ByteSize;
 use std::io;
 use thiserror::Error;
 
+/// In-memory representation of an RDF graph loaded from an HDT file.
+/// Allows queries by triple patterns.
 #[derive(Debug)]
 pub struct Hdt {
     //global_ci: ControlInfo,
@@ -18,6 +20,7 @@ pub struct Hdt {
 
 type StringTriple = (String, String, String);
 
+/// The error type for the `translate_id` method.
 #[derive(Error, Debug)]
 #[error("Cannot translate triple ID {t:?} to string triple: {e}")]
 pub struct TranslateErr {
@@ -27,6 +30,11 @@ pub struct TranslateErr {
 }
 
 impl Hdt {
+    /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
+    /// The reader must point to the beginning of the data of an HDT file as produced by hdt-cpp.
+    /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
+    /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
+    /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
@@ -38,6 +46,7 @@ impl Hdt {
         Ok(hdt)
     }
 
+    /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triple_sect.size_in_bytes()
     }
@@ -48,17 +57,18 @@ impl Hdt {
         let o = self.dict.id_to_string(t.object_id, &IdKind::Object).map_err(|e| TranslateErr { e, t })?;
         Ok((s, p, o))
     }
-    /*
-    fn translate_ids<'a>(&'a self, it: impl Iterator<Item = TripleId> + 'a) -> impl Iterator<Item = StringTriple> + '_
-    {
-        it.map(|tid| self.translate_id(tid))
-        .filter_map(move |r| r.map_err(|e| eprintln!("Error translating triple {tid:?}: {e}")).ok())
-    }
-    */
+
+    /// An iterator visiting *all* triples as strings in order.
+    /// Using this method with a filter can be inefficient for large graphs,
+    /// because the strings are stored in compressed form and must be decompressed and allocated.
+    /// Whenever possible, use [`Hdt::triples_with`] instead.
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
         self.triple_sect.read_all_ids().map(|id| self.translate_id(id).unwrap())
     }
 
+    /// An iterator visiting all triples with either the given subject, property or object as strings.
+    /// Much more effient than filtering the result of [`Hdt::triples`].
+    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead if it exists.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
         debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, kind);

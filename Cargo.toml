@@ -25,8 +25,8 @@ sucds = "0.6.0"
 thiserror = "1.0.37"
 
 [features]
-default = ["sophia_graph"]
-sophia_graph = ["sophia"]
+default = ["sophia"]
+sophia = ["dep:sophia"]
 
 [profile.test]
 opt-level = 1

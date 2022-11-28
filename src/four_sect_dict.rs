@@ -63,7 +63,7 @@ impl FourSectDict {
         }
     }
 
-    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> usize {
+    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> u32 {
         let shared_size = self.shared.num_strings();
         match id_kind {
             IdKind::Subject => {

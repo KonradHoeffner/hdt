@@ -67,7 +67,7 @@ impl DictSectPFC {
     // translated from Java
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     // 0 means not found
-    pub fn string_to_id(&self, element: &str) -> usize {
+    pub fn string_to_id(&self, element: &str) -> u32 {
         // binary search
         let mut low: usize = 0;
         let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate

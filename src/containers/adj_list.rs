@@ -17,11 +17,11 @@ impl AdjList {
         self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
     }
 
-    pub fn at_last_sibling(&self, word_index: usize) -> bool {
+    pub fn at_last_sibling(&self, word_index: u32) -> bool {
         self.bitmap.at_last_sibling(word_index)
     }
 
-    pub fn get_id(&self, word_index: usize) -> usize {
+    pub fn get_id(&self, word_index: u32) -> u32 {
         self.sequence.get(word_index)
     }
 
@@ -43,7 +43,7 @@ impl AdjList {
         self.bitmap.dict.select1(x as u64 - 1).unwrap() as usize + 1
     }
 
-    pub fn last(&self, x: usize) -> usize {
+    pub fn last(&self, x: u32) -> usize {
         self.find(x + 1) - 1
     }
 }

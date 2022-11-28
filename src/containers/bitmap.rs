@@ -36,7 +36,7 @@ impl Bitmap {
         self.dict.heap_size()
     }
 
-    pub fn at_last_sibling(&self, word_index: usize) -> bool {
+    pub fn at_last_sibling(&self, word_index: u32) -> bool {
         // Each block in the bitmap has `USIZE_BITS` many bits. If `usize` is 64 bits, and we are
         // looking for the 65th word in the sequence this means we need the first bit of the second
         // `usize` in `self.data`.
