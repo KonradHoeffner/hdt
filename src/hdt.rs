@@ -83,12 +83,6 @@ impl Hdt {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         if sid == 0 || pid == 0 {
-            if sid == 0 {
-                println!("WARNING SID");
-            }
-            if pid == 0 {
-                println!("WARNING SID");
-            }
             return Box::new(std::iter::empty());
         }
         let s_owned = s.to_owned();
