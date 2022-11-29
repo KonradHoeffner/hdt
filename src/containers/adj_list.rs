@@ -1,6 +1,7 @@
 //! Adjacency list containing an integer sequence and a bitmap with rank and select support.
 use crate::containers::Bitmap;
 use crate::containers::Sequence;
+use std::cmp::Ordering;
 
 #[derive(Debug, Clone)]
 pub struct AdjList {
@@ -41,6 +42,27 @@ impl AdjList {
         //self.bitmap.dict.select1(x as u64).unwrap()  as usize +1
         // rsdict has nonzero value for 0, is that correct? adjust for that.
         self.bitmap.dict.select1(x as u64 - 1).unwrap() as usize + 1
+    }
+
+    /// return the position of element within the given bounds
+    fn bin_search(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
+        let mut low = begin;
+        let mut high = end;
+        while low <= high {
+            let mid = low + high / 2;
+            match self.sequence.get(mid).cmp(&element) {
+                Ordering::Less => low = mid + 1,
+                Ordering::Greater => high = mid,
+                Ordering::Equal => return Some(mid),
+            };
+        }
+        None
+    }
+
+    /// Find position of element y in the list x
+    // See <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/sequence/AdjacencyList.cpp>.
+    pub fn search(&self, x: usize, y: usize) -> Option<usize> {
+        self.bin_search(y, self.find(x), self.last(x))
     }
 
     pub fn last(&self, x: usize) -> usize {
