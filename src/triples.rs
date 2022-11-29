@@ -4,58 +4,12 @@ use crate::predicate_iter::PredicateIter;
 use crate::{ControlInfo, IdKind};
 use bytesize::ByteSize;
 use rsdict::RsDict;
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
 use sucds::{CompactVector, Searial, WaveletMatrix, WaveletMatrixBuilder};
-
-#[derive(Debug)]
-// TODO is anyone actually using other formats than triple bitmaps or can we remove the enum?
-// The unnecessary matches make the code more verbose.
-pub enum TripleSect {
-    Bitmap(TriplesBitmap),
-}
-
-impl TripleSect {
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
-        let triples_ci = ControlInfo::read(reader)?;
-
-        match &triples_ci.format[..] {
-            "<http://purl.org/HDT/hdt#triplesBitmap>" => {
-                Ok(TripleSect::Bitmap(TriplesBitmap::read(reader, &triples_ci)?))
-            }
-            "<http://purl.org/HDT/hdt#triplesList>" => {
-                Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
-            }
-            _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
-        }
-    }
-
-    pub fn size_in_bytes(&self) -> usize {
-        match self {
-            TripleSect::Bitmap(bitmap) => bitmap.size_in_bytes(),
-        }
-    }
-
-    pub fn read_all_ids(&self) -> BitmapIter {
-        match self {
-            TripleSect::Bitmap(bitmap) => bitmap.into_iter(),
-        }
-    }
-
-    pub fn triples_with_id(&self, id: usize, id_kind: &IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
-        match self {
-            TripleSect::Bitmap(bitmap) => match id_kind {
-                IdKind::Subject => Box::new(BitmapIter::with_s(bitmap, id)),
-                IdKind::Predicate => Box::new(PredicateIter::new(bitmap, id)),
-                IdKind::Object => Box::new(ObjectIter::new(bitmap, id)),
-            },
-        }
-    }
-}
 
 /// Order of the triple sections.
 /// Only SPO is tested, others probably don't work correctly.
@@ -148,6 +102,28 @@ impl fmt::Debug for TriplesBitmap {
 }
 
 impl TriplesBitmap {
+    pub fn read_sect<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+        use io::Error;
+        use io::ErrorKind::InvalidData;
+        let triples_ci = ControlInfo::read(reader)?;
+
+        match &triples_ci.format[..] {
+            "<http://purl.org/HDT/hdt#triplesBitmap>" => Ok(TriplesBitmap::read(reader, &triples_ci)?),
+            "<http://purl.org/HDT/hdt#triplesList>" => {
+                Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
+            }
+            _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
+        }
+    }
+
+    pub fn triples_with_id(&self, id: usize, id_kind: &IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
+        match id_kind {
+            IdKind::Subject => Box::new(BitmapIter::with_s(self, id)),
+            IdKind::Predicate => Box::new(PredicateIter::new(self, id)),
+            IdKind::Object => Box::new(ObjectIter::new(self, id)),
+        }
+    }
+
     pub fn size_in_bytes(&self) -> usize {
         self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
     }
@@ -159,7 +135,32 @@ impl TriplesBitmap {
         self.bitmap_y.dict.select1(subject_id as u64 - 1).unwrap() as usize + 1
     }
 
-    pub fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
+    pub fn last_y(&self, subject_id: usize) -> usize {
+        self.find_y(subject_id + 1) - 1
+    }
+
+    /// binary search in the wavelet matrix
+    fn bin_search_y(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
+        let mut low = begin;
+        let mut high = end;
+
+        while low <= high {
+            let mid = (low + high) / 2;
+            match self.wavelet_y.get(mid).cmp(&element) {
+                Ordering::Less => low = mid + 1,
+                Ordering::Greater => high = mid,
+                Ordering::Equal => return Some(mid),
+            };
+        }
+        None
+    }
+
+    /// search the wavelet matrix for the position of a given subject, predicate pair
+    pub fn search_y(&self, subject_id: usize, property_id: usize) -> Option<usize> {
+        self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id))
+    }
+
+    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
 
@@ -257,6 +258,7 @@ impl<'a> IntoIterator for &'a TriplesBitmap {
     }
 }
 
+//#[derive(Debug)]
 pub struct BitmapIter<'a> {
     // triples data
     triples: &'a TriplesBitmap,
@@ -273,13 +275,17 @@ impl<'a> BitmapIter<'a> {
     /// Create an iterator over all triples.
     pub const fn new(triples: &'a TriplesBitmap) -> Self {
         BitmapIter {
+            triples,
             x: 1, // was 0 in the old code but it should start at 1
             pos_y: 0,
             pos_z: 0,
             max_y: triples.wavelet_y.len(), // exclusive
             max_z: triples.adjlist_z.len(), // exclusive
-            triples,
         }
+    }
+
+    pub const fn empty(triples: &'a TriplesBitmap) -> Self {
+        BitmapIter { triples, x: 1, pos_y: 0, pos_z: 0, max_y: 0, max_z: 0 }
     }
 
     /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
@@ -289,6 +295,65 @@ impl<'a> BitmapIter<'a> {
         let max_y = triples.find_y(subject_id);
         let max_z = triples.adjlist_z.find(max_y as Id);
         BitmapIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
+    }
+
+    /// Iterate over triples fitting the given SPO, SP? S?? or ??? triple pattern.
+    /// Variable positions are signified with a 0 value.
+    /// Undefined result if any other triple pattern is used.
+    /// # Examples
+    /// ```ignore
+    /// // S?? pattern, all triples with subject ID 1
+    /// BitmapIter::with_pattern(triples, TripleId::new(1, 0, 0);
+    /// // SP? pattern, all triples with subject ID 1 and predicate ID 2
+    /// BitmapIter::with_pattern(triples, TripleId::new(1, 2, 0);
+    /// // match a specific triple, not useful in practice
+    /// BitmapIter::with_pattern(triples, TripleId::new(1, 2, 3);
+    /// ```
+    // Translated from <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>.
+    pub fn with_pattern(triples: &'a TriplesBitmap, pat: &TripleId) -> Self {
+        let (pat_x, pat_y, pat_z) = (pat.subject_id, pat.predicate_id, pat.object_id);
+        let (min_y, max_y, min_z, max_z);
+        let mut x = 1;
+        // only SPO order is supported currently
+        if pat_x != 0 {
+            // S X X
+            if pat_y != 0 {
+                // S P X
+                match triples.search_y(pat_x - 1, pat_y) {
+                    Some(y) => min_y = y,
+                    None => return BitmapIter::empty(triples),
+                };
+                max_y = min_y + 1;
+                if pat_z != 0 {
+                    // S P O
+                    // simply with try block when they come to stable Rust
+                    match triples.adjlist_z.search(min_y, pat_z) {
+                        Some(z) => min_z = z,
+                        None => return BitmapIter::empty(triples),
+                    };
+                    max_z = min_z + 1;
+                } else {
+                    // S P ?
+                    min_z = triples.adjlist_z.find(min_y);
+                    max_z = triples.adjlist_z.last(min_y) + 1;
+                }
+            } else {
+                // S ? X
+                min_y = triples.find_y(pat_x - 1);
+                min_z = triples.adjlist_z.find(min_y);
+                max_y = triples.last_y(pat_x - 1) + 1;
+                max_z = triples.adjlist_z.find(max_y);
+            }
+            x = pat_x;
+        } else {
+            // ? X X
+            // assume ? ? ?, other triple patterns are not supported by this function
+            min_y = 0;
+            min_z = 0;
+            max_y = triples.wavelet_y.len();
+            max_z = triples.adjlist_z.len();
+        }
+        BitmapIter { triples, x, pos_y: min_y, pos_z: min_z, max_y, max_z }
     }
 }
 
@@ -317,7 +382,6 @@ impl<'a> Iterator for BitmapIter<'a> {
             self.pos_y += 1;
         }
         self.pos_z += 1;
-
         Some(triple_id)
     }
 }
@@ -359,8 +423,8 @@ mod tests {
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
         let _dict = FourSectDict::read(&mut reader).unwrap();
-        let triples = TripleSect::read(&mut reader).unwrap();
-        let v: Vec<TripleId> = triples.read_all_ids().into_iter().collect::<Vec<TripleId>>();
+        let triples = TriplesBitmap::read_sect(&mut reader).unwrap();
+        let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 327);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
@@ -385,5 +449,27 @@ mod tests {
                 );
             }
         }
+
+        // BitmapIter
+        assert_eq!(0, BitmapIter::empty(&triples).count());
+        // SPO
+        assert_eq!(
+            vec![TripleId::new(14, 14, 154)],
+            BitmapIter::with_pattern(&triples, &TripleId::new(14, 14, 154)).collect::<Vec<_>>()
+        );
+        // SP
+        assert_eq!(
+            vec![TripleId::new(14, 14, 154)],
+            BitmapIter::with_pattern(&triples, &TripleId::new(14, 14, 0)).collect::<Vec<_>>()
+        );
+        // S??
+        for i in 1..num_subjects {
+            assert_eq!(
+                BitmapIter::with_s(&triples, i).collect::<Vec<_>>(),
+                BitmapIter::with_pattern(&triples, &TripleId::new(i, 0, 0)).collect::<Vec<_>>()
+            );
+        }
+        // ??? (all triples)
+        assert_eq!(v, BitmapIter::with_pattern(&triples, &TripleId::new(0, 0, 0)).collect::<Vec<_>>());
     }
 }
