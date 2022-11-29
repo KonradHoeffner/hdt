@@ -1,9 +1,16 @@
+//! Encoding and decoding variable-length byte sequences.
+//! Only values up to usize are supported.
+//! # Important
+//! The original HDT implementation has an off-by-one error and shifts by 7, hence we
+//! have to copy the same off-by-one error in order to read the file format.
+//! The correct implementation is supposed to shift by 8!
+//! Look at the commented out tests at the bottom of the file for proof.
 use std::io;
 use std::io::BufRead;
 
 const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
-// little endian
+/// little endian
 pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     use io::Error;
     use io::ErrorKind::InvalidData;
@@ -23,10 +30,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
         n |= ((buffer[0] & 127) as u128) << shift;
         reader.read_exact(&mut buffer)?;
         bytes_read.extend_from_slice(&buffer);
-        // IMPORTANT: The original implementation has an off-by-one error here, hence we
-        // have to copy the same off-by-one error in order to read the file format.
-        // The correct implementation is supposed to shift by 8! Look at the commented out
-        // tests at the bottom of the file for proof.
+        // off by one, is supposed to be shift by 8
         shift += 7;
     }
 
@@ -39,6 +43,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     }
 }
 
+/// Decode a vbyte to usize n at the given offset and return (n, amount of bytes read).
 pub const fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     let mut n: usize = 0;
     let mut shift: usize = 0;
@@ -56,17 +61,14 @@ pub const fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     (n, byte_amount)
 }
 
-// little endian
+/// little endian
 pub fn encode_vbyte(n: usize) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut n = n;
 
     while n > 127 {
         bytes.push((n & 127) as u8);
-        // IMPORTANT: The original implementation has an off-by-one error here, hence we
-        // have to copy the same off-by-one error in order to read the file format.
-        // The correct implementation is supposed to shift by 8! Look at the commented out
-        // tests at the bottom of the file for proof.
+        // off by one, is supposed to be shift by 8
         n >>= 7;
     }
 
