@@ -1,8 +1,7 @@
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
-use crate::triples::TripleId;
-use crate::triples::TripleSect;
+use crate::triples::{BitmapIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use std::io;
@@ -15,7 +14,7 @@ pub struct Hdt {
     //global_ci: ControlInfo,
     //header: Header,
     dict: FourSectDict,
-    triple_sect: TripleSect,
+    triples: TriplesBitmap,
 }
 
 type StringTriple = (String, String, String);
@@ -39,8 +38,8 @@ impl Hdt {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
         let dict = FourSectDict::read(&mut reader)?;
-        let triple_sect = TripleSect::read(&mut reader)?;
-        let hdt = Hdt { dict, triple_sect };
+        let triples = TriplesBitmap::read_sect(&mut reader)?;
+        let hdt = Hdt { dict, triples };
         println!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         println!("{hdt:#?}");
         Ok(hdt)
@@ -48,7 +47,7 @@ impl Hdt {
 
     /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.dict.size_in_bytes() + self.triple_sect.size_in_bytes()
+        self.dict.size_in_bytes() + self.triples.size_in_bytes()
     }
 
     fn translate_id(&self, t: TripleId) -> Result<StringTriple, TranslateErr> {
@@ -63,12 +62,14 @@ impl Hdt {
     /// because the strings are stored in compressed form and must be decompressed and allocated.
     /// Whenever possible, use [`Hdt::triples_with`] instead.
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
-        self.triple_sect.read_all_ids().map(|id| self.translate_id(id).unwrap())
+        self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// An iterator visiting all triples with either the given subject, property or object as strings.
+    /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. either given subject, property or object.
+    /// Returns translated triples as strings.
+    /// If the subject is given, you can also use [`Hdt::BitmapIterator::with_pattern`] with a TripleId where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].
-    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead if it exists.
+    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
         debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, kind);
@@ -77,7 +78,7 @@ impl Hdt {
         }
         let owned = s.to_owned();
         Box::new(
-            self.triple_sect
+            self.triples
                 .triples_with_id(id, kind)
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| r.map_err(|e| eprintln!("Error on triple with {kind:?} {owned}: {e}")).ok()),
@@ -87,8 +88,6 @@ impl Hdt {
     // TODO extract common code out of triples_with_...
 
     /// Get all triples with the given subject and property.
-    /// The current implementation queries all triple IDs for the given subject and filters them for the given property.
-    /// This method is faster then filtering on translated strings but can be further optimized by creating a special SP iterator.
     pub fn triples_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
@@ -98,9 +97,7 @@ impl Hdt {
         let s_owned = s.to_owned();
         let p_owned = p.to_owned();
         Box::new(
-            self.triple_sect
-                .triples_with_id(sid, &IdKind::Subject)
-                .filter(move |tid| tid.predicate_id == pid)
+            BitmapIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| {
                     r.map_err(|e| eprintln!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
@@ -121,7 +118,7 @@ impl Hdt {
         let s_owned = s.to_owned();
         let o_owned = o.to_owned();
         Box::new(
-            self.triple_sect
+            self.triples
                 .triples_with_id(sid, &IdKind::Subject)
                 .filter(move |tid| tid.object_id == oid)
                 .map(move |tid| self.translate_id(tid))
@@ -144,7 +141,7 @@ impl Hdt {
         let p_owned = p.to_owned();
         let o_owned = o.to_owned();
         Box::new(
-            self.triple_sect
+            self.triples
                 .triples_with_id(pid, &IdKind::Predicate)
                 .filter(move |tid| tid.object_id == oid)
                 .map(move |tid| self.translate_id(tid))

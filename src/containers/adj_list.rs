@@ -49,11 +49,11 @@ impl AdjList {
     }
 
     /// return the position of element within the given bounds
-    fn bin_search(&self, element: Id, begin: usize, end: usize) -> Option<usize> {
+    fn bin_search(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
         let mut low = begin;
         let mut high = end;
         while low <= high {
-            let mid = low + high / 2;
+            let mid = (low + high) / 2;
             match self.sequence.get(mid).cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
