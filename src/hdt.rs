@@ -67,7 +67,7 @@ impl Hdt {
 
     /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. either given subject, property or object.
     /// Returns translated triples as strings.
-    /// If the subject is given, you can also use [`Hdt::BitmapIterator::with_pattern`] with a TripleId where property and object are 0.
+    /// If the subject is given, you can also use [`BitmapIter::with_pattern`] with a TripleId where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].
     /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {

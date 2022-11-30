@@ -3,12 +3,16 @@ use std::fmt;
 /// Represents an RDF triple.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Triple {
+    /// Named IRI or blank node.
     pub subject: Id,
+    /// IRI
     pub predicate: String,
+    /// Named IRI, blank node or literal.
     pub object: Term,
 }
 
 impl Triple {
+    /// Triple with the given subject, predicate and object.
     pub const fn new(subject: Id, predicate: String, object: Term) -> Self {
         Triple { subject, predicate, object }
     }
@@ -25,7 +29,9 @@ impl fmt::Debug for Triple {
 /// contained in.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Id {
+    /// IRI
     Named(String),
+    /// Blank node
     Blank(String),
 }
 
@@ -43,7 +49,9 @@ impl fmt::Debug for Id {
 /// RDF Terms are either identifiers or literals.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Term {
+    /// Named IRI or blank node.
     Id(Id),
+    /// Literal value.
     Literal(Literal),
 }
 

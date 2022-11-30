@@ -10,14 +10,17 @@ use sophia::triple::stream::*;
 use sophia::triple::streaming_mode::*;
 use std::convert::Infallible;
 
+/// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
     hdt: Hdt,
 }
 
 impl HdtGraph {
+    /// Wrapper around Hdt.
     pub const fn new(hdt: Hdt) -> Self {
         HdtGraph { hdt }
     }
+    /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.hdt.size_in_bytes()
     }

@@ -6,24 +6,19 @@ use std::io;
 use std::io::BufRead;
 use std::str;
 
+/// Metadata about the dataset, see <https://www.rdfhdt.org/hdt-binary-format/#header>.
 #[derive(Debug, Clone)]
 pub struct Header {
+    /// Header data format. Only "ntriples" is supported.
     pub format: String,
+    /// The number of bytes of the header data.
     pub length: usize,
+    /// Triples describing the dataset.
     pub body: BTreeSet<Triple>,
 }
 
-impl Default for Header {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Header {
-    pub fn new() -> Self {
-        Header { format: String::new(), length: 0, body: BTreeSet::new() }
-    }
-
+    /// Reader needs to be positioned directly after the global control information.
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;

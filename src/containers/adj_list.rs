@@ -4,13 +4,17 @@ use crate::containers::Sequence;
 use crate::triples::Id;
 use std::cmp::Ordering;
 
+/// Adjacency list including a compact integer sequence and a bitmap for efficient access of that sequence using rank and select queries.
 #[derive(Debug, Clone)]
 pub struct AdjList {
+    /// Compact integer sequence.
     pub sequence: Sequence,
+    /// Helper structure for rank and select queries.
     pub bitmap: Bitmap,
 }
 
 impl AdjList {
+    /// Adjacency list with the given sequence and bitmap.
     pub const fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
         AdjList { sequence, bitmap }
     }
@@ -25,19 +29,17 @@ impl AdjList {
         self.bitmap.at_last_sibling(word_index)
     }
 
+    /// Get the ID at the given position.
     pub fn get_id(&self, word_index: usize) -> Id {
         self.sequence.get(word_index) as Id
     }
 
+    /// Number of entries in both the integer sequence and the bitmap.
     pub const fn len(&self) -> usize {
         self.sequence.entries
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.sequence.data.is_empty()
-    }
-
-    /// Find the position of the given ID, counting from 1.
+    /// Find the first position for the given ID, counting from 1.
     pub fn find(&self, x: Id) -> usize {
         if x == 0 {
             return 0;
@@ -48,7 +50,7 @@ impl AdjList {
         self.bitmap.dict.select1(x as u64 - 1).unwrap() as usize + 1
     }
 
-    /// return the position of element within the given bounds
+    /// Return the position of element within the given bounds.
     fn bin_search(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
         let mut low = begin;
         let mut high = end;
@@ -63,12 +65,13 @@ impl AdjList {
         None
     }
 
-    /// Find position of element y in the list x
+    /// Find position of element y in the list x.
     // See <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/sequence/AdjacencyList.cpp>.
     pub fn search(&self, x: usize, y: usize) -> Option<usize> {
         self.bin_search(y, self.find(x), self.last(x))
     }
 
+    /// Find the last position for the given ID, counting from 1.
     pub fn last(&self, x: Id) -> usize {
         self.find(x + 1) - 1
     }

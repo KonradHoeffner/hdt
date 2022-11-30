@@ -5,6 +5,8 @@ use std::io;
 use std::io::BufRead;
 use std::str;
 
+/// Type of Control Information.
+#[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ControlType {
@@ -32,24 +34,19 @@ impl TryFrom<u8> for ControlType {
     }
 }
 
+/// <https://www.rdfhdt.org/hdt-binary-format/>: "preamble that describes a chunk of information".
 #[derive(Debug, Clone)]
 pub struct ControlInfo {
+    /// Type of control information.
     pub control_type: ControlType,
+    /// "URI identifier of the implementation of the following section."
     pub format: String,
+    /// Key-value entries, ASCII only.
     properties: HashMap<String, String>,
 }
 
-impl Default for ControlInfo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ControlInfo {
-    pub fn new() -> Self {
-        ControlInfo { control_type: ControlType::Unknown, format: String::new(), properties: HashMap::new() }
-    }
-
+    /// Read and verify control information.
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;
@@ -117,6 +114,7 @@ impl ControlInfo {
         Ok(ControlInfo { control_type, format, properties })
     }
 
+    /// Get property value for the given key, if available.
     pub fn get(&self, key: &str) -> Option<String> {
         self.properties.get(key).cloned()
     }

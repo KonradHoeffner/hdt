@@ -8,10 +8,14 @@ use std::mem::size_of;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
+/// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
 #[derive(Clone)]
 pub struct Sequence {
+    /// Number of integers in the sequence.
     pub entries: usize,
+    /// Number of bits that each integer uses.
     pub bits_per_entry: usize,
+    /// Data in blocks.
     pub data: Vec<usize>,
 }
 
@@ -54,6 +58,7 @@ impl<'a> IntoIterator for &'a Sequence {
 }
 
 impl Sequence {
+    /// Get the integer at the given index, counting from 0.
     pub fn get(&self, index: usize) -> usize {
         let scaled_index = index * self.bits_per_entry;
         let block_index = scaled_index / USIZE_BITS;
@@ -73,10 +78,12 @@ impl Sequence {
         result
     }
 
+    /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         (self.data.len() * USIZE_BITS) >> 3
     }
 
+    /// Read sequence including metadata from HDT data.
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;

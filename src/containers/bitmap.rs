@@ -11,10 +11,12 @@ use std::mem::size_of;
 
 //const USIZE_BITS: usize = usize::BITS as usize;
 
+/// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
 pub struct Bitmap {
     //num_bits: usize,
     // could also use sucds::rs_bit_vector::RsBitVector, that would be -1 dependency but that doesn't seem to have from_blocks
+    /// Currently using the rsdict crate.
     pub dict: RsDict,
     //pub data: Vec<u64>,
 }
@@ -26,16 +28,19 @@ impl fmt::Debug for Bitmap {
 }
 
 impl Bitmap {
+    /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
     pub fn new(data: Vec<u64>) -> Self {
         let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
         //let dict = RsDict::from_blocks((data.clone() as Vec<u64>).into_iter()); // keep data. faster get_bit but more RAM.
         Bitmap { dict }
     }
 
+    /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.heap_size()
     }
 
+    /// Whether the node given position is the last child of its parent.
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
         // Each block in the bitmap has `USIZE_BITS` many bits. If `usize` is 64 bits, and we are
         // looking for the 65th word in the sequence this means we need the first bit of the second
@@ -54,6 +59,7 @@ impl Bitmap {
         self.dict.get_bit(word_index as u64)
     }
 
+    /// Read bitmap from a suitable point within HDT file data and verify checksums.
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::{InvalidData, Other};

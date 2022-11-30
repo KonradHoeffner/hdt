@@ -3,7 +3,7 @@ use std::io::BufRead;
 
 const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
-// little endian
+/// little endian
 pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     use io::Error;
     use io::ErrorKind::InvalidData;
@@ -39,6 +39,7 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
     }
 }
 
+/// decode VByte with offset
 pub const fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     let mut n: usize = 0;
     let mut shift: usize = 0;
@@ -56,7 +57,7 @@ pub const fn decode_vbyte_delta(data: &[u8], offset: usize) -> (usize, usize) {
     (n, byte_amount)
 }
 
-// little endian
+/// little endian
 pub fn encode_vbyte(n: usize) -> Vec<u8> {
     let mut bytes = Vec::new();
     let mut n = n;

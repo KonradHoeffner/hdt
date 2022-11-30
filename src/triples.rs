@@ -13,6 +13,7 @@ use sucds::{CompactVector, Searial, WaveletMatrix, WaveletMatrixBuilder};
 
 /// Order of the triple sections.
 /// Only SPO is tested, others probably don't work correctly.
+#[allow(missing_docs)]
 #[repr(u8)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Order {
@@ -86,9 +87,13 @@ impl OpIndex {
 //#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
+    /// bitmap to find positions in the wavelet matrix
     pub bitmap_y: Bitmap,
+    /// adjacency list storing the object IDs
     pub adjlist_z: AdjList,
+    /// index for object-based access
     pub op_index: OpIndex,
+    /// wavelet matrix for predicate-based access
     pub wavelet_y: WaveletMatrix,
 }
 
@@ -102,6 +107,7 @@ impl fmt::Debug for TriplesBitmap {
 }
 
 impl TriplesBitmap {
+    /// read the whole triple section including control information
     pub fn read_sect<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
         use io::ErrorKind::InvalidData;
@@ -116,6 +122,7 @@ impl TriplesBitmap {
         }
     }
 
+    /// Iterator over all triples with a given ID in the specified position (subject, predicate or object).
     pub fn triples_with_id(&self, id: usize, id_kind: &IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
         match id_kind {
             IdKind::Subject => Box::new(BitmapIter::with_s(self, id)),
@@ -124,10 +131,12 @@ impl TriplesBitmap {
         }
     }
 
+    /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
     }
 
+    /// Position in the wavelet index of the first predicate for the given subject ID.
     pub fn find_y(&self, subject_id: Id) -> usize {
         if subject_id == 0 {
             return 0;
@@ -135,11 +144,12 @@ impl TriplesBitmap {
         self.bitmap_y.dict.select1(subject_id as u64 - 1).unwrap() as usize + 1
     }
 
+    /// Position in the wavelet index of the last predicate for the given subject ID.
     pub fn last_y(&self, subject_id: usize) -> usize {
         self.find_y(subject_id + 1) - 1
     }
 
-    /// binary search in the wavelet matrix
+    /// Binary search in the wavelet matrix.
     fn bin_search_y(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
         let mut low = begin;
         let mut high = end;
@@ -155,7 +165,7 @@ impl TriplesBitmap {
         None
     }
 
-    /// search the wavelet matrix for the position of a given subject, predicate pair
+    /// Search the wavelet matrix for the position of a given subject, predicate pair.
     pub fn search_y(&self, subject_id: usize, property_id: usize) -> Option<usize> {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id))
     }
@@ -228,6 +238,9 @@ impl TriplesBitmap {
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 
+    /// Transform the given IDs of the layers in triple section order to a triple ID.
+    /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
+    /// Other orders may lead to undefined behaviour.
     pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> io::Result<TripleId> {
         use io::Error;
         use io::ErrorKind::InvalidData;
@@ -258,6 +271,7 @@ impl<'a> IntoIterator for &'a TriplesBitmap {
     }
 }
 
+/// Iterator over triples fitting an SPO, SP? S?? or ??? triple pattern.
 //#[derive(Debug)]
 pub struct BitmapIter<'a> {
     // triples data
@@ -284,6 +298,7 @@ impl<'a> BitmapIter<'a> {
         }
     }
 
+    /// Use when no results are found.
     pub const fn empty(triples: &'a TriplesBitmap) -> Self {
         BitmapIter { triples, x: 1, pos_y: 0, pos_z: 0, max_y: 0, max_z: 0 }
     }
@@ -301,7 +316,7 @@ impl<'a> BitmapIter<'a> {
     /// Variable positions are signified with a 0 value.
     /// Undefined result if any other triple pattern is used.
     /// # Examples
-    /// ```ignore
+    /// ```text
     /// // S?? pattern, all triples with subject ID 1
     /// BitmapIter::with_pattern(triples, TripleId::new(1, 0, 0);
     /// // SP? pattern, all triples with subject ID 1 and predicate ID 2
@@ -386,6 +401,11 @@ impl<'a> Iterator for BitmapIter<'a> {
     }
 }
 
+/// Subject, predicate or object ID, starting at 1.
+/// Subjects and predicate share IDs, starting at 1, for common values.
+/// A value of 0 indicates either not found (as a return value) or all of them (in a triple pattern).
+/// In the official documentation, u32 is used, however here, usize is used.
+/// While u32 caps out at 4 billion, more is not supported by the format anyways so this can probably be changed to u32.
 pub type Id = usize;
 
 /// Type for a triple encoded as numeric IDs for subject, predicate and object, respectively.
