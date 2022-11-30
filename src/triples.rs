@@ -141,17 +141,11 @@ impl TriplesBitmap {
 
     /// binary search in the wavelet matrix
     fn bin_search_y(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
-        println!("searching for element {element} between {begin} and {end}");
-
         let mut low = begin;
         let mut high = end;
 
-        for i in low..high {
-            println!("{}", self.wavelet_y.get(i));
-        }
-
         while low <= high {
-            let mid = low + high / 2;
+            let mid = (low + high) / 2;
             match self.wavelet_y.get(mid).cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
@@ -163,7 +157,6 @@ impl TriplesBitmap {
 
     /// search the wavelet matrix for the position of a given subject, predicate pair
     pub fn search_y(&self, subject_id: usize, property_id: usize) -> Option<usize> {
-        println!("searching for subject id {subject_id} and property_id {property_id}");
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id))
     }
 
@@ -326,7 +319,7 @@ impl<'a> BitmapIter<'a> {
             // S X X
             if pat_y != 0 {
                 // S P X
-                match triples.search_y(pat_x, pat_y) {
+                match triples.search_y(pat_x - 1, pat_y) {
                     Some(y) => min_y = y,
                     None => return BitmapIter::empty(triples),
                 };
@@ -340,12 +333,9 @@ impl<'a> BitmapIter<'a> {
                     };
                     max_z = min_z + 1;
                 } else {
-                    println!("bingo!");
                     // S P ?
                     min_z = triples.adjlist_z.find(min_y);
                     max_z = triples.adjlist_z.last(min_y) + 1;
-                    println!("adjlist_z min_z ele {}", triples.adjlist_z.sequence.get(min_z));
-                    println!("adjlist_z max_z ele {}", triples.adjlist_z.sequence.get(max_z));
                 }
             } else {
                 // S ? X
@@ -392,7 +382,6 @@ impl<'a> Iterator for BitmapIter<'a> {
             self.pos_y += 1;
         }
         self.pos_z += 1;
-        println!("bitmap iter next {triple_id:?} ");
         Some(triple_id)
     }
 }
@@ -460,6 +449,27 @@ mod tests {
                 );
             }
         }
+
+        // BitmapIter
         assert_eq!(0, BitmapIter::empty(&triples).count());
+        // SPO
+        assert_eq!(
+            vec![TripleId::new(14, 14, 154)],
+            BitmapIter::with_pattern(&triples, &TripleId::new(14, 14, 154)).collect::<Vec<_>>()
+        );
+        // SP
+        assert_eq!(
+            vec![TripleId::new(14, 14, 154)],
+            BitmapIter::with_pattern(&triples, &TripleId::new(14, 14, 0)).collect::<Vec<_>>()
+        );
+        // S??
+        for i in 1..num_subjects {
+            assert_eq!(
+                BitmapIter::with_s(&triples, i).collect::<Vec<_>>(),
+                BitmapIter::with_pattern(&triples, &TripleId::new(i, 0, 0)).collect::<Vec<_>>()
+            );
+        }
+        // ??? (all triples)
+        assert_eq!(v, BitmapIter::with_pattern(&triples, &TripleId::new(0, 0, 0)).collect::<Vec<_>>());
     }
 }

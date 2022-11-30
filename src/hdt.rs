@@ -65,9 +65,11 @@ impl Hdt {
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// An iterator visiting all triples with either the given subject, property or object as strings.
+    /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. either given subject, property or object.
+    /// Returns translated triples as strings.
+    /// If the subject is given, you can also use [`Hdt::BitmapIterator::with_pattern`] with a TripleId where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].
-    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead if it exists.
+    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
         debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, kind);
@@ -175,13 +177,6 @@ mod tests {
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
         let o = "\"top class\"@en";
         let triple_vec = vec![(s.to_owned(), p.to_owned(), o.to_owned())];
-        println!(
-            "{:?}",
-            hdt.triples
-                .triples_with_id(14, &IdKind::Subject)
-                .filter(|tid| tid.predicate_id == 14)
-                .collect::<Vec<_>>()
-        );
         assert_eq!(triple_vec, hdt.triples_with_sp(s, p).collect::<Vec<_>>());
         assert_eq!(triple_vec, hdt.triples_with_so(s, o).collect::<Vec<_>>());
         assert_eq!(triple_vec, hdt.triples_with_po(p, o).collect::<Vec<_>>());
