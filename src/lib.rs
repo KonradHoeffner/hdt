@@ -14,11 +14,6 @@
 //!
 //! # Example of loading and querying an HDT file
 //!
-//! ```toml
-//! [dependencies]
-//! hdt = "0.0.4"
-//! ```
-//!
 //! ```no_run
 //! use hdt::Hdt;
 //!
