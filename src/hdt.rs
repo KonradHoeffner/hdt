@@ -6,6 +6,7 @@ use crate::FourSectDict;
 use bytesize::ByteSize;
 use std::io;
 use thiserror::Error;
+use rayon::prelude::*;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
 /// Allows queries by triple patterns.
@@ -80,6 +81,7 @@ impl Hdt {
         Box::new(
             self.triples
                 .triples_with_id(id, kind)
+                .par_bridge()
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| r.map_err(|e| eprintln!("Error on triple with {kind:?} {owned}: {e}")).ok()),
         )
