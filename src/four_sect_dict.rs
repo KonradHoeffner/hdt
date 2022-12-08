@@ -3,7 +3,7 @@ use crate::triples::Id;
 use crate::ControlInfo;
 use crate::DictSectPFC;
 use std::io;
-use std::io::BufRead;
+use std::io::{BufRead, Error, ErrorKind};
 use thiserror::Error;
 
 #[derive(Debug, Clone)]
@@ -13,7 +13,7 @@ pub enum IdKind {
     Object,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FourSectDict {
     pub shared: DictSectPFC,
     pub subjects: DictSectPFC,
@@ -91,8 +91,25 @@ impl FourSectDict {
         }
     }
 
+    /// Validates the checksums of all dictionary sections in parallel.
+    /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
+    /// This function must NOT be called more than once.
+    // TODO can this be simplified?
+    pub fn validate(&mut self) -> io::Result<()> {
+        let sects = [&mut self.shared, &mut self.subjects, &mut self.predicates, &mut self.objects];
+        let names = ["shared", "subject", "predicate", "object"];
+        for i in 0..sects.len() {
+            if !sects[i].crc_handle.take().unwrap().join().unwrap() {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("CRC Error in {} dictionary section.", names[i]),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use io::Error;
         use io::ErrorKind::InvalidData;
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {

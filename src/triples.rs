@@ -83,7 +83,7 @@ impl OpIndex {
     }
 }
 
-/// BitmapTriples variant of the triples section.
+/// `BitmapTriples` variant of the triples section.
 //#[derive(Clone)]
 pub struct TriplesBitmap {
     order: Order,
@@ -170,6 +170,18 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id))
     }
 
+    fn build_wavelet(sequence: Sequence) -> WaveletMatrix {
+        print!("Start constructing wavelet matrix");
+        let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence.bits_per_entry);
+        for x in &sequence {
+            wavelet_builder.push(x);
+        }
+        drop(sequence);
+        let wavelet = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
+        println!("...finished constructing wavelet matrix with length {}", wavelet.len());
+        wavelet
+    }
+
     fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
@@ -188,20 +200,11 @@ impl TriplesBitmap {
 
         // read sequences
         let sequence_y = Sequence::read(reader)?;
-        // generate wavelet matrix early to reduce memory peak consumption
-        print!("Start constructing wavelet matrix");
-        let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence_y.bits_per_entry);
-        for x in &sequence_y {
-            wavelet_builder.push(x);
-        }
-        drop(sequence_y);
-        let wavelet_y = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
-        println!("...finished constructing wavelet matrix with length {}", wavelet_y.len());
+        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
         let sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-
         // construct object-based index to traverse from the leaves and support O?? queries
         print!("Constructing OPS index");
         let entries = adjlist_z.sequence.entries;
@@ -234,7 +237,7 @@ impl TriplesBitmap {
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
-
+        let wavelet_y = wavelet_thread.join().unwrap();
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 

@@ -8,15 +8,17 @@ use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::str;
+use std::thread;
 use thiserror::Error;
 
 /// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct DictSectPFC {
     num_strings: usize,
     block_size: usize,
     sequence: Sequence,
     packed_data: Vec<u8>,
+    pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -266,16 +268,18 @@ impl DictSectPFC {
         // read packed data CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
-        let crc_code = u32::from_le_bytes(crc_code);
-
         // validate packed data CRC32
-        let mut crc = CRCu32::crc32c();
-        crc.digest(&packed_data[..]);
-        if crc.get_crc() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
-        }
+        // higher temporary memory usage but CRC can be calculated in parallel
+        // TODO can this be done without cloning?
+        let cloned_data = packed_data.clone();
+        let crc_handle = Some(thread::spawn(move || {
+            let crc_code = u32::from_le_bytes(crc_code);
+            let mut crc = CRCu32::crc32c();
+            crc.digest(&cloned_data[..]);
+            crc.get_crc() == crc_code
+        }));
 
-        Ok(DictSectPFC { num_strings, block_size, sequence, packed_data })
+        Ok(DictSectPFC { num_strings, block_size, sequence, packed_data, crc_handle })
     }
 }
 

@@ -39,6 +39,11 @@ impl AdjList {
         self.sequence.entries
     }
 
+    /// Whether the list is emtpy
+    pub const fn is_empty(&self) -> bool {
+        self.sequence.entries == 0
+    }
+
     /// Find the first position for the given ID, counting from 1.
     pub fn find(&self, x: Id) -> usize {
         if x == 0 {

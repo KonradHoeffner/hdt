@@ -16,15 +16,12 @@
 //!
 //! ```no_run
 //! use hdt::Hdt;
-//!
-//! pub fn main() {
-//!     // Load an hdt file
-//!     let file = File::open("example.hdt").expect("error opening file");
-//!     let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
-//!     // query
-//!     let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
-//!     println!("{:?}", majors.collect::<Vec<(String, String, String)>(majors));
-//! }
+//! // Load an hdt file
+//! let file = File::open("example.hdt").expect("error opening file");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! // query
+//! let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
+//! println!("{:?}", majors.collect::<Vec<(String, String, String)>(majors));
 //! ```
 //!
 //! # Optional features
@@ -43,6 +40,8 @@
 #![allow(clippy::wildcard_imports)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::similar_names)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::if_not_else)]
 #![warn(clippy::missing_const_for_fn)]
 /// Types for storing and reading data.
 pub mod containers;

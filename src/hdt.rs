@@ -37,8 +37,9 @@ impl Hdt {
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
-        let dict = FourSectDict::read(&mut reader)?;
+        let mut dict = FourSectDict::read(&mut reader)?;
         let triples = TriplesBitmap::read_sect(&mut reader)?;
+        dict.validate()?;
         let hdt = Hdt { dict, triples };
         println!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         println!("{hdt:#?}");
@@ -67,7 +68,7 @@ impl Hdt {
 
     /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. either given subject, property or object.
     /// Returns translated triples as strings.
-    /// If the subject is given, you can also use [`BitmapIter::with_pattern`] with a TripleId where property and object are 0.
+    /// If the subject is given, you can also use [`BitmapIter::with_pattern`] with a `TripleId` where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].
     /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
