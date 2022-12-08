@@ -64,7 +64,7 @@ impl Bitmap {
         use std::io::Error;
         use std::io::ErrorKind::{InvalidData, Other};
 
-        let mut history: Vec<u8> = Vec::new();
+        let mut history: Vec<u8> = Vec::with_capacity(5);
 
         // read the type
         let mut bitmap_type = [0u8];
@@ -90,14 +90,14 @@ impl Bitmap {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
         }
 
-        // reset history for CRC32
-        history = Vec::new();
-        let mut data: Vec<u64> = Vec::new();
-
         // read all but the last word, last word is byte aligned
         let full_byte_amount = ((num_bits - 1) >> 6) * 8;
         let mut full_words = vec![0_u8; full_byte_amount];
+        // div_ceil is unstable
+        let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
+        // reset history for CRC32
+        history = Vec::with_capacity(full_byte_amount + 100);
         history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize/u64 values

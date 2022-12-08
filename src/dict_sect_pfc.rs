@@ -18,6 +18,7 @@ pub struct DictSectPFC {
     block_size: usize,
     sequence: Sequence,
     packed_data: Vec<u8>,
+    /// whether CRC check was successful
     pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 

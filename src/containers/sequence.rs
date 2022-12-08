@@ -5,11 +5,12 @@ use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
+use std::thread;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
-#[derive(Clone)]
+//#[derive(Clone)]
 pub struct Sequence {
     /// Number of integers in the sequence.
     pub entries: usize,
@@ -17,6 +18,8 @@ pub struct Sequence {
     pub bits_per_entry: usize,
     /// Data in blocks.
     pub data: Vec<usize>,
+    /// whether CRC check was successful
+    pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
 impl fmt::Debug for Sequence {
@@ -126,17 +129,16 @@ impl Sequence {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
         }
 
-        // read entry body
-        // keep track of history for CRC32
-        let mut history: Vec<u8> = Vec::new();
         // read body data
-        let mut data: Vec<usize> = Vec::new();
-
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
         let full_byte_amount = (((total_bits + USIZE_BITS - 1) / USIZE_BITS) - 1) * size_of::<usize>();
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words)?;
+        let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / 8 + 2);
+        // read entry body
+        // keep track of history for CRC32
+        let mut history: Vec<u8> = Vec::with_capacity(full_byte_amount + 8);
         history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize values
@@ -161,19 +163,18 @@ impl Sequence {
             bits_read += size_of::<usize>();
         }
         data.push(last_value);
-        data.shrink_to_fit();
         // read entry body CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
-        let crc_code = u32::from_le_bytes(crc_code);
+        let crc_handle = Some(thread::spawn(move || {
+            let crc_code = u32::from_le_bytes(crc_code);
 
-        // validate entry body CRC32
-        let mut crc = CRCu32::crc32c();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
-        }
+            // validate entry body CRC32
+            let mut crc = CRCu32::crc32c();
+            crc.digest(&history[..]);
+            crc.get_crc() == crc_code
+        }));
 
-        Ok(Sequence { entries, bits_per_entry, data })
+        Ok(Sequence { entries, bits_per_entry, data, crc_handle })
     }
 }

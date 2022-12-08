@@ -170,12 +170,13 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id))
     }
 
-    fn build_wavelet(sequence: Sequence) -> WaveletMatrix {
+    fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix {
         print!("Start constructing wavelet matrix");
         let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence.bits_per_entry);
         for x in &sequence {
             wavelet_builder.push(x);
         }
+        assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
         drop(sequence);
         let wavelet = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
         println!("...finished constructing wavelet matrix with length {}", wavelet.len());
@@ -201,21 +202,20 @@ impl TriplesBitmap {
         // read sequences
         let sequence_y = Sequence::read(reader)?;
         let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let sequence_z = Sequence::read(reader)?;
+        let mut sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
-        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         // construct object-based index to traverse from the leaves and support O?? queries
         print!("Constructing OPS index");
-        let entries = adjlist_z.sequence.entries;
+        let entries = sequence_z.entries;
         // if it takes too long to calculate, can also pass in as parameter
-        let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
+        let max_object = sequence_z.into_iter().max().unwrap().to_owned();
         // limited to < 2^32 objects
         let mut indicess = vec![Vec::<u32>::new(); max_object];
 
         // Count the indexes of appearance of each object
         for i in 0..entries {
-            let object = adjlist_z.sequence.get(i);
+            let object = sequence_z.get(i);
             if object == 0 {
                 eprintln!("ERROR: There is a zero value in the Z level.");
                 continue;
@@ -238,6 +238,8 @@ impl TriplesBitmap {
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         println!("...finished constructing OPS index");
         let wavelet_y = wavelet_thread.join().unwrap();
+        assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
+        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 
