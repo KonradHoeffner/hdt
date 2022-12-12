@@ -1,3 +1,5 @@
+/// Dictionary section with plain front coding.
+/// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crate::triples::Id;
@@ -11,7 +13,7 @@ use std::str;
 use std::thread;
 use thiserror::Error;
 
-/// Dictionary section plain front coding, see <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
+/// Dictionary section with plain front coding.
 //#[derive(Clone)]
 pub struct DictSectPFC {
     num_strings: usize,
@@ -34,6 +36,7 @@ impl fmt::Debug for DictSectPFC {
     }
 }
 
+///
 #[derive(Error, Debug)]
 pub enum ExtractError {
     #[error("index out of bounds: id {id} > dictionary section len {len}")]

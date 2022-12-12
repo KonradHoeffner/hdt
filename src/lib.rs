@@ -45,7 +45,7 @@
 #![warn(clippy::missing_const_for_fn)]
 /// Types for storing and reading data.
 pub mod containers;
-/// Types for representing dictionaries.
+// Types for representing dictionaries.
 mod dict_sect_pfc;
 mod four_sect_dict;
 /// Types for representing triple sections.

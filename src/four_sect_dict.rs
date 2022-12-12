@@ -1,3 +1,4 @@
+/// Four section dictionary.
 use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
 use crate::ControlInfo;
@@ -6,6 +7,7 @@ use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use thiserror::Error;
 
+/// Position in an RDF triple.
 #[derive(Debug, Clone)]
 pub enum IdKind {
     Subject,
@@ -13,14 +15,23 @@ pub enum IdKind {
     Object,
 }
 
+/// Four section dictionary with plain front coding.
+/// Dictionary with shared, subject, predicate and object sections.
+/// Types specified as <http://purl.org/HDT/hdt#dictionaryFour>.
+/// See <https://www.rdfhdt.org/hdt-internals/#dictionary>.
 #[derive(Debug)]
 pub struct FourSectDict {
+    /// The shared section contains URIs that occur both in subject and object position. Its IDs start at one.
     pub shared: DictSectPFC,
+    /// URIs that only occur as subjects. Their IDs start at the last ID of the shared section + 1.
     pub subjects: DictSectPFC,
+    /// The predicate section has its own separate numbering starting from 1.
     pub predicates: DictSectPFC,
+    /// URIs and literals that only occur as objects . Their IDs start at the last ID of the shared section + 1.
     pub objects: DictSectPFC,
 }
 
+/// Designates one of the four sections.
 #[derive(Debug)]
 pub enum SectKind {
     Shared,
@@ -29,6 +40,7 @@ pub enum SectKind {
     Object,
 }
 
+/// Wraps an extraction error with additional information on which dictionary section it occurred in.
 #[derive(Error, Debug)]
 #[error("four sect dict error id_to_string({id},IdKind::{id_kind:?}) in the {sect_kind:?} section, caused by {e}")]
 pub struct DictErr {
@@ -40,6 +52,8 @@ pub struct DictErr {
 }
 
 impl FourSectDict {
+    /// Get the string value of a given ID of a given type.
+    /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
     pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> Result<String, DictErr> {
         let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);
@@ -64,6 +78,8 @@ impl FourSectDict {
         }
     }
 
+    /// Get the string value of an ID.
+    /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
     pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> Id {
         let shared_size = self.shared.num_strings();
         match id_kind {
