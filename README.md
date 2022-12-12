@@ -58,3 +58,10 @@ pub fn main() {
   let majors = graph.triples_with_sp(s,p);
 }
 ```
+
+If you don't want to pull in the Sophia dependency, you can exclude the adapter:
+
+```toml
+[dependencies]
+hdt = { version = "0.0.6", default-features = false }
+```
