@@ -28,8 +28,9 @@ impl fmt::Debug for DictSectPFC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "total size {}, sequence {:?}, packed data {}",
+            "total size {}, {} strings, sequence {:?}, packed data {}",
             ByteSize(self.size_in_bytes() as u64),
+            self.num_strings,
             self.sequence,
             ByteSize(self.packed_data.len() as u64)
         )
@@ -75,9 +76,13 @@ impl DictSectPFC {
     // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
     // 0 means not found
     pub fn string_to_id(&self, element: &str) -> Id {
+        if self.num_strings == 0 {
+            // shared dictionary may be empty
+            return 0;
+        }
         // binary search
         let mut low: usize = 0;
-        let mut high = self.sequence.entries - 2; // should be -1 but only works with -2, investigate
+        let mut high = self.sequence.entries.saturating_sub(2); // should be -1 but only works with -2, investigate
         let max = high;
         let mut mid = high;
         while low <= high {
@@ -122,8 +127,22 @@ impl DictSectPFC {
     }
 
     fn pos_str(&self, pos: usize, slen: usize) -> &str {
+        assert!(
+            pos + slen < self.packed_data.len(),
+            "Invalid arguments pos_str({pos},{slen}), packed data len {}).",
+            self.packed_data.len()
+        );
         //println!("pos_str({}, {})", pos, slen);
-        str::from_utf8(&self.packed_data[pos..pos + slen]).unwrap()
+        match str::from_utf8(&self.packed_data[pos..pos + slen]) {
+            Ok(s) => s,
+            Err(_) => {
+                println!(
+                    "invalid UTF8, skipping a byte {}",
+                    String::from_utf8_lossy(&self.packed_data[pos..pos + slen])
+                );
+                self.pos_str(pos + 1, slen)
+            }
+        }
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
@@ -152,13 +171,16 @@ impl DictSectPFC {
 
             //Copy suffix
             let slen = self.strlen(pos);
-            temp_string.truncate(delta);
+            temp_string.truncate(temp_string.floor_char_boundary(delta));
             temp_string.push_str(self.pos_str(pos, slen));
 
             if delta >= cshared {
                 // Current delta value means that this string has a larger long common prefix than the previous one
-                cshared +=
-                    Self::longest_common_prefix(temp_string[cshared..].as_bytes(), element[cshared..].as_bytes());
+                let boundary = temp_string.floor_char_boundary(cshared);
+                cshared += Self::longest_common_prefix(
+                    temp_string[boundary..].as_bytes(),
+                    element[boundary..].as_bytes(),
+                );
 
                 if (cshared == element.len()) && (temp_string.len() == element.len()) {
                     break;
