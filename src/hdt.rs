@@ -66,7 +66,7 @@ impl Hdt {
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. either given subject, property or object.
+    /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. S??, ?P? or ??O.
     /// Returns translated triples as strings.
     /// If the subject is given, you can also use [`BitmapIter::with_pattern`] with a `TripleId` where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].

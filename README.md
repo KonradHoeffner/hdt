@@ -28,7 +28,7 @@ If you need any of the those features, consider using a SPARQL endpoint instead.
 
 ```toml
 [dependencies]
-hdt = "0.0.6"
+hdt = "0.0.7"
 ```
 
 ```rust
@@ -63,5 +63,5 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.0.6", default-features = false }
+hdt = { version = "0.0.7", default-features = false }
 ```
