@@ -3,6 +3,7 @@ use crate::object_iter::ObjectIter;
 use crate::predicate_iter::PredicateIter;
 use crate::{ControlInfo, IdKind};
 use bytesize::ByteSize;
+use log::{debug, error};
 use rsdict::RsDict;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
@@ -171,7 +172,7 @@ impl TriplesBitmap {
     }
 
     fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix {
-        print!("Start constructing wavelet matrix");
+        debug!("Building wavelet matrix...");
         let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence.bits_per_entry);
         for x in &sequence {
             wavelet_builder.push(x);
@@ -179,7 +180,7 @@ impl TriplesBitmap {
         assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
         drop(sequence);
         let wavelet = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
-        println!("...finished constructing wavelet matrix with length {}", wavelet.len());
+        debug!("built wavelet matrix with length {}", wavelet.len());
         wavelet
     }
 
@@ -206,7 +207,7 @@ impl TriplesBitmap {
 
         // construct adjacency lists
         // construct object-based index to traverse from the leaves and support O?? queries
-        print!("Constructing OPS index");
+        debug!("Building OPS index...");
         let entries = sequence_z.entries;
         // if it takes too long to calculate, can also pass in as parameter
         let max_object = sequence_z.into_iter().max().unwrap().to_owned();
@@ -217,7 +218,7 @@ impl TriplesBitmap {
         for i in 0..entries {
             let object = sequence_z.get(i);
             if object == 0 {
-                eprintln!("ERROR: There is a zero value in the Z level.");
+                error!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
             indicess[object - 1].push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
@@ -236,7 +237,7 @@ impl TriplesBitmap {
         }
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
-        println!("...finished constructing OPS index");
+        debug!("built OPS index");
         let wavelet_y = wavelet_thread.join().unwrap();
         assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
@@ -436,6 +437,7 @@ impl TripleId {
 mod tests {
     use super::*;
     use crate::header::Header;
+    use crate::tests::init;
     use crate::{ControlInfo, FourSectDict, IdKind};
     use pretty_assertions::assert_eq;
     use std::fs::File;
@@ -443,6 +445,7 @@ mod tests {
 
     #[test]
     fn read_triples() {
+        init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();

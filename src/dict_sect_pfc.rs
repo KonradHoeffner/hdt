@@ -5,6 +5,7 @@ use crate::containers::Sequence;
 use crate::triples::Id;
 use bytesize::ByteSize;
 use crc_any::{CRCu32, CRCu8};
+use log::error;
 use std::cmp::{min, Ordering};
 use std::fmt;
 use std::io;
@@ -132,11 +133,10 @@ impl DictSectPFC {
             "Invalid arguments pos_str({pos},{slen}), packed data len {}).",
             self.packed_data.len()
         );
-        //println!("pos_str({}, {})", pos, slen);
         match str::from_utf8(&self.packed_data[pos..pos + slen]) {
             Ok(s) => s,
             Err(_) => {
-                println!(
+                error!(
                     "invalid UTF8, skipping a byte {}",
                     String::from_utf8_lossy(&self.packed_data[pos..pos + slen])
                 );
@@ -147,7 +147,6 @@ impl DictSectPFC {
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
         if block >= self.sequence.entries {
-            //println!("block {} >= blocks {}", block, self.sequence.entries );
             return 0;
         }
 
@@ -313,6 +312,7 @@ impl DictSectPFC {
 mod tests {
     use super::*;
     use crate::header::Header;
+    use crate::tests::init;
     use crate::ControlInfo;
     use pretty_assertions::assert_eq;
     use std::fs::File;
@@ -327,6 +327,7 @@ mod tests {
     */
     #[test]
     fn test_section_read() {
+        init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();

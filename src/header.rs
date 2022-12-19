@@ -73,11 +73,13 @@ impl Header {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::init;
     use std::fs::File;
     use std::io::BufReader;
 
     #[test]
     fn read_header() {
+        init();
         let file = File::open("tests/resources/yago_header.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).expect("error reading control info");

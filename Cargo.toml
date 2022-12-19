@@ -23,6 +23,7 @@ rsdict = "0.0.6"
 sophia = { version = "0.7", optional = true }
 sucds = "0.6.0"
 thiserror = "1.0.37"
+log = "0.4"
 
 [features]
 default = ["sophia"]
@@ -33,3 +34,4 @@ opt-level = 1
 
 [dev-dependencies]
 pretty_assertions = "1.3"
+env_logger = { version = "0.9", default-features = false, features = ["termcolor", "atty"]}

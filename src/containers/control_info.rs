@@ -123,10 +123,12 @@ impl ControlInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::init;
     use std::io::BufReader;
 
     #[test]
     fn read_info() {
+        init();
         let info = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00\x00\x76\x35";
         let mut reader = BufReader::new(&info[..]);
 

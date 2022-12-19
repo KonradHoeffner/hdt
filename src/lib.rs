@@ -71,3 +71,16 @@ use four_sect_dict::IdKind;
 #[cfg(feature = "sophia")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
 pub use hdt_graph::HdtGraph;
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+
+    static INIT: Once = Once::new();
+
+    pub fn init() {
+        INIT.call_once(|| {
+            env_logger::init();
+        });
+    }
+}

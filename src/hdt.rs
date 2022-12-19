@@ -4,6 +4,7 @@ use crate::header::Header;
 use crate::triples::{BitmapIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
+use log::{debug, error};
 use std::io;
 use thiserror::Error;
 
@@ -41,8 +42,8 @@ impl Hdt {
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         dict.validate()?;
         let hdt = Hdt { dict, triples };
-        println!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
-        println!("{hdt:#?}");
+        debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
+        debug!("{hdt:#?}");
         Ok(hdt)
     }
 
@@ -82,7 +83,7 @@ impl Hdt {
             self.triples
                 .triples_with_id(id, kind)
                 .map(move |tid| self.translate_id(tid))
-                .filter_map(move |r| r.map_err(|e| eprintln!("Error on triple with {kind:?} {owned}: {e}")).ok()),
+                .filter_map(move |r| r.map_err(|e| error!("Error on triple with {kind:?} {owned}: {e}")).ok()),
         )
     }
 
@@ -101,7 +102,7 @@ impl Hdt {
             BitmapIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| {
-                    r.map_err(|e| eprintln!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
+                    r.map_err(|e| error!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
                         .ok()
                 }),
         )
@@ -124,8 +125,7 @@ impl Hdt {
                 .filter(move |tid| tid.object_id == oid)
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| {
-                    r.map_err(|e| eprintln!("Error on triple with subject {s_owned} and object {o_owned}: {e}"))
-                        .ok()
+                    r.map_err(|e| error!("Error on triple with subject {s_owned} and object {o_owned}: {e}")).ok()
                 }),
         )
     }
@@ -147,8 +147,7 @@ impl Hdt {
                 .filter(move |tid| tid.object_id == oid)
                 .map(move |tid| self.translate_id(tid))
                 .filter_map(move |r| {
-                    r.map_err(|e| eprintln!("Error on triple with property {p_owned} and object {o_owned}: {e}"))
-                        .ok()
+                    r.map_err(|e| error!("Error on triple with property {p_owned} and object {o_owned}: {e}")).ok()
                 }),
         )
     }
@@ -157,11 +156,13 @@ impl Hdt {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::init;
     use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
 
     #[test]
     fn triples() {
+        init();
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename).expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();

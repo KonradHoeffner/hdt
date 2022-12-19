@@ -164,6 +164,7 @@ impl FourSectDict {
 mod tests {
     use super::*;
     use crate::header::Header;
+    use crate::tests::init;
     use crate::ControlInfo;
     use pretty_assertions::assert_eq;
     use std::fs::File;
@@ -171,6 +172,7 @@ mod tests {
 
     #[test]
     fn read_dict() {
+        init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader).unwrap();

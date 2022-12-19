@@ -78,10 +78,12 @@ pub fn encode_vbyte(n: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::init;
     use std::io::BufReader;
 
     #[test]
     fn test_encode_decode() {
+        init();
         let buffer = encode_vbyte(824);
         let mut reader = BufReader::new(&buffer[..]);
         if let Ok((number, bytes_read)) = read_vbyte(&mut reader) {
@@ -94,6 +96,7 @@ mod tests {
 
     #[test]
     fn test_max_value() {
+        init();
         let buffer = encode_vbyte(usize::MAX);
         let mut reader = BufReader::new(&buffer[..]);
         if let Ok((number, bytes_read)) = read_vbyte(&mut reader) {
@@ -107,6 +110,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_decode_too_large() {
+        init();
         let mut buffer = encode_vbyte(usize::MAX);
         buffer[MAX_VBYTE_BYTES - 1] &= 0x7F;
         buffer.push(0x7F);

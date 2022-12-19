@@ -2,6 +2,8 @@
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
+use log::debug;
+use log::error;
 use sophia::graph::*;
 use sophia::term::iri::Iri;
 use sophia::term::literal::Literal;
@@ -66,7 +68,7 @@ fn triple_source<'s>(triples: impl Iterator<Item = (String, String, String)> + '
                 debug_assert_ne!("", o, "triple_source object is empty    ({s}, {p}, {o})");
                 Ok(StreamedTriple::by_value([auto_term(s)?, auto_term(p)?, auto_term(o)?]))
             })
-            .filter_map(|r| r.map_err(|e| eprintln!("{e}")).ok())
+            .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
             .into_triple_source(),
     )
 }
@@ -102,9 +104,7 @@ impl Graph for HdtGraph {
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
-        eprintln!(
-            "Warning: Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs."
-        );
+        debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         triple_source(self.hdt.triples())
     }
 
@@ -145,11 +145,13 @@ impl Graph for HdtGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::init;
     use sophia::triple::Triple;
     use std::fs::File;
 
     #[test]
     fn test_graph() {
+        init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
