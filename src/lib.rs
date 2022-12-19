@@ -60,6 +60,8 @@ pub mod header;
 pub mod object_iter;
 /// Iterator over all triples with a given predicate.
 pub mod predicate_iter;
+/// Iterator over all triples with a given predicate and object.
+pub mod predicate_object_iter;
 /// Types for representing triples.
 pub mod triples;
 

@@ -184,6 +184,14 @@ impl TriplesBitmap {
         wavelet
     }
 
+    /*
+        /// Get the predicate ID for the given z index position.
+    fn get_p(bitmap_z:  Bitmap, wavelet_y: WaveletMatrix, pos_z: usize) -> Id {
+                let pos_y = bitmap_z.dict.rank(pos_z, true);
+                wavelet_y.get(pos_y as usize) as Id
+    }
+    */
+
     fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
         use std::io::Error;
         use std::io::ErrorKind::InvalidData;
@@ -212,9 +220,12 @@ impl TriplesBitmap {
         // if it takes too long to calculate, can also pass in as parameter
         let max_object = sequence_z.into_iter().max().unwrap().to_owned();
         // limited to < 2^32 objects
-        let mut indicess = vec![Vec::<u32>::new(); max_object];
+        let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
 
         // Count the indexes of appearance of each object
+        // In https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
+        // they count the number of appearances in a sequence instead, which saves memory
+        // temporarily but they need to loop over it an additional time.
         for i in 0..entries {
             let object = sequence_z.get(i);
             if object == 0 {
@@ -226,9 +237,15 @@ impl TriplesBitmap {
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
+        let wavelet_y = wavelet_thread.join().unwrap();
+        let get_p = |pos_z: u32| {
+            let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
+            wavelet_y.get(pos_y as usize) as Id
+        };
         for mut indices in indicess {
             let mut first = true;
-            indices.sort_unstable();
+            // sort by predicate
+            indices.sort_unstable_by(|a, b| get_p(*a).cmp(&get_p(*b)));
             for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;
@@ -238,7 +255,6 @@ impl TriplesBitmap {
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         debug!("built OPS index");
-        let wavelet_y = wavelet_thread.join().unwrap();
         assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
@@ -460,7 +476,6 @@ mod tests {
         let num_subjects = 48;
         let num_predicates = 23;
         let num_objects = 175;
-        // theorectially order doesn't matter so should derive Hash for TripleId and use HashSet but not needed in practice
         let mut filtered: Vec<TripleId>;
         let kinds = [IdKind::Subject, IdKind::Predicate, IdKind::Object];
         let lens = [num_subjects, num_predicates, num_objects];
@@ -468,13 +483,10 @@ mod tests {
         for j in 0..kinds.len() {
             for i in 1..=lens[j] {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
-                assert_eq!(
-                    filtered,
-                    triples.triples_with_id(i, &kinds[j]).collect::<Vec<TripleId>>(),
-                    "triples_with({},{:?})",
-                    i,
-                    kinds[j]
-                );
+                filtered.sort_unstable();
+                let mut triples_with_id = triples.triples_with_id(i, &kinds[j]).collect::<Vec<TripleId>>();
+                triples_with_id.sort_unstable();
+                assert_eq!(filtered, triples_with_id, "triples_with({},{:?})", i, kinds[j]);
             }
         }
 

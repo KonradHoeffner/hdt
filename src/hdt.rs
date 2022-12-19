@@ -1,6 +1,7 @@
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
+use crate::predicate_object_iter::PredicateObjectIter;
 use crate::triples::{BitmapIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
@@ -131,8 +132,6 @@ impl Hdt {
     }
 
     /// Get all triples with the given property and object.
-    /// The current implementation queries all triple IDs for the given property and filters them for the given object.
-    /// This method is faster then filtering on translated strings but can be further optimized by creating a special PO iterator.
     pub fn triples_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         let oid = self.dict.string_to_id(o, &IdKind::Object);
@@ -142,13 +141,11 @@ impl Hdt {
         let p_owned = p.to_owned();
         let o_owned = o.to_owned();
         Box::new(
-            self.triples
-                .triples_with_id(pid, &IdKind::Predicate)
-                .filter(move |tid| tid.object_id == oid)
-                .map(move |tid| self.translate_id(tid))
-                .filter_map(move |r| {
+            PredicateObjectIter::new(&self.triples, pid, oid).map(move |tid| self.translate_id(tid)).filter_map(
+                move |r| {
                     r.map_err(|e| error!("Error on triple with property {p_owned} and object {o_owned}: {e}")).ok()
-                }),
+                },
+            ),
         )
     }
 }
@@ -182,5 +179,12 @@ mod tests {
         assert_eq!(triple_vec, hdt.triples_with_sp(s, p).collect::<Vec<_>>());
         assert_eq!(triple_vec, hdt.triples_with_so(s, o).collect::<Vec<_>>());
         assert_eq!(triple_vec, hdt.triples_with_po(p, o).collect::<Vec<_>>());
+        let et = "http://www.snik.eu/ontology/meta/EntityType";
+        assert_eq!(4, hdt.triples_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).count());
+        assert_eq!(
+            12,
+            hdt.triples_with("http://www.w3.org/2000/01/rdf-schema#subClassOf", &IdKind::Predicate).count()
+        );
+        assert_eq!(20, hdt.triples_with(et, &IdKind::Object).count());
     }
 }
