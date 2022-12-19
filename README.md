@@ -2,6 +2,7 @@
 
 [![Latest Version](https://img.shields.io/crates/v/hdt.svg)](https://crates.io/crates/hdt)
 [![Documentation](https://docs.rs/hdt/badge.svg)](https://docs.rs/hdt/)
+[![Benchmarks](https://img.shields.io/badge/Benchmarks--x.svg?style=social)](https://github.com/KonradHoeffner/sophia_benchmark/blob/master/benchmark_results.ipynb)
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
