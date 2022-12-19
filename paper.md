@@ -63,6 +63,7 @@ Figure sizes can be customized by adding an optional second parameter:
 
 # Acknowledgements
 
+We thank Pierre-Antoine Champin for explaining the details of Sophia and for supplying the benchmarking code.
 For this functionality and acknowledgement of all the original authors, please look at the reference implementations in C++ and Java by the [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
 
 # References
