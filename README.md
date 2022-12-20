@@ -49,6 +49,7 @@ You can also use the Sophia adapter to load HDT files and reduce memory consumpt
 
 ```rust
 use hdt::{Hdt,HdtGraph};
+use std::fs::File;
 
 pub fn main() {
   let file = File::open("dbpedia.hdt").expect("error opening file");
@@ -56,7 +57,7 @@ pub fn main() {
   let graph = HdtGraph::new(hdt);
   let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
   let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
-  let majors = graph.triples_with_sp(s,p);
+  let majors = graph.triples_with_sp(&s,&p);
 }
 ```
 
