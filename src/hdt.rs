@@ -15,8 +15,10 @@ use thiserror::Error;
 pub struct Hdt {
     //global_ci: ControlInfo,
     //header: Header,
-    dict: FourSectDict,
-    triples: TriplesBitmap,
+    /// in-memory representation of dictionary
+    pub dict: FourSectDict,
+    /// in-memory representation of triples
+    pub triples: TriplesBitmap,
 }
 
 type StringTriple = (String, String, String);
