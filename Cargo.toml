@@ -34,4 +34,4 @@ opt-level = 1
 
 [dev-dependencies]
 pretty_assertions = "1.3"
-env_logger = { version = "0.9", default-features = false, features = ["termcolor", "atty"]}
+env_logger = { version = "0.10", default-features = false, features = ["auto-color"] }
