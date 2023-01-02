@@ -139,8 +139,26 @@ impl<T: Data> Graph for HdtGraph<T> {
         triple_source(self.hdt.triples())
     }
 
-    fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&term_string(s), &IdKind::Subject))
+   fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
+        let ss = term_string(s);
+        let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
+        if sid == 0 {
+            return Box::new(std::iter::empty());
+        }
+        // very inefficient conversion between TS and Term<T>, TODO improve
+        let s = auto_term(&ss).unwrap();
+        Box::new(
+            BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, 0, 0))
+                .map(move |tid| -> Result<_> {
+                    Ok(StreamedTriple::by_value([
+                        s.clone(),
+                        Term::new_iri_unchecked(self.hdt.dict.id_to_string(tid.predicate_id, &IdKind::Predicate).unwrap()),
+                        auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
+                    ]))
+                })
+                .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
+                .into_triple_source(),
+        )
     }
 
     fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
@@ -159,6 +177,10 @@ impl<T: Data> Graph for HdtGraph<T> {
         let ps = term_string(p);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
         let pid = self.hdt.dict.string_to_id(&ps, &IdKind::Predicate);
+        if sid == 0 || pid == 0 {
+            return Box::new(std::iter::empty());
+        }
+        // TODO inefficient conversion, can we somehow use the given s and p directly?
         let s = auto_term(&ss).unwrap();
         let p = auto_term(&ps).unwrap();
         Box::new(
