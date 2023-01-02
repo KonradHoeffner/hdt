@@ -245,7 +245,7 @@ impl TriplesBitmap {
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
-            indices.sort_unstable_by(|a, b| get_p(*a).cmp(&get_p(*b)));
+            indices.sort_unstable_by_key(|a| get_p(*a));
             for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;

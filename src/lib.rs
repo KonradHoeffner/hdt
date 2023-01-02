@@ -17,13 +17,27 @@
 //! ```no_run
 //! use hdt::Hdt;
 //! // Load an hdt file
-//! let file = File::open("example.hdt").expect("error opening file");
+//! let file = std::fs::File::open("example.hdt").expect("error opening file");
 //! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! // query
 //! let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
-//! println!("{:?}", majors.collect::<Vec<(String, String, String)>(majors));
+//! println!("{:?}", majors.collect::<Vec<(String, String, String)>>());
 //! ```
-//!
+//! 
+//! Using the Sophia adapter:
+//! 
+//! ```no_run
+//! use hdt::{Hdt,HdtGraph};
+//! use sophia::term::BoxTerm;
+//! use sophia::graph::Graph;
+//! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let graph = HdtGraph::<std::rc::Rc<str>>::new(hdt);
+//! let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
+//! let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
+//! let majors = graph.triples_with_sp(&s,&p);
+//! ```
+//! 
 //! # Optional features
 //!
 //! The following features are available.
@@ -33,6 +47,7 @@
 #![feature(round_char_boundary)]
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
+#![allow(clippy::unnecessary_cast)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]

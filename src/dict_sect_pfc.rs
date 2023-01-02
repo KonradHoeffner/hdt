@@ -133,15 +133,14 @@ impl DictSectPFC {
             "Invalid arguments pos_str({pos},{slen}), packed data len {}).",
             self.packed_data.len()
         );
-        match str::from_utf8(&self.packed_data[pos..pos + slen]) {
-            Ok(s) => s,
-            Err(_) => {
-                error!(
-                    "invalid UTF8, skipping a byte {}",
-                    String::from_utf8_lossy(&self.packed_data[pos..pos + slen])
-                );
-                self.pos_str(pos + 1, slen)
-            }
+        if let Ok(s) = str::from_utf8(&self.packed_data[pos..pos + slen]) {
+            s
+        } else {
+            error!(
+                "invalid UTF8, skipping a byte {}",
+                String::from_utf8_lossy(&self.packed_data[pos..pos + slen])
+            );
+            self.pos_str(pos + 1, slen)
         }
     }
 

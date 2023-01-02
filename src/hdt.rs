@@ -93,7 +93,7 @@ impl Hdt {
     // TODO extract common code out of triples_with_...
 
     /// Get all triples with the given subject and property.
-    pub fn triples_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+    pub fn objects_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         if sid == 0 || pid == 0 {
@@ -103,12 +103,19 @@ impl Hdt {
         let p_owned = p.to_owned();
         Box::new(
             BitmapIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
-                .map(move |tid| self.translate_id(tid))
+                .map(move |tid| self.dict.id_to_string(tid.object_id, &IdKind::Object))
                 .filter_map(move |r| {
                     r.map_err(|e| error!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
                         .ok()
                 }),
         )
+    }
+
+    /// Get all triples with the given subject and property.
+    /// Inefficient with large results because the subject and property strings are duplicated for each triple.
+    /// Consider using [Self::objects_with_sp()] instead.
+    pub fn triples_with_sp<'a>(&'a self, s: &'a str, p: &'a str) -> impl Iterator<Item = StringTriple> + '_ {
+        self.objects_with_sp(s, p).map(|o| (s.to_owned(), p.to_owned(), o))
     }
 
     /// Get all triples with the given subject and object.
@@ -133,22 +140,31 @@ impl Hdt {
         )
     }
 
-    /// Get all triples with the given property and object.
-    pub fn triples_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+    /// Get all subjects with the given property and object.
+    pub fn subjects_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         let oid = self.dict.string_to_id(o, &IdKind::Object);
+        // predicate or object not in dictionary
         if pid == 0 || oid == 0 {
             return Box::new(std::iter::empty());
         }
         let p_owned = p.to_owned();
         let o_owned = o.to_owned();
+        //let s = self.dict.id_to_string(t.subject_id, &IdKind::Subject).map_err(|e| TranslateErr { e, t })?;
         Box::new(
-            PredicateObjectIter::new(&self.triples, pid, oid).map(move |tid| self.translate_id(tid)).filter_map(
-                move |r| {
+            PredicateObjectIter::new(&self.triples, pid, oid)
+                .map(move |sid| self.dict.id_to_string(sid, &IdKind::Subject))
+                .filter_map(move |r| {
                     r.map_err(|e| error!("Error on triple with property {p_owned} and object {o_owned}: {e}")).ok()
-                },
-            ),
+                }),
         )
+    }
+
+    /// Get all triples with the given property and object.
+    /// Inefficient with large results because the property and object strings are duplicated for each triple.
+    /// Consider using [Self::subjects_with_po()] instead.
+    pub fn triples_with_po<'a>(&'a self, p: &'a str, o: &'a str) -> impl Iterator<Item = StringTriple> + 'a {
+        self.subjects_with_po(p, o).map(|s| (s, p.to_owned(), o.to_owned()))
     }
 }
 
@@ -182,7 +198,7 @@ mod tests {
         assert_eq!(triple_vec, hdt.triples_with_so(s, o).collect::<Vec<_>>());
         assert_eq!(triple_vec, hdt.triples_with_po(p, o).collect::<Vec<_>>());
         let et = "http://www.snik.eu/ontology/meta/EntityType";
-        assert_eq!(4, hdt.triples_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).count());
+        assert_eq!(4, hdt.subjects_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).count());
         assert_eq!(
             12,
             hdt.triples_with("http://www.w3.org/2000/01/rdf-schema#subClassOf", &IdKind::Predicate).count()

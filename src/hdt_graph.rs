@@ -3,6 +3,7 @@
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use crate::predicate_object_iter::PredicateObjectIter;
+use crate::triples::{BitmapIter, TripleId};
 use log::debug;
 use log::error;
 use sophia::graph::*;
@@ -45,6 +46,8 @@ impl<T: Data> HdtGraph<T> {
 
 const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 
+/// Create the correct Sophia term for a given resource string.
+/// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
 fn auto_term<T: Data>(s: &str) -> Result<Term<T>, TermError> {
     match s.chars().next() {
         None => Err(TermError::InvalidIri(String::new())),
@@ -71,7 +74,7 @@ fn auto_term<T: Data>(s: &str) -> Result<Term<T>, TermError> {
                 dt_split.next(); // empty
                 match dt_split.next() {
                     Some(dt) => {
-                        let unquoted = (&dt[1..dt.len() - 1]).to_owned().into_boxed_str();
+                        let unquoted = dt[1..dt.len() - 1].to_owned().into_boxed_str();
                         let dt = Iri::<Box<str>>::new_unchecked(unquoted);
                         Ok(Term::<T>::from(Literal::new_dt(lex, dt)))
                     }
@@ -152,7 +155,24 @@ impl<T: Data> Graph for HdtGraph<T> {
     fn triples_with_sp<'s, TS: TTerm + ?Sized, TP: TTerm + ?Sized>(
         &'s self, s: &'s TS, p: &'s TP,
     ) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with_sp(&term_string(s), &term_string(p)))
+        let ss = term_string(s);
+        let ps = term_string(p);
+        let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
+        let pid = self.hdt.dict.string_to_id(&ps, &IdKind::Predicate);
+        let s = auto_term(&ss).unwrap();
+        let p = auto_term(&ps).unwrap();
+        Box::new(
+            BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, pid, 0))
+                .map(move |tid| -> Result<_> {
+                    Ok(StreamedTriple::by_value([
+                        s.clone(),
+                        p.clone(),
+                        auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
+                    ]))
+                })
+                .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
+                .into_triple_source(),
+        )
     }
 
     /// An iterator visiting all triples with the given subject and object.
@@ -170,15 +190,16 @@ impl<T: Data> Graph for HdtGraph<T> {
         let os = term_string(o);
         let pid = self.hdt.dict.string_to_id(&ps, &IdKind::Predicate);
         let oid = self.hdt.dict.string_to_id(&os, &IdKind::Object);
-        let p = auto_term(&ps).unwrap();
+        // predicate can be neither a literal nor a blank node
+        let p = Term::new_iri_unchecked(ps);
         let o = auto_term(&os).unwrap();
         Box::new(
             PredicateObjectIter::new(&self.hdt.triples, pid, oid)
-                .map(move |tid| -> Result<_> {
+                .map(move |sid| -> Result<_> {
                     Ok(StreamedTriple::by_value([
-                        Term::new_iri_unchecked(
-                            self.hdt.dict.id_to_string(tid.subject_id, &IdKind::Subject).unwrap(),
-                        ),
+                        // subject is never a literal, so we can save a lot of CPU time here by not using auto_term
+                        // TODO: could subject be a blank node?
+                        Term::new_iri_unchecked(self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
                         p.clone(),
                         o.clone(),
                     ]))
@@ -199,10 +220,10 @@ mod tests {
 
     #[test]
     fn test_graph() {
+        type T = Rc<str>;
         init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
-        type T = Rc<str>;
         let graph = HdtGraph::<Rc<str>>::new(hdt);
         let triples: Vec<_> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
@@ -224,8 +245,7 @@ mod tests {
             let with_s_string = format!("{with_s:?}");
             assert_eq!(
                 filtered_string, with_s_string,
-                "different results between triples() and triples_with_s() for {}",
-                uri
+                "different results between triples() and triples_with_s() for {uri}"
             );
         }
         let s = Term::<T>::new_iri_unchecked("http://www.snik.eu/ontology/meta/Top".to_owned());

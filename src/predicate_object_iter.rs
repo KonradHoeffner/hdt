@@ -5,11 +5,10 @@ use std::cmp::Ordering;
 // see filterPredSubj in "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36
 
-/// Iterator over all triples with a given predicate and object ID, answering an (?S,P,O) query.
+/// Iterator over all subject IDs with a given predicate and object ID, answering an (?S,P,O) query.
 pub struct PredicateObjectIter<'a> {
     triples: &'a TriplesBitmap,
     p: Id,
-    o: Id,
     pos_index: usize,
     max_index: usize,
 }
@@ -41,30 +40,30 @@ impl<'a> PredicateObjectIter<'a> {
                             _ => border_high = mid,
                         }
                     }
-                    return PredicateObjectIter { triples, p, o, pos_index: low, max_index: high };
+                    return PredicateObjectIter { triples, p, pos_index: low, max_index: high };
                 }
             }
         }
         // not found
-        return PredicateObjectIter { triples, p, o, pos_index: 999, max_index: 0 };
+        PredicateObjectIter { triples, p, pos_index: 999, max_index: 0 }
     }
 }
 
 impl<'a> Iterator for PredicateObjectIter<'a> {
     type Item = Id;
     fn next(&mut self) -> Option<Self::Item> {
-        while self.pos_index <= self.max_index {
-            let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
-            let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
-            let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
-            //println!(" op p {y}");
-            if y != self.p {
-                return None;
-            }
-            let x = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
-            self.pos_index += 1;
-            return Some(self.triples.coord_to_triple(x, y, self.o).unwrap());
+        if self.pos_index > self.max_index {
+            return None;
         }
-        return None;
+        let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
+        let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
+        let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
+        //println!(" op p {y}");
+        if y != self.p {
+            return None;
+        }
+        let s = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
+        self.pos_index += 1;
+        Some(s)
     }
 }
