@@ -61,5 +61,5 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.0.7", default-features = false }
+hdt = { version = "0.0.9", default-features = false }
 ```
