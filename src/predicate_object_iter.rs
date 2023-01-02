@@ -1,5 +1,4 @@
 use crate::triples::Id;
-use crate::triples::TripleId;
 use crate::triples::TriplesBitmap;
 use std::cmp::Ordering;
 
@@ -52,7 +51,7 @@ impl<'a> PredicateObjectIter<'a> {
 }
 
 impl<'a> Iterator for PredicateObjectIter<'a> {
-    type Item = TripleId;
+    type Item = Id;
     fn next(&mut self) -> Option<Self::Item> {
         while self.pos_index <= self.max_index {
             let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
