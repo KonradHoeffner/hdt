@@ -10,8 +10,11 @@ use thiserror::Error;
 /// Position in an RDF triple.
 #[derive(Debug, Clone)]
 pub enum IdKind {
+    /// IRI or blank node in the first position of a triple.
     Subject,
+    /// IRI in the second position of a triple.
     Predicate,
+    /// IRI, blank node or literal in the third position of a triple.
     Object,
 }
 

@@ -78,7 +78,7 @@ impl AdjList {
     /// Find position of element y in the list x.
     // See <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/sequence/AdjacencyList.cpp>.
     pub fn search(&self, x: usize, y: usize) -> Option<usize> {
-        self.bin_search(y, self.find(x), self.last(x)+1)
+        self.bin_search(y, self.find(x), self.last(x) + 1)
     }
 
     /// Find the last position for the given ID, counting from 1.

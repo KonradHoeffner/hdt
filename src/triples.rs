@@ -168,7 +168,7 @@ impl TriplesBitmap {
 
     /// Search the wavelet matrix for the position of a given subject, predicate pair.
     pub fn search_y(&self, subject_id: usize, property_id: usize) -> Option<usize> {
-        self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id)+1)
+        self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
     fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix {
@@ -512,6 +512,6 @@ mod tests {
         // ??? (all triples)
         assert_eq!(v, BitmapIter::with_pattern(&triples, &TripleId::new(0, 0, 0)).collect::<Vec<_>>());
         // SP? where S and P are in the graph, but not together
-        assert_eq!(0,BitmapIter::with_pattern(&triples, &TripleId::new(12, 14, 154)).count());
+        assert_eq!(0, BitmapIter::with_pattern(&triples, &TripleId::new(12, 14, 154)).count());
     }
 }

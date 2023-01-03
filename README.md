@@ -29,17 +29,17 @@ If you need any of the those features, consider using a SPARQL endpoint instead.
 
 ```toml
 [dependencies]
-hdt = "0.0.10"
+hdt = "0.0.11"
 ```
 
 ```rust
 use hdt::Hdt;
 
 let file = std::fs::File::open("example.hdt").expect("error opening file");
-let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
+let hdt = Hdt::Rc<str>::new(std::io::BufReader::new(file)).expect("error loading HDT");
 // query
 let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
-println!("{:?}", majors.collect::<Vec<(String, String, String)>>());
+println!("{:?}", majors.collect::<Vec<_>>());
 ```
 
 You can also use the Sophia adapter to load HDT files and reduce memory consumption of an existing application based on Sophia:
@@ -50,8 +50,8 @@ use sophia::term::BoxTerm;
 use sophia::graph::Graph;
 
 let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
-let graph = HdtGraph::<std::rc::Rc<str>>::new(hdt);
+let hdt = Hdt::<std::rc::Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+let graph = HdtGraph::new(hdt);
 let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
 let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
 let majors = graph.triples_with_sp(&s,&p);
@@ -61,5 +61,5 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.0.10", default-features = false }
+hdt = { version = "0.0.11", default-features = false }
 ```

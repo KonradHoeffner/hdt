@@ -17,7 +17,7 @@ use std::convert::Infallible;
 use std::hash::Hash;
 use std::marker::PhantomData;
 
-/// Type of String pointer to return
+/// Type of String pointer to return, predetermined by Sophia.
 pub trait Data:
     AsRef<str> + Clone + Eq + From<std::boxed::Box<str>> + From<String> + From<&'static str> + Hash
 {
@@ -27,15 +27,19 @@ impl<T> Data for T where
 {
 }
 
+/// Our own requirements on top of the Sophia trait.
+pub trait DisplayData: Data + std::fmt::Debug + std::fmt::Display {}
+impl<T> DisplayData for T where T: Data + std::fmt::Debug + std::fmt::Display {}
+
 /// Adapter to use HDT as a Sophia graph.
-pub struct HdtGraph<T: Data> {
-    hdt: Hdt,
+pub struct HdtGraph<T: DisplayData> {
+    hdt: Hdt<T>,
     phantom: PhantomData<T>,
 }
 
-impl<T: Data> HdtGraph<T> {
+impl<T: DisplayData> HdtGraph<T> {
     /// Wrapper around Hdt.
-    pub const fn new(hdt: Hdt) -> Self {
+    pub const fn new(hdt: Hdt<T>) -> Self {
         HdtGraph { hdt, phantom: PhantomData {} }
     }
     /// Size in bytes on the heap.
@@ -48,7 +52,7 @@ const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term<T: Data>(s: &str) -> Result<Term<T>, TermError> {
+fn auto_term<T: DisplayData>(s: &str) -> Result<Term<T>, TermError> {
     match s.chars().next() {
         None => Err(TermError::InvalidIri(String::new())),
         Some('"') => match s.rfind('"') {
@@ -87,17 +91,21 @@ fn auto_term<T: Data>(s: &str) -> Result<Term<T>, TermError> {
     }
 }
 
-// transforms string triples into a sophia TripleSource
-fn triple_source<'s, T: Data>(
-    triples: impl Iterator<Item = (String, String, String)> + 's,
+// transforms Hdt triples into a sophia TripleSource
+fn triple_source<'s, T: DisplayData>(
+    triples: impl Iterator<Item = (T, T, T)> + 's,
 ) -> GTripleSource<'s, HdtGraph<T>> {
     Box::new(
         triples
             .map(|(s, p, o)| -> Result<_> {
-                debug_assert_ne!("", s, "triple_source subject is empty   ({s}, {p}, {o})");
-                debug_assert_ne!("", p, "triple_source predicate is empty ({s}, {p}, {o})");
-                debug_assert_ne!("", o, "triple_source object is empty    ({s}, {p}, {o})");
-                Ok(StreamedTriple::by_value([auto_term(&s)?, auto_term(&p)?, auto_term(&o)?]))
+                debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
+                debug_assert_ne!("", p.as_ref(), "triple_source predicate is empty ({s}, {p}, {o})");
+                debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");
+                Ok(StreamedTriple::by_value([
+                    auto_term(s.as_ref())?,
+                    auto_term(p.as_ref())?,
+                    auto_term(o.as_ref())?,
+                ]))
             })
             .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
             .into_triple_source(),
@@ -130,7 +138,7 @@ fn term_string(t: &(impl TTerm + ?Sized)) -> String {
     }
 }
 
-impl<T: Data> Graph for HdtGraph<T> {
+impl<T: DisplayData> Graph for HdtGraph<T> {
     type Triple = ByValue<[Term<T>; 3]>;
     type Error = Infallible; // infallible for now, figure out what to put here later
 
@@ -139,7 +147,7 @@ impl<T: Data> Graph for HdtGraph<T> {
         triple_source(self.hdt.triples())
     }
 
-   fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
+    fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
         if sid == 0 {
@@ -152,7 +160,9 @@ impl<T: Data> Graph for HdtGraph<T> {
                 .map(move |tid| -> Result<_> {
                     Ok(StreamedTriple::by_value([
                         s.clone(),
-                        Term::new_iri_unchecked(self.hdt.dict.id_to_string(tid.predicate_id, &IdKind::Predicate).unwrap()),
+                        Term::new_iri_unchecked(
+                            self.hdt.dict.id_to_string(tid.predicate_id, &IdKind::Predicate).unwrap(),
+                        ),
                         auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
                     ]))
                 })
@@ -245,8 +255,8 @@ mod tests {
         type T = Rc<str>;
         init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
-        let graph = HdtGraph::<Rc<str>>::new(hdt);
+        let hdt = Hdt::<Rc<str>>::new(std::io::BufReader::new(file)).unwrap();
+        let graph = HdtGraph::new(hdt);
         let triples: Vec<_> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
         assert!(graph

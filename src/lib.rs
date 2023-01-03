@@ -18,26 +18,27 @@
 //! use hdt::Hdt;
 //! // Load an hdt file
 //! let file = std::fs::File::open("example.hdt").expect("error opening file");
-//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::<std::rc::Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! // query
 //! let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
-//! println!("{:?}", majors.collect::<Vec<(String, String, String)>>());
+//! println!("{:?}", majors.collect::<Vec<_>>());
 //! ```
-//! 
+//!
 //! Using the Sophia adapter:
-//! 
+//!
 //! ```no_run
 //! use hdt::{Hdt,HdtGraph};
+//! use std::rc::Rc;
 //! use sophia::term::BoxTerm;
 //! use sophia::graph::Graph;
 //! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
-//! let graph = HdtGraph::<std::rc::Rc<str>>::new(hdt);
+//! let hdt = Hdt::<Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let graph = HdtGraph::new(hdt);
 //! let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
 //! let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
 //! let majors = graph.triples_with_sp(&s,&p);
 //! ```
-//! 
+//!
 //! # Optional features
 //!
 //! The following features are available.
@@ -84,7 +85,7 @@ pub use crate::hdt::Hdt;
 use containers::ControlInfo;
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
-use four_sect_dict::IdKind;
+pub use four_sect_dict::IdKind;
 #[cfg(feature = "sophia")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
 pub use hdt_graph::HdtGraph;
