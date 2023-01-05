@@ -56,10 +56,15 @@ impl AdjList {
     }
 
     /// Return the position of element within the given bounds.
+    /// # Arguments
+    ///
+    /// * `element` - a value that may or may not exist in the specified range of the list
+    /// * `begin` - first index of the search range
+    /// * `end` - end (exclusive) of the search range
     fn bin_search(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
         let mut low = begin;
         let mut high = end;
-        while low <= high {
+        while low < high {
             let mid = (low + high) / 2;
             match self.sequence.get(mid).cmp(&element) {
                 Ordering::Less => low = mid + 1,
@@ -73,7 +78,7 @@ impl AdjList {
     /// Find position of element y in the list x.
     // See <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/sequence/AdjacencyList.cpp>.
     pub fn search(&self, x: usize, y: usize) -> Option<usize> {
-        self.bin_search(y, self.find(x), self.last(x))
+        self.bin_search(y, self.find(x), self.last(x)+1)
     }
 
     /// Find the last position for the given ID, counting from 1.
