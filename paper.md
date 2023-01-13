@@ -26,10 +26,38 @@ bibliography: paper.bib
 
 # Summary
 
-We present a Rust library for the Header Data Triples binary RDF compression format with the following design goals:
+We present a Rust library for the Header Data Triples (HDT) binary RDF compression format.
+This allows writing high-performance Rust applications that load and query HDT files.
+
+# Statement of need
+
+Semantic Web technologies have seen adoption by major tech companies in recent years
+but widespread use is still inhibited by a lack of freely available performant, accessible, robust and adaptable tooling [@semanticwebreview].
+SPARQL endpoints provide a standard publication channel and API to any RDF graph but they are not suitable for all use cases.
+On small knowledge bases, there is a large relative overhead in both memory and CPU resources.
+On large knowledge bases on the other hand, query complexity and shared access may cause an overload of the server, causing delayed or missed responses.
+Finally, downtime of a SPARQL endpoint causes all applications depending on it to stop working.
+
+To insulate against such problems, Semantic Web applications may integrate and query an RDF graph using libraries such as Apache Jena [@jena] for Java,
+RDFlib for Python or Sophia [@sophia] for Rust.
+However those libraries do not scale to large RDF graphs due to their excessive memory usage, which can be drastically lowered by using the Header Data Triples (HDT) binary RDF compression format, which still allows efficient queries [@hdt2012, @hdt2013].
+Implementations exist for C++ [@hdtcpp] and Java [@hdtjava] but not for Rust, a popular modern, statically typed high-level programming language that allows writing performant software while still ensuring memory safety, which aligns with the challenges to the adoption of the Semantic Web.
+
+# Figures
+
+Figures can be included like this:
+![Caption for example figure.\label{fig:example}](figure.png)
+and referenced from text using \autoref{fig:example}.
+
+Figure sizes can be customized by adding an optional second parameter:
+![Caption for example figure.](figure.png){ width=20% }
+
+# Related Work
+
+@hdt2012
+@hdt2013
 
 * loading the HDT default format as created by [hdt-cpp](https://github.com/rdfhdt/hdt-cpp)
-* efficient querying by triple patterns
 * serializing into other formats like RDF Turtle and N-Triples using the [Sophia](https://crates.io/crates/sophia) adapter
 
 Non-goals:
@@ -43,23 +71,6 @@ It also cannot:
 * modify the RDF graph in memory
 * run SPARQL queries
 
-# Statement of need
-
-Semantic Web technologies have seen adoption by major tech companies in recent years in the form of *knowledge graphs*,
-but widespread industry use is still inhibited by a lack of freely available performant, accessible, robust and adaptable tooling [@semanticwebreview].
-
-While SPARQL endpoints provide a standard publication channel and API to any knowledge base, they are not suitable for all use cases.
-On small knowledge bases, the overhead in both memory and CPU resources is too large.
-On large knowledge bases on the other hand, query complexity may cause an overload of the server, causing delayed or missed responses.
-
-# Figures
-
-Figures can be included like this:
-![Caption for example figure.\label{fig:example}](figure.png)
-and referenced from text using \autoref{fig:example}.
-
-Figure sizes can be customized by adding an optional second parameter:
-![Caption for example figure.](figure.png){ width=20% }
 
 # Acknowledgements
 
