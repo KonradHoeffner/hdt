@@ -18,9 +18,9 @@
 //! use hdt::Hdt;
 //! // Load an hdt file
 //! let file = std::fs::File::open("example.hdt").expect("error opening file");
-//! let hdt = Hdt::<std::rc::Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! // query
-//! let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
+//! let majors = hdt.triples_with_pattern(Some("http://dbpedia.org/resource/Leipzig"), Some("http://dbpedia.org/ontology/major"),None);
 //! println!("{:?}", majors.collect::<Vec<_>>());
 //! ```
 //!
@@ -28,15 +28,15 @@
 //!
 //! ```no_run
 //! use hdt::{Hdt,HdtGraph};
-//! use std::rc::Rc;
-//! use sophia::term::BoxTerm;
-//! use sophia::graph::Graph;
+//! use sophia::api::graph::Graph;
+//! use sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
+//! use mownstr::MownStr;
 //! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-//! let hdt = Hdt::<Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! let graph = HdtGraph::new(hdt);
-//! let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
-//! let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
-//! let majors = graph.triples_with_sp(&s,&p);
+//! let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/resource/Leipzig")));
+//! let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/ontology/major")));
+//! let majors = graph.triples_matching(Some(s),Some(p),Any);
 //! ```
 //!
 //! # Optional features
@@ -72,13 +72,7 @@ pub mod hdt;
 pub mod hdt_graph;
 /// Types for representing the header.
 pub mod header;
-/// Iterator over all triples with a given object.
-pub mod object_iter;
-/// Iterator over all triples with a given predicate.
-pub mod predicate_iter;
-/// Iterator over all triples with a given predicate and object.
-pub mod predicate_object_iter;
-/// Types for representing triples.
+/// Types for representing and querying triples.
 pub mod triples;
 
 pub use crate::hdt::Hdt;

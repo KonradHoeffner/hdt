@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.0.12"
+version = "0.0.13-alpha"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -17,10 +17,12 @@ langtag = "^0.3.2"
 ntriple = "^0.1.1"
 #rayon = "1.5.3"
 rsdict = "0.0.6"
-sophia = { version = "0.7", optional = true }
+sophia = { version="0.8.0-alpha", git="https://github.com/pchampin/sophia_rs", optional = true }
 sucds = "0.6.0"
 thiserror = "1.0.37"
 log = "0.4"
+#mownstr = "0.1.3"
+mownstr = { git="https://github.com/pchampin/mownstr", rev="c88467d" }
 
 [features]
 default = ["sophia"]
