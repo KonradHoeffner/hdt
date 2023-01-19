@@ -6,12 +6,9 @@ use crate::predicate_object_iter::PredicateObjectIter;
 use crate::triples::{BitmapIter, TripleId};
 use log::debug;
 use log::error;
-use sophia::graph::*;
-use sophia::term::iri::Iri;
-use sophia::term::literal::Literal;
-use sophia::term::*;
-use sophia::triple::stream::*;
-use sophia::triple::streaming_mode::*;
+use sophia::api::graph::{GTripleSource, Graph};
+use sophia::api::term;
+use sophia::api::term::{SimpleTerm, SimpleTerm::*, Term, TermKind};
 use std::convert::From;
 use std::convert::Infallible;
 use std::hash::Hash;
@@ -26,6 +23,8 @@ impl<T> Data for T where
     T: AsRef<str> + Clone + Eq + From<std::boxed::Box<str>> + From<String> + From<&'static str> + Hash
 {
 }
+
+type TermError = 'static + std::error::Error;
 
 /// Our own requirements on top of the Sophia trait.
 pub trait DisplayData: Data + std::fmt::Debug + std::fmt::Display {}
@@ -52,7 +51,7 @@ const XSD_STRING: &str = "http://www.w3.org/2001/XMLSchema#string";
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term<T: DisplayData>(s: &str) -> Result<Term<T>, TermError> {
+fn auto_term<T: DisplayData>(s: &str) -> Result<SimpleTerm<T>, TermError> {
     match s.chars().next() {
         None => Err(TermError::InvalidIri(String::new())),
         Some('"') => match s.rfind('"') {
@@ -64,7 +63,7 @@ fn auto_term<T: DisplayData>(s: &str) -> Result<Term<T>, TermError> {
                 if rest.is_empty() {
                     //let dt_string: sophia::term::iri::Iri<&str> = Iri::<&str>::new_unchecked(XSD_STRING);
                     let dt_string = Iri::<&str>::new_unchecked(XSD_STRING);
-                    return Ok(Term::<T>::from(Literal::new_dt(lex, dt_string)));
+                    return Ok(Term::<T>::from(LiteralDatatype(lex, dt_string)));
                 }
                 // either language tag or datatype
                 if let Some(tag_index) = rest.find('@') {
@@ -80,7 +79,7 @@ fn auto_term<T: DisplayData>(s: &str) -> Result<Term<T>, TermError> {
                     Some(dt) => {
                         let unquoted = dt[1..dt.len() - 1].to_owned().into_boxed_str();
                         let dt = Iri::<Box<str>>::new_unchecked(unquoted);
-                        Ok(Term::<T>::from(Literal::new_dt(lex, dt)))
+                        Ok(Term::<T>::from(LiteralDatatype(lex, dt)))
                     }
                     None => Err(TermError::UnsupportedDatatype(s.to_owned())),
                 }
@@ -101,11 +100,7 @@ fn triple_source<'s, T: DisplayData>(
                 debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
                 debug_assert_ne!("", p.as_ref(), "triple_source predicate is empty ({s}, {p}, {o})");
                 debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");
-                Ok(StreamedTriple::by_value([
-                    auto_term(s.as_ref())?,
-                    auto_term(p.as_ref())?,
-                    auto_term(o.as_ref())?,
-                ]))
+                Ok([auto_term(s.as_ref())?, auto_term(p.as_ref())?, auto_term(o.as_ref())?])
             })
             .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
             .into_triple_source(),
@@ -114,7 +109,7 @@ fn triple_source<'s, T: DisplayData>(
 
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
-fn term_string(t: &(impl TTerm + ?Sized)) -> String {
+fn term_string(t: &(impl SimpleTerm + ?Sized)) -> String {
     match t.kind() {
         TermKind::BlankNode => "_:".to_owned() + &t.value(),
         TermKind::Iri => t.value().to_string(),
@@ -147,7 +142,9 @@ impl<T: DisplayData> Graph for HdtGraph<T> {
         triple_source(self.hdt.triples())
     }
 
-    fn triples_with_s<'s, TS: TTerm + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
+    fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self> {}
+
+    fn triples_with_s<'s, TS: Term + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
         if sid == 0 {
@@ -158,29 +155,29 @@ impl<T: DisplayData> Graph for HdtGraph<T> {
         Box::new(
             BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, 0, 0))
                 .map(move |tid| -> Result<_> {
-                    Ok(StreamedTriple::by_value([
+                    Ok([
                         s.clone(),
                         Term::new_iri_unchecked(
                             self.hdt.dict.id_to_string(tid.predicate_id, &IdKind::Predicate).unwrap(),
                         ),
                         auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
-                    ]))
+                    ])
                 })
                 .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
                 .into_triple_source(),
         )
     }
 
-    fn triples_with_p<'s, TS: TTerm + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
+    fn triples_with_p<'s, TS: Term + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
         triple_source(self.hdt.triples_with(&p.value(), &IdKind::Predicate))
     }
 
-    fn triples_with_o<'s, TS: TTerm + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
+    fn triples_with_o<'s, TS: Term + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
         triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
     }
 
     /// An iterator visiting all triples with the given subject and predicate.
-    fn triples_with_sp<'s, TS: TTerm + ?Sized, TP: TTerm + ?Sized>(
+    fn triples_with_sp<'s, TS: Term + ?Sized, TP: Term + ?Sized>(
         &'s self, s: &'s TS, p: &'s TP,
     ) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
@@ -196,11 +193,11 @@ impl<T: DisplayData> Graph for HdtGraph<T> {
         Box::new(
             BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, pid, 0))
                 .map(move |tid| -> Result<_> {
-                    Ok(StreamedTriple::by_value([
+                    Ok([
                         s.clone(),
                         p.clone(),
                         auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
-                    ]))
+                    ])
                 })
                 .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
                 .into_triple_source(),
@@ -208,14 +205,14 @@ impl<T: DisplayData> Graph for HdtGraph<T> {
     }
 
     /// An iterator visiting all triples with the given subject and object.
-    fn triples_with_so<'s, TS: TTerm + ?Sized, TO: TTerm + ?Sized>(
+    fn triples_with_so<'s, TS: Term + ?Sized, TO: Term + ?Sized>(
         &'s self, s: &'s TS, o: &'s TO,
     ) -> GTripleSource<'s, Self> {
         triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
     }
 
     /// An iterator visiting all triples with the given predicate and object.
-    fn triples_with_po<'s, TP: TTerm + ?Sized, TO: TTerm + ?Sized>(
+    fn triples_with_po<'s, TP: Term + ?Sized, TO: Term + ?Sized>(
         &'s self, p: &'s TP, o: &'s TO,
     ) -> GTripleSource<'s, Self> {
         let ps = term_string(p);
@@ -228,13 +225,13 @@ impl<T: DisplayData> Graph for HdtGraph<T> {
         Box::new(
             PredicateObjectIter::new(&self.hdt.triples, pid, oid)
                 .map(move |sid| -> Result<_> {
-                    Ok(StreamedTriple::by_value([
+                    Ok([
                         // subject is never a literal, so we can save a lot of CPU time here by not using auto_term
                         // TODO: could subject be a blank node?
                         Term::new_iri_unchecked(self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
                         p.clone(),
                         o.clone(),
-                    ]))
+                    ])
                 })
                 .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
                 .into_triple_source(),
@@ -302,14 +299,14 @@ mod tests {
             assert_eq!(e.o(), triple.2);
         }
         assert!(graph.triples_with_o(&Term::<T>::from("22.10".to_owned())).count() == 1);
-        let date = &Term::<T>::from(Literal::new_dt(
+        let date = &Term::<T>::from(LiteralDatatype(
             "2022-10-20",
             Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#date"),
         ));
         assert!(graph.triples_with_o(date).count() == 1);
         // not in snik meta but only in local test file to make sure explicit xsd:string works
         /*
-        let testo = &Term::<T>::from(Literal::new_dt(
+        let testo = &Term::<T>::from(LiteralDatatype(
             "testo",
             Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#string"),
         ));
