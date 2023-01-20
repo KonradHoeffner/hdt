@@ -9,8 +9,7 @@ use log::error;
 use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
-use sophia::api::term::{SimpleTerm, SimpleTerm::*, Term, TermKind};
-use std::convert::From;
+use sophia::api::term::{BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
 use std::io::{Error, ErrorKind};
 
@@ -41,31 +40,33 @@ fn auto_term(s: &str) -> Result<SimpleTerm, Error> {
                 format!("missing right quotation mark in literal string {}", s),
             )),
             Some(index) => {
-                let lex = s[1..index].to_owned();
+                let lex = &s[1..index];
                 let rest = &s[index + 1..];
                 // literal with no language tag and no datatype
                 if rest.is_empty() {
-                    return Ok(SimpleTerm::from(lex));
+                    return Ok(lex.into_term());
                 }
+                let lex = MownStr::from_str(lex);
                 // either language tag or datatype
                 if let Some(tag_index) = rest.find('@') {
-                    return Ok(LiteralLanguage(lex, rest[tag_index + 1..].to_owned()));
+                    let tag = LanguageTag::new_unchecked(MownStr::from_str(&rest[tag_index + 1..]));
+                    return Ok(SimpleTerm::LiteralLanguage(lex, tag));
                 }
                 // datatype
                 let mut dt_split = rest.split("^^");
                 dt_split.next(); // empty
                 match dt_split.next() {
                     Some(dt) => {
-                        let unquoted = dt[1..dt.len() - 1];
-                        let dt = MownStr::from_str(unquoted);
-                        Ok(SimpleTerm::from(LiteralDatatype(lex, dt)))
+                        let unquoted = &dt[1..dt.len() - 1];
+                        let dt = IriRef::new_unchecked(MownStr::from_str(unquoted));
+                        Ok(SimpleTerm::LiteralDatatype(lex, dt))
                     }
                     None => Err(Error::new(ErrorKind::InvalidData, format!("empty datatype in {s}"))),
                 }
             }
         },
-        Some('_') => Term::new_bnode(s[2..].to_owned()),
-        _ => Term::new_iri(s.to_owned()),
+        Some('_') => Ok(BnodeId::new_unchecked(MownStr::from_str(&s[2..].to_owned())).into_term()),
+        _ => Ok(SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(s)))),
     }
 }
 
@@ -89,10 +90,10 @@ fn triple_source<'a>(
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &SimpleTerm) -> String {
-    match t.kind() {
-        TermKind::BlankNode => "_:".to_owned() + &t.value(),
-        TermKind::Iri => t.value().to_string(),
-        TermKind::Literal => {
+    match t() {
+        SimpleTerm::BlankNode(_) => "_:".to_owned() + &t.value(),
+        SimpleTerm::Iri(_) => t.value().to_string(),
+        SimpleTerm::LiteralLanguage(_, _) => {
             let value = format!("\"{}\"", t.value());
             if let Some(lang) = t.language() {
                 return format!("{value}@{lang}");
@@ -106,14 +107,14 @@ fn term_string(t: &SimpleTerm) -> String {
             }
             value
         }
-        TermKind::Variable => {
-            panic!("Variable term strings are not supported.");
+        _ => {
+            panic!("Variable term strings and RDF-star are not supported.");
         }
     }
 }
 
-impl<'a> Graph for HdtGraph {
-    type Triple = [SimpleTerm<'a>; 3];
+impl Graph for HdtGraph {
+    type Triple<'a> = [SimpleTerm<'a>; 3];
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
