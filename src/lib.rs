@@ -18,7 +18,7 @@
 //! use hdt::Hdt;
 //! // Load an hdt file
 //! let file = std::fs::File::open("example.hdt").expect("error opening file");
-//! let hdt = Hdt::<std::rc::Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! // query
 //! let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
 //! println!("{:?}", majors.collect::<Vec<_>>());
@@ -28,11 +28,10 @@
 //!
 //! ```no_run
 //! use hdt::{Hdt,HdtGraph};
-//! use std::rc::Rc;
 //! use sophia::term::BoxTerm;
 //! use sophia::graph::Graph;
 //! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-//! let hdt = Hdt::<Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! let graph = HdtGraph::new(hdt);
 //! let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
 //! let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
