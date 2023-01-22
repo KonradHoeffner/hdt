@@ -9,9 +9,10 @@ use log::error;
 use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
+use sophia::api::source::IntoTripleSource;
 use sophia::api::term::{BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
-use std::io::{Error, ErrorKind};
+use std::io::{self, Error, ErrorKind};
 
 /// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
@@ -31,7 +32,7 @@ impl HdtGraph {
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term(s: &str) -> Result<SimpleTerm, Error> {
+fn auto_term(s: &str) -> io::Result<SimpleTerm> {
     match s.chars().next() {
         None => Err(Error::new(ErrorKind::InvalidData, "empty input")),
         Some('"') => match s.rfind('"') {
@@ -76,13 +77,13 @@ fn triple_source<'a>(
 ) -> GTripleSource<'a, HdtGraph> {
     Box::new(
         triples
-            .map(|(s, p, o)| -> Result<_> {
+            .map(|(s, p, o)| -> Result<_, _> {
                 debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
                 debug_assert_ne!("", p.as_ref(), "triple_source predicate is empty ({s}, {p}, {o})");
                 debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");
                 Ok([auto_term(s.as_ref())?, auto_term(p.as_ref())?, auto_term(o.as_ref())?])
             })
-            .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
+            .filter_map(|r| r.map_err(|e: Error| error!("{e}")).ok())
             .into_triple_source(),
     )
 }
@@ -90,9 +91,9 @@ fn triple_source<'a>(
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &SimpleTerm) -> String {
-    match t() {
-        SimpleTerm::BlankNode(_) => "_:".to_owned() + &t.value(),
-        SimpleTerm::Iri(_) => t.value().to_string(),
+    match t {
+        SimpleTerm::BlankNode(b) => "_:".to_owned() + &b.as_str(),
+        SimpleTerm::Iri(i) => i.as_str().to_owned(),
         SimpleTerm::LiteralLanguage(_, _) => {
             let value = format!("\"{}\"", t.value());
             if let Some(lang) = t.language() {
@@ -126,22 +127,26 @@ impl Graph for HdtGraph {
 }
 
 impl HdtGraph {
-    fn triples_with_s<'s, TS: Term + ?Sized>(&'s self, s: &'s TS) -> GTripleSource<'s, Self> {
+    fn triples_with_s<'s>(&'s self, s: &SimpleTerm) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
         if sid == 0 {
             return Box::new(std::iter::empty());
         }
         // very inefficient conversion between TS and Term, TODO improve
-        let s = auto_term(&ss).unwrap();
+        //let s = auto_term(&ss).unwrap();
         Box::new(
             BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, 0, 0))
-                .map(move |tid| -> Result<_> {
+                .map(move |tid| -> io::Result<_> {
                     Ok([
                         s.clone(),
-                        Term::new_iri_unchecked(
-                            self.hdt.dict.id_to_string(tid.predicate_id, &IdKind::Predicate).unwrap(),
-                        ),
+                        SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from(
+                            self.hdt
+                                .dict
+                                .id_to_string(tid.predicate_id, &IdKind::Predicate)
+                                .unwrap()
+                                .into_boxed_str(),
+                        ))),
                         auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap())?,
                     ])
                 })
@@ -149,19 +154,17 @@ impl HdtGraph {
                 .into_triple_source(),
         )
     }
+    /*
+        fn triples_with_p<'s>(&'s self, p: &SimpleTerm) -> GTripleSource<'s, Self> {
+            triple_source(self.hdt.triples_with(&p.value(), &IdKind::Predicate))
+        }
 
-    fn triples_with_p<'s, TS: Term + ?Sized>(&'s self, p: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&p.value(), &IdKind::Predicate))
-    }
-
-    fn triples_with_o<'s, TS: Term + ?Sized>(&'s self, o: &'s TS) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
-    }
-
+        fn triples_with_o<'s>(&'s self, o: &SimpleTerm) -> GTripleSource<'s, Self> {
+            triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
+        }
+    */
     /// An iterator visiting all triples with the given subject and predicate.
-    fn triples_with_sp<'s, TS: Term + ?Sized, TP: Term + ?Sized>(
-        &'s self, s: &'s TS, p: &'s TP,
-    ) -> GTripleSource<'s, Self> {
+    fn triples_with_sp<'s>(&'s self, s: &SimpleTerm, p: &SimpleTerm) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
         let ps = term_string(p);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
@@ -174,7 +177,7 @@ impl HdtGraph {
         let p = auto_term(&ps).unwrap();
         Box::new(
             BitmapIter::with_pattern(&self.hdt.triples, &TripleId::new(sid, pid, 0))
-                .map(move |tid| -> Result<_> {
+                .map(move |tid| -> io::Result<_> {
                     Ok([
                         s.clone(),
                         p.clone(),
@@ -187,30 +190,28 @@ impl HdtGraph {
     }
 
     /// An iterator visiting all triples with the given subject and object.
-    fn triples_with_so<'s, TS: Term + ?Sized, TO: Term + ?Sized>(
-        &'s self, s: &'s TS, o: &'s TO,
-    ) -> GTripleSource<'s, Self> {
+    fn triples_with_so<'s>(&'s self, s: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
         triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
     }
 
     /// An iterator visiting all triples with the given predicate and object.
-    fn triples_with_po<'s, TP: Term + ?Sized, TO: Term + ?Sized>(
-        &'s self, p: &'s TP, o: &'s TO,
-    ) -> GTripleSource<'s, Self> {
+    fn triples_with_po<'s>(&'s self, p: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
         let ps = term_string(p);
         let os = term_string(o);
         let pid = self.hdt.dict.string_to_id(&ps, &IdKind::Predicate);
         let oid = self.hdt.dict.string_to_id(&os, &IdKind::Object);
         // predicate can be neither a literal nor a blank node
-        let p = Term::new_iri_unchecked(ps);
-        let o = auto_term(&os).unwrap();
+        //let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(ps)));
+        //let o = auto_term(&os).unwrap();
         Box::new(
             PredicateObjectIter::new(&self.hdt.triples, pid, oid)
                 .map(move |sid| -> Result<_> {
                     Ok([
                         // subject is never a literal, so we can save a lot of CPU time here by not using auto_term
                         // TODO: could subject be a blank node?
-                        Term::new_iri_unchecked(self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
+                        SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from(
+                            self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap().into_boxed_str(),
+                        ))),
                         p.clone(),
                         o.clone(),
                     ])
@@ -238,11 +239,13 @@ mod tests {
         let triples: Vec<_> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
         assert!(graph
-            .triples_with_s(&Term::new_iri_unchecked("http://www.snik.eu/ontology/meta".to_owned()))
+            .triples_with_s(&SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(
+                "http://www.snik.eu/ontology/meta"
+            ))))
             .next()
             .is_some());
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
-            let term = Term::new_iri_unchecked(uri.to_owned());
+            let term = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(uri)));
             let filtered: Vec<_> = triples
                 .iter()
                 .map(|triple| triple.as_ref().unwrap())
@@ -258,8 +261,10 @@ mod tests {
                 "different results between triples() and triples_with_s() for {uri}"
             );
         }
-        let s = Term::new_iri_unchecked("http://www.snik.eu/ontology/meta/Top".to_owned());
-        let p = Term::new_iri_unchecked("http://www.w3.org/2000/01/rdf-schema#label".to_owned());
+        let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://www.snik.eu/ontology/meta/Top")));
+        let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(
+            "http://www.w3.org/2000/01/rdf-schema#label",
+        )));
         let o = Term::from(Literal::new_lang_unchecked("top class", "en"));
         assert!(graph.triples_with_o(&o).next().is_some());
         let triple = (&s, &p, &o);
