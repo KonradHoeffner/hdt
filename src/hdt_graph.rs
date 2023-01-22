@@ -9,6 +9,7 @@ use log::error;
 use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
+use sophia::api::prelude::Triple;
 use sophia::api::source::{IntoTripleSource, TripleSource};
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
@@ -70,7 +71,7 @@ fn auto_term<'a>(s: &'a str) -> io::Result<SimpleTerm<'a>> {
         _ => Ok(SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(s)))),
     }
 }
-
+/*
 // transforms Hdt triples into a sophia TripleSource
 fn triple_source<'a>(
     triples: impl Iterator<Item = (MownStr<'a>, MownStr<'a>, MownStr<'a>)> + 'a,
@@ -86,10 +87,9 @@ fn triple_source<'a>(
                 [MownStr::from(""),MownStr::from(""),MownStr::from("")]
             })
            // .filter_map(|r| r.map_err(|e: Error| error!("{e}")).ok())
-            .into_triple_source(),
     )
 }
-
+*/
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &SimpleTerm) -> String {
@@ -114,22 +114,27 @@ impl Graph for HdtGraph {
 
     fn triples(&self) -> GTripleSource<Self> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
-        triple_source(self.hdt.triples())
+        Box::new(self.hdt.triples().map(move |(s, p, o)| {
+            Ok([
+                SimpleTerm::Iri(IriRef::new_unchecked("".into())),
+                SimpleTerm::Iri(IriRef::new_unchecked("".into())),
+                SimpleTerm::Iri(IriRef::new_unchecked("".into())),
+            ])
+        }))
     }
-    /*
+
     fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self>
-        where
-            S: TermMatcher + 's,
-            P: TermMatcher + 's,
-            O: TermMatcher + 's,
-        {
-            Box::new(
-                self.triples().filter_ok(move |t| {
-                    t.matched_by(sm.matcher_ref(), pm.matcher_ref(), om.matcher_ref())
-                }),
-            )
-        }
-        */
+    where
+        S: TermMatcher + 's,
+        P: TermMatcher + 's,
+        O: TermMatcher + 's,
+    {
+        Box::new(
+            self.triples().filter(|r| r.is_ok()).filter(move |t| {
+                t.as_ref().unwrap().matched_by(sm.matcher_ref(), pm.matcher_ref(), om.matcher_ref())
+            }),
+        )
+    }
 }
 
 impl HdtGraph {
