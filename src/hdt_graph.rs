@@ -10,7 +10,7 @@ use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
 use sophia::api::source::IntoTripleSource;
-use sophia::api::term::{BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
+use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
 
@@ -32,7 +32,7 @@ impl HdtGraph {
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term(s: &str) -> io::Result<SimpleTerm> {
+fn auto_term<'a>(s: &'a str) -> io::Result<SimpleTerm<'a>> {
     match s.chars().next() {
         None => Err(Error::new(ErrorKind::InvalidData, "empty input")),
         Some('"') => match s.rfind('"') {
@@ -77,7 +77,7 @@ fn triple_source<'a>(
 ) -> GTripleSource<'a, HdtGraph> {
     Box::new(
         triples
-            .map(|(s, p, o)| -> Result<_, _> {
+            .map(move |(s, p, o)| -> Result<_, _> {
                 debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
                 debug_assert_ne!("", p.as_ref(), "triple_source predicate is empty ({s}, {p}, {o})");
                 debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");
@@ -94,19 +94,11 @@ fn term_string(t: &SimpleTerm) -> String {
     match t {
         SimpleTerm::BlankNode(b) => "_:".to_owned() + &b.as_str(),
         SimpleTerm::Iri(i) => i.as_str().to_owned(),
-        SimpleTerm::LiteralLanguage(_, _) => {
-            let value = format!("\"{}\"", t.value());
-            if let Some(lang) = t.language() {
-                return format!("{value}@{lang}");
-            }
-            if let Some(dt) = t.datatype() {
-                // handle implicit xsd:string datatype
-                // TODO check if this breaks triples that have explicit xsd:string datattype
-                if dt.value() != "http://www.w3.org/2001/XMLSchema#string" {
-                    return format!("{value}^^{dt}");
-                }
-            }
-            value
+        SimpleTerm::LiteralLanguage(l, lang) => {
+            format!("{l}@{}", lang.as_str())
+        }
+        SimpleTerm::LiteralDatatype(l, dt) => {
+            format!("{l}@{}", dt.as_str())
         }
         _ => {
             panic!("Variable term strings and RDF-star are not supported.");
@@ -122,11 +114,24 @@ impl Graph for HdtGraph {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         triple_source(self.hdt.triples())
     }
-
-    fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self> {}
+    /*
+    fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self>
+        where
+            S: TermMatcher + 's,
+            P: TermMatcher + 's,
+            O: TermMatcher + 's,
+        {
+            Box::new(
+                self.triples().filter_ok(move |t| {
+                    t.matched_by(sm.matcher_ref(), pm.matcher_ref(), om.matcher_ref())
+                }),
+            )
+        }
+        */
 }
 
 impl HdtGraph {
+    /*
     fn triples_with_s<'s>(&'s self, s: &SimpleTerm) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
         let sid = self.hdt.dict.string_to_id(&ss, &IdKind::Subject);
@@ -154,6 +159,7 @@ impl HdtGraph {
                 .into_triple_source(),
         )
     }
+    */
     /*
         fn triples_with_p<'s>(&'s self, p: &SimpleTerm) -> GTripleSource<'s, Self> {
             triple_source(self.hdt.triples_with(&p.value(), &IdKind::Predicate))
@@ -163,6 +169,7 @@ impl HdtGraph {
             triple_source(self.hdt.triples_with(&term_string(o), &IdKind::Object))
         }
     */
+    /*
     /// An iterator visiting all triples with the given subject and predicate.
     fn triples_with_sp<'s>(&'s self, s: &SimpleTerm, p: &SimpleTerm) -> GTripleSource<'s, Self> {
         let ss = term_string(s);
@@ -188,14 +195,15 @@ impl HdtGraph {
                 .into_triple_source(),
         )
     }
-
-    /// An iterator visiting all triples with the given subject and object.
-    fn triples_with_so<'s>(&'s self, s: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
-        triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
-    }
-
+    */
+    /*
+        /// An iterator visiting all triples with the given subject and object.
+        fn triples_with_so<'s>(&'s self, s: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
+            triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
+        }
+    */
     /// An iterator visiting all triples with the given predicate and object.
-    fn triples_with_po<'s>(&'s self, p: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
+    fn triples_with_po<'s>(&'s self, p: &'s SimpleTerm, o: &'s SimpleTerm) -> GTripleSource<'s, Self> {
         let ps = term_string(p);
         let os = term_string(o);
         let pid = self.hdt.dict.string_to_id(&ps, &IdKind::Predicate);
@@ -205,8 +213,8 @@ impl HdtGraph {
         //let o = auto_term(&os).unwrap();
         Box::new(
             PredicateObjectIter::new(&self.hdt.triples, pid, oid)
-                .map(move |sid| -> Result<_> {
-                    Ok([
+                .map(move |sid| {
+                    [
                         // subject is never a literal, so we can save a lot of CPU time here by not using auto_term
                         // TODO: could subject be a blank node?
                         SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from(
@@ -214,9 +222,9 @@ impl HdtGraph {
                         ))),
                         p.clone(),
                         o.clone(),
-                    ])
+                    ]
                 })
-                .filter_map(|r| r.map_err(|e| error!("{e}")).ok())
+                //.filter_map(|r| r.map_err(|e| error!("{e}")).ok())
                 .into_triple_source(),
         )
     }
