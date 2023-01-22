@@ -9,7 +9,7 @@ use log::error;
 use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
-use sophia::api::source::IntoTripleSource;
+use sophia::api::source::{IntoTripleSource, TripleSource};
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
@@ -77,13 +77,15 @@ fn triple_source<'a>(
 ) -> GTripleSource<'a, HdtGraph> {
     Box::new(
         triples
-            .map(move |(s, p, o)| -> Result<_, _> {
-                debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
+            .map(move |(s, p, o)| {
+                /*debug_assert_ne!("", s.as_ref(), "triple_source subject is empty   ({s}, {p}, {o})");
                 debug_assert_ne!("", p.as_ref(), "triple_source predicate is empty ({s}, {p}, {o})");
-                debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");
-                Ok([auto_term(s.as_ref())?, auto_term(p.as_ref())?, auto_term(o.as_ref())?])
+                debug_assert_ne!("", o.as_ref(), "triple_source object is empty    ({s}, {p}, {o})");*/
+                //Ok([auto_term(s.as_ref())?, auto_term(p.as_ref())?, auto_term(o.as_ref())?])
+                //Ok([MownStr::from(""),MownStr::from(""),MownStr::from("")])
+                [MownStr::from(""),MownStr::from(""),MownStr::from("")]
             })
-            .filter_map(|r| r.map_err(|e: Error| error!("{e}")).ok())
+           // .filter_map(|r| r.map_err(|e: Error| error!("{e}")).ok())
             .into_triple_source(),
     )
 }
