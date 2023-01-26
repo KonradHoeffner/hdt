@@ -71,13 +71,7 @@ pub mod hdt;
 pub mod hdt_graph;
 /// Types for representing the header.
 pub mod header;
-/// Iterator over all triples with a given object.
-pub mod object_iter;
-/// Iterator over all triples with a given predicate.
-pub mod predicate_iter;
-/// Iterator over all triples with a given predicate and object.
-pub mod predicate_object_iter;
-/// Types for representing triples.
+/// Types for representing and querying triples.
 pub mod triples;
 
 pub use crate::hdt::Hdt;

@@ -1,8 +1,7 @@
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
-use crate::predicate_object_iter::PredicateObjectIter;
-use crate::triples::{BitmapIter, TripleId, TriplesBitmap};
+use crate::triples::{PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use log::{debug, error};
@@ -56,7 +55,7 @@ impl Hdt {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
     }
 
-    /// Don't use this for many triples with shared values as you won't benefit from deduplication if you are using a smartpointer like Rc<str> or Arc<str>.
+    /// Don't use this for many triples with shared values as you won't benefit from deduplication.
     fn translate_id(&self, t: TripleId) -> Result<StringTriple, TranslateErr> {
         let s = self.dict.id_to_string(t.subject_id, &IdKind::Subject).map_err(|e| TranslateErr { e, t })?;
         let p = self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).map_err(|e| TranslateErr { e, t })?;
@@ -74,7 +73,7 @@ impl Hdt {
 
     /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. S??, ?P? or ??O.
     /// Returns translated triples as strings.
-    /// If the subject is given, you can also use [`BitmapIter::with_pattern`] with a `TripleId` where property and object are 0.
+    /// If the subject is given, you can also use [`SubjectIter::with_pattern`] with a `TripleId` where property and object are 0.
     /// Much more effient than filtering the result of [`Hdt::triples`].
     /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
     pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
@@ -104,7 +103,7 @@ impl Hdt {
         let s_owned = s.to_owned();
         let p_owned = p.to_owned();
         Box::new(
-            BitmapIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
+            SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
                 .map(move |tid| self.dict.id_to_string(tid.object_id, &IdKind::Object))
                 .filter_map(move |r| {
                     r.map_err(|e| error!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
@@ -174,6 +173,9 @@ impl Hdt {
         let ot = MownStr::from(o);
         self.subjects_with_po(p, o).map(move |s| (MownStr::from(s), pt.clone(), ot.clone()))
     }
+
+    //    pub fn triples_with_pattern(&self, spat: &str, ppat: &str, opat: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+    //  }
 }
 
 #[cfg(test)]
