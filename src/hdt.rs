@@ -7,6 +7,7 @@ use bytesize::ByteSize;
 use log::{debug, error};
 use mownstr::MownStr;
 use std::io;
+use std::iter;
 use thiserror::Error;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
@@ -80,7 +81,7 @@ impl Hdt {
         debug_assert_ne!("", s);
         let id = self.dict.string_to_id(s, kind);
         if id == 0 {
-            return Box::new(std::iter::empty());
+            return Box::new(iter::empty());
         }
         let owned = s.to_owned();
         Box::new(
@@ -98,7 +99,7 @@ impl Hdt {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         if sid == 0 || pid == 0 {
-            return Box::new(std::iter::empty());
+            return Box::new(iter::empty());
         }
         let s_owned = s.to_owned();
         let p_owned = p.to_owned();
@@ -128,7 +129,7 @@ impl Hdt {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let oid = self.dict.string_to_id(o, &IdKind::Object);
         if sid == 0 || oid == 0 {
-            return Box::new(std::iter::empty());
+            return Box::new(iter::empty());
         }
         let st = MownStr::from(s);
         let ot = MownStr::from(o);
@@ -151,7 +152,7 @@ impl Hdt {
         let oid = self.dict.string_to_id(o, &IdKind::Object);
         // predicate or object not in dictionary
         if pid == 0 || oid == 0 {
-            return Box::new(std::iter::empty());
+            return Box::new(iter::empty());
         }
         let p_owned = p.to_owned();
         let o_owned = o.to_owned();
@@ -174,8 +175,47 @@ impl Hdt {
         self.subjects_with_po(p, o).map(move |s| (MownStr::from(s), pt.clone(), ot.clone()))
     }
 
-    //    pub fn triples_with_pattern(&self, spat: &str, ppat: &str, opat: &str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
-    //  }
+    pub fn triples_with_pattern(&self, pat: [Option<&str>; 3]) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+        if let Some(s) = pat[0] {
+            // S X X
+            let sid = self.dict.string_to_id(s, &IdKind::Subject);
+            if sid == 0 {
+                return Box::new(iter::empty());
+            }
+            let sm = MownStr::from_str(s);
+            if let Some(p) = pat[1] {
+                // S P X
+                let pid = self.dict.string_to_id(p, &IdKind::Predicate);
+                if pid == 0 {
+                    return Box::new(iter::empty());
+                }
+                let pm = MownStr::from_str(p);
+                if let Some(o) = pat[2] {
+                    // S P O
+                    let oid = self.dict.string_to_id(o, &IdKind::Object);
+                    if oid == 0 {
+                        return Box::new(iter::empty());
+                    }
+                    let om = MownStr::from_str(o);
+                    if SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, oid)).next().is_some() {
+                        Box::new(iter::once((sm, pm, om)))
+                    } else {
+                        Box::new(iter::empty())
+                    }
+                } else {
+                    // S P ?
+                    Box::new(
+                        SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
+                            .map(|t| (sm, pm, self.dict.id_to_string(t.2, &IdKind::Object))),
+                    )
+                }
+            } else {
+                // S ? X
+            }
+        } else {
+            // ? X X
+        }
+    }
 }
 
 #[cfg(test)]

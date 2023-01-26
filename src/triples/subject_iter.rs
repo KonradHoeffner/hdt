@@ -50,7 +50,7 @@ impl<'a> SubjectIter<'a> {
     /// SubjectIter::with_pattern(triples, TripleId::new(1, 0, 0);
     /// // SP? pattern, all triples with subject ID 1 and predicate ID 2
     /// SubjectIter::with_pattern(triples, TripleId::new(1, 2, 0);
-    /// // match a specific triple, not useful in practice
+    /// // match a specific triple, not useful in practice except as an ASK query
     /// SubjectIter::with_pattern(triples, TripleId::new(1, 2, 3);
     /// ```
     // Translated from <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>.
