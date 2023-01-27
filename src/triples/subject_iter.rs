@@ -12,6 +12,7 @@ pub struct SubjectIter<'a> {
     pos_z: usize,
     max_y: usize,
     max_z: usize,
+    search_z: usize, // for S?O
 }
 
 impl<'a> SubjectIter<'a> {
@@ -24,12 +25,13 @@ impl<'a> SubjectIter<'a> {
             pos_z: 0,
             max_y: triples.wavelet_y.len(), // exclusive
             max_z: triples.adjlist_z.len(), // exclusive
+            search_z: 0,
         }
     }
 
     /// Use when no results are found.
     pub const fn empty(triples: &'a TriplesBitmap) -> Self {
-        SubjectIter { triples, x: 1, pos_y: 0, pos_z: 0, max_y: 0, max_z: 0 }
+        SubjectIter { triples, x: 1, pos_y: 0, pos_z: 0, max_y: 0, max_z: 0, search_z: 0 }
     }
 
     /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
@@ -38,10 +40,10 @@ impl<'a> SubjectIter<'a> {
         let min_z = triples.adjlist_z.find(min_y as Id);
         let max_y = triples.find_y(subject_id);
         let max_z = triples.adjlist_z.find(max_y as Id);
-        SubjectIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z }
+        SubjectIter { triples, x: subject_id, pos_y: min_y, pos_z: min_z, max_y, max_z, search_z: 0 }
     }
 
-    /// Iterate over triples fitting the given SPO, SP? S?? or ??? triple pattern.
+    /// Iterate over triples fitting the given SPO, SP? S??, S?O or ??? triple pattern.
     /// Variable positions are signified with a 0 value.
     /// Undefined result if any other triple pattern is used.
     /// # Examples
@@ -58,6 +60,7 @@ impl<'a> SubjectIter<'a> {
         let (pat_x, pat_y, pat_z) = (pat.subject_id, pat.predicate_id, pat.object_id);
         let (min_y, max_y, min_z, max_z);
         let mut x = 1;
+        let mut search_z = 0;
         // only SPO order is supported currently
         if pat_x != 0 {
             // S X X
@@ -72,7 +75,7 @@ impl<'a> SubjectIter<'a> {
                     // S P O
                     // simply with try block when they come to stable Rust
                     match triples.adjlist_z.search(min_y, pat_z) {
-                        Some(z) => min_z = z,
+                        Some(pos_z) => min_z = pos_z,
                         None => return SubjectIter::empty(triples),
                     };
                     max_z = min_z + 1;
@@ -87,17 +90,18 @@ impl<'a> SubjectIter<'a> {
                 min_z = triples.adjlist_z.find(min_y);
                 max_y = triples.last_y(pat_x - 1) + 1;
                 max_z = triples.adjlist_z.find(max_y);
+                search_z = pat_z;
             }
             x = pat_x;
         } else {
             // ? X X
-            // assume ? ? ?, other triple patterns are not supported by this function
+            // assume ? ? ?, other triple patterns are not supported by this iterator
             min_y = 0;
             min_z = 0;
             max_y = triples.wavelet_y.len();
             max_z = triples.adjlist_z.len();
         }
-        SubjectIter { triples, x, pos_y: min_y, pos_z: min_z, max_y, max_z }
+        SubjectIter { triples, x, pos_y: min_y, pos_z: min_z, max_y, max_z, search_z }
     }
 }
 
@@ -109,11 +113,23 @@ impl<'a> Iterator for SubjectIter<'a> {
             return None;
         }
 
+        let y = self.triples.wavelet_y.get(self.pos_y) as Id;
+
+        if self.search_z > 0 {
+            self.pos_y += 1;
+            match self.triples.adjlist_z.search(self.pos_y - 1, self.search_z) {
+                Some(_) => {
+                    return Some(self.triples.coord_to_triple(self.x, y, self.search_z).unwrap());
+                }
+                None => {
+                    return self.next();
+                }
+            }
+        }
+
         if self.pos_z >= self.max_z {
             return None;
         }
-
-        let y = self.triples.wavelet_y.get(self.pos_y) as Id;
         let z = self.triples.adjlist_z.get_id(self.pos_z);
         let triple_id = self.triples.coord_to_triple(self.x, y, z).unwrap();
 

@@ -1,7 +1,7 @@
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
-use crate::triples::{PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
+use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use log::{debug, error};
@@ -72,28 +72,6 @@ impl Hdt {
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// An iterator visiting all triples for a given triple pattern with exactly two variables, i.e. S??, ?P? or ??O.
-    /// Returns translated triples as strings.
-    /// If the subject is given, you can also use [`SubjectIter::with_pattern`] with a `TripleId` where property and object are 0.
-    /// Much more effient than filtering the result of [`Hdt::triples`].
-    /// If you want to query triple patterns with only one variable, use `triples_with_sp` etc. instead.
-    pub fn triples_with(&self, s: &str, kind: &'static IdKind) -> Box<dyn Iterator<Item = StringTriple> + '_> {
-        debug_assert_ne!("", s);
-        let id = self.dict.string_to_id(s, kind);
-        if id == 0 {
-            return Box::new(iter::empty());
-        }
-        let owned = s.to_owned();
-        Box::new(
-            self.triples
-                .triples_with_id(id, kind)
-                .map(move |tid| self.translate_id(tid))
-                .filter_map(move |r| r.map_err(|e| error!("Error on triple with {kind:?} {owned}: {e}")).ok()),
-        )
-    }
-
-    // TODO extract common code out of triples_with_...
-
     /// Get all triples with the given subject and property.
     pub fn objects_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
@@ -110,39 +88,6 @@ impl Hdt {
                     r.map_err(|e| error!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
                         .ok()
                 }),
-        )
-    }
-
-    /// Get all triples with the given subject and property.
-    /// Inefficient with large results because the subject and property strings are duplicated for each triple.
-    /// Consider using [Self::objects_with_sp()] instead.
-    pub fn triples_with_sp<'a>(&'a self, s: &'a str, p: &'a str) -> impl Iterator<Item = StringTriple> {
-        let st = MownStr::from(s);
-        let pt = MownStr::from(p);
-        self.objects_with_sp(s, p).map(move |o| (st.clone(), pt.clone(), MownStr::from(o)))
-    }
-
-    /// Get all triples with the given subject and object.
-    /// The current implementation queries all triple IDs for the given subject and filters them for the given object.
-    /// This method is faster then filtering on translated strings but can be further optimized by creating a special SO iterator.
-    pub fn triples_with_so<'a>(&'a self, s: &'a str, o: &'a str) -> Box<dyn Iterator<Item = StringTriple> + '_> {
-        let sid = self.dict.string_to_id(s, &IdKind::Subject);
-        let oid = self.dict.string_to_id(o, &IdKind::Object);
-        if sid == 0 || oid == 0 {
-            return Box::new(iter::empty());
-        }
-        let st = MownStr::from(s);
-        let ot = MownStr::from(o);
-        Box::new(
-            self.triples
-                .triples_with_id(sid, &IdKind::Subject)
-                .filter(move |tid| tid.object_id == oid)
-                .map(move |tid| self.dict.id_to_string(tid.predicate_id, &IdKind::Predicate))
-                .filter_map(move |r| {
-                    //r.map_err(|e| error!("Error on triple with subject {st} and object {ot}: {e}")).ok()
-                    r.map_err(|e| error!("Error on triple: {e}")).ok()
-                })
-                .map(move |ps| (st.clone(), MownStr::from(ps), ot.clone())),
         )
     }
 
@@ -166,54 +111,76 @@ impl Hdt {
         )
     }
 
-    /// Get all triples with the given property and object.
-    /// Inefficient with large results because the property and object are duplicated for each triple.
-    /// Consider using [Self::subjects_with_po()] instead.
-    pub fn triples_with_po<'a>(&'a self, p: &'a str, o: &'a str) -> impl Iterator<Item = StringTriple> + 'a {
-        let pt = MownStr::from(p);
-        let ot = MownStr::from(o);
-        self.subjects_with_po(p, o).map(move |s| (MownStr::from(s), pt.clone(), ot.clone()))
-    }
-
-    pub fn triples_with_pattern(&self, pat: [Option<&str>; 3]) -> Box<dyn Iterator<Item = StringTriple> + '_> {
-        if let Some(s) = pat[0] {
-            // S X X
-            let sid = self.dict.string_to_id(s, &IdKind::Subject);
-            if sid == 0 {
-                return Box::new(iter::empty());
-            }
-            let sm = MownStr::from_str(s);
-            if let Some(p) = pat[1] {
-                // S P X
-                let pid = self.dict.string_to_id(p, &IdKind::Predicate);
-                if pid == 0 {
-                    return Box::new(iter::empty());
-                }
-                let pm = MownStr::from_str(p);
-                if let Some(o) = pat[2] {
-                    // S P O
-                    let oid = self.dict.string_to_id(o, &IdKind::Object);
-                    if oid == 0 {
-                        return Box::new(iter::empty());
-                    }
-                    let om = MownStr::from_str(o);
-                    if SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, oid)).next().is_some() {
-                        Box::new(iter::once((sm, pm, om)))
-                    } else {
-                        Box::new(iter::empty())
-                    }
+    /// None in any position matches anything.
+    pub fn triples_with_pattern<'a>(
+        &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
+    ) -> Box<dyn Iterator<Item = StringTriple<'a>> + '_> {
+        let xso = sp.map(|s| (MownStr::from_str(s), self.dict.string_to_id(s, &IdKind::Subject)));
+        let xpo = pp.map(|p| (MownStr::from_str(p), self.dict.string_to_id(p, &IdKind::Predicate)));
+        let xoo = op.map(|o| (MownStr::from_str(o), self.dict.string_to_id(o, &IdKind::Object)));
+        if [&xso, &xpo, &xoo].into_iter().flatten().filter(|x| x.1 == 0).next().is_some() {
+            // at least one term does not exist in the graph
+            return Box::new(iter::empty());
+        }
+        match (xso, xpo, xoo) {
+            (Some(s), Some(p), Some(o)) => {
+                if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
+                    Box::new(iter::once((s.0, p.0, o.0)))
                 } else {
-                    // S P ?
-                    Box::new(
-                        SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
-                            .map(|t| (sm, pm, self.dict.id_to_string(t.2, &IdKind::Object))),
-                    )
+                    Box::new(iter::empty())
                 }
-            } else {
-                // S ? X
             }
-        } else {
-            // ? X X
+            (Some(s), Some(p), None) => {
+                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
+                    (
+                        s.0.clone(),
+                        p.0.clone(),
+                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                    )
+                }))
+            }
+            (Some(s), None, Some(o)) => {
+                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
+                    (
+                        s.0.clone(),
+                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        o.0.clone(),
+                    )
+                }))
+            }
+            (Some(s), None, None) => {
+                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
+                    (
+                        s.0.clone(),
+                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                    )
+                }))
+            }
+            (None, Some(p), Some(o)) => {
+                Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
+                    (
+                        MownStr::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
+                        p.0.clone(),
+                        o.0.clone(),
+                    )
+                }))
+            }
+            (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
+                (
+                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    p.0.clone(),
+                    MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                )
+            })),
+            (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
+                (
+                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                    o.0.clone(),
+                )
+            })),
+            (None, None, None) => Box::new(self.triples()),
         }
     }
 }
@@ -237,22 +204,36 @@ mod tests {
         assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0.as_ref() == uri).collect();
-            let with_s: Vec<_> = hdt.triples_with(uri, &IdKind::Subject).collect();
+            let with_s: Vec<_> = hdt.triples_with_pattern(Some(uri), None, None).collect();
             assert_eq!(filtered, with_s, "different results between triples() and triples_with_s() for {}", uri);
         }
         let s = "http://www.snik.eu/ontology/meta/Top";
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
         let o = "\"top class\"@en";
         let triple_vec = vec![(MownStr::from(s), MownStr::from(p), MownStr::from(o))];
-        assert_eq!(triple_vec, hdt.triples_with_sp(s, p).collect::<Vec<_>>());
-        assert_eq!(triple_vec, hdt.triples_with_so(s, o).collect::<Vec<_>>());
-        assert_eq!(triple_vec, hdt.triples_with_po(p, o).collect::<Vec<_>>());
+        assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), "SP?");
+        assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), None, Some(o)).collect::<Vec<_>>(), "S?O");
+        assert_eq!(triple_vec, hdt.triples_with_pattern(None, Some(p), Some(o)).collect::<Vec<_>>(), "?P?");
         let et = "http://www.snik.eu/ontology/meta/EntityType";
         assert_eq!(4, hdt.subjects_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).count());
         assert_eq!(
             12,
-            hdt.triples_with("http://www.w3.org/2000/01/rdf-schema#subClassOf", &IdKind::Predicate).count()
+            hdt.triples_with_pattern(None, Some("http://www.w3.org/2000/01/rdf-schema#subClassOf"), None).count()
         );
-        assert_eq!(20, hdt.triples_with(et, &IdKind::Object).count());
+        assert_eq!(20, hdt.triples_with_pattern(None, None, Some(et)).count());
+        let meta = "http://www.snik.eu/ontology/meta";
+        let snikeu = "http://www.snik.eu";
+        let triple_vec = [
+            "http://purl.org/dc/terms/publisher", "http://purl.org/dc/terms/source",
+            "http://xmlns.com/foaf/0.1/homepage",
+        ]
+        .into_iter()
+        .map(|p| (MownStr::from(meta), MownStr::from(p), MownStr::from(snikeu)))
+        .collect::<Vec<_>>();
+        assert_eq!(
+            triple_vec,
+            hdt.triples_with_pattern(Some(meta), None, Some(snikeu)).collect::<Vec<_>>(),
+            "S?O multiple"
+        );
     }
 }
