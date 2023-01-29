@@ -2,8 +2,7 @@
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
-use crate::predicate_object_iter::PredicateObjectIter;
-use crate::triples::{BitmapIter, TripleId};
+use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
 use log::error;
 use sophia::api::graph::{GTripleSource, Graph};
@@ -14,6 +13,7 @@ use sophia::api::source::{IntoTripleSource, TripleSource};
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
+use std::iter;
 
 /// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
@@ -116,24 +116,151 @@ impl Graph for HdtGraph {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         Box::new(self.hdt.triples().map(move |(s, p, o)| {
             Ok([
-                SimpleTerm::Iri(IriRef::new_unchecked("".into())),
-                SimpleTerm::Iri(IriRef::new_unchecked("".into())),
+                SimpleTerm::Iri(IriRef::new_unchecked(s.into())),
+                SimpleTerm::Iri(IriRef::new_unchecked(p.into())),
                 SimpleTerm::Iri(IriRef::new_unchecked("".into())),
             ])
         }))
     }
 
+    /// Only supports constant and "any" matchers.
+    /// Non-constant matchers are supposed to be "any" matchers.
     fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self>
     where
         S: TermMatcher + 's,
         P: TermMatcher + 's,
         O: TermMatcher + 's,
     {
-        Box::new(
-            self.triples().filter(|r| r.is_ok()).filter(move |t| {
-                t.as_ref().unwrap().matched_by(sm.matcher_ref(), pm.matcher_ref(), om.matcher_ref())
-            }),
-        )
+        let xso = sm.constant().map(|s| {
+            //let simple = s.as_simple();
+            //let simple = SimpleTerm::from_term_ref(s);
+            let simple = SimpleTerm::from(s.as_simple().to_owned());
+            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Subject);
+            (simple, id)
+        });
+        let xpo = pm.constant().map(|p| {
+            let simple = p.as_simple();
+            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Predicate);
+            (simple, id)
+        });
+        let xoo = om.constant().map(|o| {
+            let simple = o.as_simple();
+            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Object);
+            (simple, id)
+        });
+        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
+            // at least one term does not exist in the graph
+            return Box::new(iter::empty());
+        }
+        //return Box::new(iter::empty());
+        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
+            // at least one term does not exist in the graph
+            return Box::new(iter::empty());
+        }
+        // TODO: improve error handling
+        match (xso, xpo, xoo) {
+            /*
+            (Some(s), Some(p), Some(o)) => {
+                if SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
+                    Box::new(iter::once(Ok([s.0, p.0, o.0])))
+                } else {
+                    Box::new(iter::empty())
+                }
+            }
+            (Some(s), Some(p), None) => {
+                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
+                    (
+                        s.0.clone(),
+                        p.0.clone(),
+                        MownStr::from(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                    )
+                }))
+            }
+            (Some(s), None, Some(o)) => {
+                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
+                    (
+                        s.0.clone(),
+                        MownStr::from(self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        o.0.clone(),
+                    )
+                }))
+            }
+            */
+            (Some(s), None, None) => {
+                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
+                    Ok([
+                        s.0,
+                        IriRef::new_unchecked(MownStr::from(
+                            self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
+                        ))
+                        .into_term(),
+                        IriRef::new_unchecked(MownStr::from(
+                            self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
+                        ))
+                        .into_term(),
+                    ])
+                }))
+            }
+            /*
+            (None, Some(p), Some(o)) => {
+                Box::new(PredicateObjectIter::new(&self.hdt.triples, p.1, o.1).map(move |sid| {
+                    (
+                        MownStr::from(self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
+                        p.0.clone(),
+                        o.0.clone(),
+                    )
+                }))
+            }
+            (None, Some(p), None) => Box::new(PredicateIter::new(&self.hdt.triples, p.1).map(move |t| {
+                (
+                    MownStr::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    p.0.clone(),
+                    MownStr::from(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                )
+            })),
+            (None, None, Some(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
+                (
+                    MownStr::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    MownStr::from(self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                    o.0.clone(),
+                )
+            })),
+            (None, None, None) => Box::new(self.hdt.triples()),
+            */
+            _ => Box::new(iter::empty()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::init;
+    use pretty_assertions::{assert_eq, assert_ne};
+    use std::fs::File;
+
+    #[test]
+    fn triples() {
+        init();
+        let filename = "tests/resources/snikmeta.hdt";
+        let file = File::open(filename).expect("error opening file");
+        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
+        let triples = hdt.triples();
+        let v: Vec<StringTriple> = triples.collect();
+        assert_eq!(v.len(), 327);
+        assert_eq!(v, hdt.triples_with_pattern(None, None, None).collect::<Vec<_>>(), "all triples not equal ???");
+        assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
+        for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
+            let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0.as_ref() == uri).collect();
+            let with_s: Vec<_> = hdt.triples_with_pattern(Some(uri), None, None).collect();
+            assert_eq!(filtered, with_s, "different results between triples() and triples_with_s() for {}", uri);
+        }
+        let s = "http://www.snik.eu/ontology/meta/Top";
+        let p = "http://www.w3.org/2000/01/rdf-schema#label";
+        let o = "\"top class\"@en";
+        let triple_vec = vec![(MownStr::from(s), MownStr::from(p), MownStr::from(o))];
+        // triple patterns with 2-3 terms
+        assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), Some(o)).collect::<Vec<_>>(), "SPO");
     }
 }
 
@@ -208,7 +335,7 @@ impl HdtGraph {
         fn triples_with_so<'s>(&'s self, s: &SimpleTerm, o: &SimpleTerm) -> GTripleSource<'s, Self> {
             triple_source(self.hdt.triples_with_so(&term_string(s), &term_string(o)))
         }
-    */
+
     /// An iterator visiting all triples with the given predicate and object.
     fn triples_with_po<'s>(&'s self, p: &'s SimpleTerm, o: &'s SimpleTerm) -> GTripleSource<'s, Self> {
         let ps = term_string(p);
@@ -235,6 +362,7 @@ impl HdtGraph {
                 .into_triple_source(),
         )
     }
+    */
 }
 
 #[cfg(test)]

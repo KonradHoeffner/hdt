@@ -47,7 +47,7 @@ impl Hdt {
         dict.validate()?;
         let hdt = Hdt { dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
-        //debug!("{hdt:#?}");
+        debug!("{hdt:#?}");
         Ok(hdt)
     }
 
