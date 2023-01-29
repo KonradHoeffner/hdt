@@ -67,12 +67,13 @@ impl Hdt {
     /// An iterator visiting *all* triples as strings in order.
     /// Using this method with a filter can be inefficient for large graphs,
     /// because the strings are stored in compressed form and must be decompressed and allocated.
-    /// Whenever possible, use [`Hdt::triples_with`] instead.
+    /// Whenever possible, use [`Hdt::triples_with_pattern`] instead.
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
+        // TODO deduplicate
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// Get all triples with the given subject and property.
+    /// Get all objects with the given subject and property.
     pub fn objects_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let sid = self.dict.string_to_id(s, &IdKind::Subject);
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
@@ -91,17 +92,18 @@ impl Hdt {
         )
     }
 
-    /// Get all subjects with the given property and object.
+    /// Get all subjects with the given property and object (?PO pattern).
+    /// Use this over `triples_with_pattern(None,Some(p),Some(o))` if you don't need whole triples.
     pub fn subjects_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         let oid = self.dict.string_to_id(o, &IdKind::Object);
-        // predicate or object not in dictionary
+        // predicate or object not in dictionary, iterator would interpret 0 as variable
         if pid == 0 || oid == 0 {
             return Box::new(iter::empty());
         }
+        // needed for extending the lifetime of the parameters into the iterator for error messages
         let p_owned = p.to_owned();
         let o_owned = o.to_owned();
-        //let s = self.dict.id_to_string(t.subject_id, &IdKind::Subject).map_err(|e| TranslateErr { e, t })?;
         Box::new(
             PredicateObjectIter::new(&self.triples, pid, oid)
                 .map(move |sid| self.dict.id_to_string(sid, &IdKind::Subject))
@@ -111,7 +113,8 @@ impl Hdt {
         )
     }
 
-    /// None in any position matches anything.
+    /// Get all triples that fit the given triple patterns, where `None` stands for a variable.
+    /// For example, `triples_with_pattern(None, Some(p), Some(o)` answers an ?PO pattern.
     pub fn triples_with_pattern<'a>(
         &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
     ) -> Box<dyn Iterator<Item = StringTriple<'a>> + '_> {
@@ -122,6 +125,7 @@ impl Hdt {
             // at least one term does not exist in the graph
             return Box::new(iter::empty());
         }
+        // TODO: improve error handling
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
                 if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
@@ -201,6 +205,7 @@ mod tests {
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 327);
+        assert_eq!(v, hdt.triples_with_pattern(None, None, None).collect::<Vec<_>>(), "all triples not equal ???");
         assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0.as_ref() == uri).collect();
@@ -211,6 +216,8 @@ mod tests {
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
         let o = "\"top class\"@en";
         let triple_vec = vec![(MownStr::from(s), MownStr::from(p), MownStr::from(o))];
+        // triple patterns with 2-3 terms
+        assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), Some(o)).collect::<Vec<_>>(), "SPO");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), "SP?");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), None, Some(o)).collect::<Vec<_>>(), "S?O");
         assert_eq!(triple_vec, hdt.triples_with_pattern(None, Some(p), Some(o)).collect::<Vec<_>>(), "?P?");

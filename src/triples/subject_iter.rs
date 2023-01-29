@@ -34,7 +34,8 @@ impl<'a> SubjectIter<'a> {
         SubjectIter { triples, x: 1, pos_y: 0, pos_z: 0, max_y: 0, max_z: 0, search_z: 0 }
     }
 
-    /// see <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>
+    /// Convenience method for the S?? triple pattern.
+    /// See <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>.
     pub fn with_s(triples: &'a TriplesBitmap, subject_id: Id) -> Self {
         let min_y = triples.find_y(subject_id - 1);
         let min_z = triples.adjlist_z.find(min_y as Id);

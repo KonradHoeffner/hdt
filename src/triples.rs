@@ -1,5 +1,5 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
-use crate::{ControlInfo, IdKind};
+use crate::ControlInfo;
 use bytesize::ByteSize;
 use log::{debug, error};
 use rsdict::RsDict;
@@ -127,15 +127,6 @@ impl TriplesBitmap {
                 Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
             }
             _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
-        }
-    }
-
-    /// Iterator over all triples with a given ID in the specified position (subject, predicate or object).
-    pub fn triples_with_id(&self, id: usize, id_kind: &IdKind) -> Box<dyn Iterator<Item = TripleId> + '_> {
-        match id_kind {
-            IdKind::Subject => Box::new(SubjectIter::with_s(self, id)),
-            IdKind::Predicate => Box::new(PredicateIter::new(self, id)),
-            IdKind::Object => Box::new(ObjectIter::new(self, id)),
         }
     }
 
@@ -336,6 +327,17 @@ mod tests {
     use std::fs::File;
     use std::io::BufReader;
 
+    /// Iterator over all triples with a given ID in the specified position (subject, predicate or object).
+    fn triples_with_id<'a>(
+        t: &'a TriplesBitmap, id: usize, k: &IdKind,
+    ) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+        match k {
+            IdKind::Subject => Box::new(SubjectIter::with_s(t, id)),
+            IdKind::Predicate => Box::new(PredicateIter::new(t, id)),
+            IdKind::Object => Box::new(ObjectIter::new(t, id)),
+        }
+    }
+
     #[test]
     fn read_triples() {
         init();
@@ -361,7 +363,7 @@ mod tests {
             for i in 1..=lens[j] {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
                 filtered.sort_unstable();
-                let mut triples_with_id = triples.triples_with_id(i, &kinds[j]).collect::<Vec<TripleId>>();
+                let mut triples_with_id = triples_with_id(&triples, i, &kinds[j]).collect::<Vec<TripleId>>();
                 triples_with_id.sort_unstable();
                 assert_eq!(filtered, triples_with_id, "triples_with({},{:?})", i, kinds[j]);
             }
