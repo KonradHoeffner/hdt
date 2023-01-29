@@ -118,7 +118,7 @@ impl Hdt {
         let xso = sp.map(|s| (MownStr::from_str(s), self.dict.string_to_id(s, &IdKind::Subject)));
         let xpo = pp.map(|p| (MownStr::from_str(p), self.dict.string_to_id(p, &IdKind::Predicate)));
         let xoo = op.map(|o| (MownStr::from_str(o), self.dict.string_to_id(o, &IdKind::Object)));
-        if [&xso, &xpo, &xoo].into_iter().flatten().filter(|x| x.1 == 0).next().is_some() {
+        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
             // at least one term does not exist in the graph
             return Box::new(iter::empty());
         }
