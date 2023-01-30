@@ -25,12 +25,19 @@ It also cannot:
 
 If you need any of the those features, consider using a SPARQL endpoint instead.
 
-## Examples
+## Setup
+Add the following to Cargo.toml:
 
 ```toml
 [dependencies]
 hdt = "0.0.12"
 ```
+
+Since version 0.0.7, nightly is required:
+
+    rustup component add rustfmt --toolchain nightly
+
+## Examples
 
 ```rust
 use hdt::Hdt;
@@ -63,6 +70,26 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 [dependencies]
 hdt = { version = "0.0.12", default-features = false }
 ```
+
+## Performance and Benchmarks
+[The benchmarks](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb) show the performance of this and some other RDF libraries.
+The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.
+When using large HDT files, make sure to enable the release profile, such as through `cargo build --release`, as this can be much faster than using the dev profile.
+
+### Profiling
+If you want to optimize the code, you can use a profiler.
+The provided test data is very small in order to keep the size of the crate down; locally modifying the tests to use a large HDT file returns more meaningful results.
+
+#### Example with perf and Firefox Profiler
+
+    $ cargo test --release
+    [...]
+    Running unittests src/lib.rs (target/release/deps/hdt-2b2f139dafe69681)
+    [...]
+    $ perf record --call-graph=dwarf target/release/deps/hdt-2b2f139dafe69681 hdt::tests::triples
+    $ perf script > /tmp/test.perf
+
+Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
 
 ## Community Guidelines
 
