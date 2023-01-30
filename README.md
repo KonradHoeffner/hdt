@@ -13,7 +13,7 @@ A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) comp
 However it cannot:
 
 * load other RDF formats
-* load other HDT variants 
+* load other HDT variants
 
 For this functionality and acknowledgement of all the original authors, please look at the reference implementations in C++ and Java by the [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.
 
@@ -63,3 +63,14 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 [dependencies]
 hdt = { version = "0.0.12", default-features = false }
 ```
+
+## Community Guidelines
+
+### Issues and Support
+If you have a problem with the software, want to report a bug or have a feature request, please use the [issue tracker](https://github.com/KonradHoeffner/hdt/issues).
+If have a different type of request, feel free to send an email to [Konrad](mailto:konrad.hoeffner@uni-leipzig.de).
+
+### Contribute
+We are happy to receive pull requests.
+Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the nightly toolchain both with and without the "sophia" feature active.
+`cargo clippy` should not report any warnings, though currently there are [false positives with unnecessary\_to\_owned](https://github.com/rust-lang/rust/issues/106374).
