@@ -48,12 +48,13 @@ which aligns with the challenges to the adoption of the Semantic Web.
 The Rust HDT library is used through the included Sophia adapter by the RickView [@rickview] RDF browser to publish large knowledge bases, for example LinkedSpending [@linkedspending] at <https://linkedspending.aksw.org>,
 which previously suffered from frequent downtimes when based on a SPARQL endpoint.
 
-![Dataset loading time, memory usage (resident set size) and query time of different RDF libraries on an Intel i9-12900k CPU using the benchmarking environment of @sophia.
+![Dataset loading time, memory usage (resident set size) and query time of different RDF libraries on an Intel i9-12900k CPU using the benchmark suite of @sophia.
 librdf was not benchmarked on $10^6$ triples and beyond due to graph loading exceeding several hours.
 \label{fig:benchmark}](img/benchmark.png){ width=100% }
 
 # Acknowledgements
 
-We thank Pierre-Antoine Champin for explaining the details of Sophia and for supplying the benchmarking code.
+We thank Pierre-Antoine Champin for explaining the details of Sophia and for creating [the benchmark suite](https://github.com/pchampin/sophia_benchmark) 
+that the [HDT benchmarks](https://github.com/KonradHoeffner/hdt_benchmark) are based on.
 
 # References
