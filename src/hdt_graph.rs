@@ -4,12 +4,11 @@ use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
-use log::error;
+
 use sophia::api::graph::{GTripleSource, Graph};
 //use sophia::api::term;
 use mownstr::MownStr;
-use sophia::api::prelude::Triple;
-use sophia::api::source::{IntoTripleSource, TripleSource};
+
 use sophia::api::term::FromTerm;
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;
@@ -31,7 +30,7 @@ impl HdtGraph {
         self.hdt.size_in_bytes()
     }
 
-    fn term(&self, id: Id, kind: &'static IdKind) -> SimpleTerm<'static> {
+    fn id_term(&self, id: Id, kind: &'static IdKind) -> SimpleTerm<'static> {
         IriRef::new_unchecked(MownStr::from(self.hdt.dict.id_to_string(id, kind).unwrap())).into_term()
     }
 }
@@ -44,7 +43,7 @@ fn auto_term(s: MownStr) -> io::Result<SimpleTerm> {
         Some('"') => match s.rfind('"') {
             None => Err(Error::new(
                 ErrorKind::InvalidData,
-                format!("missing right quotation mark in literal string {}", s),
+                format!("missing right quotation mark in literal string {s}"),
             )),
             Some(index) => {
                 let lex = &s[1..index];
@@ -72,7 +71,7 @@ fn auto_term(s: MownStr) -> io::Result<SimpleTerm> {
                 }
             }
         },
-        Some('_') => Ok(BnodeId::new_unchecked(MownStr::from_str(&s[2..].to_owned())).into_term()),
+        Some('_') => Ok(BnodeId::new_unchecked(MownStr::from_str(&s[2..])).into_term()),
         _ => Ok(SimpleTerm::Iri(IriRef::new_unchecked(s))),
     }
 }
@@ -82,7 +81,7 @@ fn auto_term(s: MownStr) -> io::Result<SimpleTerm> {
 // not needed for property terms, as they can't be blank nodes
 fn term_string(t: &SimpleTerm) -> String {
     match t {
-        SimpleTerm::BlankNode(b) => "_:".to_owned() + &b.as_str(),
+        SimpleTerm::BlankNode(b) => "_:".to_owned() + b.as_str(),
         SimpleTerm::Iri(i) => i.as_str().to_owned(),
         SimpleTerm::LiteralLanguage(l, lang) => {
             format!("\"{l}\"@{}", lang.as_str())
@@ -93,7 +92,7 @@ fn term_string(t: &SimpleTerm) -> String {
             if dts == xsd_string {
                 format!("\"{l}\"")
             } else {
-                format!("\"{l}\"^^<{}>", dts)
+                format!("\"{l}\"^^<{dts}>")
             }
         }
         _ => {
@@ -109,7 +108,7 @@ impl Graph for HdtGraph {
     fn triples(&self) -> GTripleSource<Self> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         Box::new(self.hdt.triples().map(move |(s, p, o)| {
-            Ok([auto_term(s).unwrap(), SimpleTerm::Iri(IriRef::new_unchecked(p.into())), auto_term(o).unwrap()])
+            Ok([auto_term(s).unwrap(), SimpleTerm::Iri(IriRef::new_unchecked(p)), auto_term(o).unwrap()])
         }))
     }
 
@@ -162,24 +161,14 @@ impl Graph for HdtGraph {
             }
             (Some(s), None, Some(o)) => {
                 Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
-                    Ok([
-                        s.0.clone(),
-                        IriRef::new_unchecked(MownStr::from(
-                            self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
-                        ))
-                        .into_term(),
-                        o.0.clone(),
-                    ])
+                    Ok([s.0.clone(), self.id_term(t.predicate_id, &IdKind::Predicate), o.0.clone()])
                 }))
             }
             (Some(s), None, None) => {
                 Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
                     Ok([
                         s.0.clone(),
-                        IriRef::new_unchecked(MownStr::from(
-                            self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
-                        ))
-                        .into_term(),
+                        self.id_term(t.predicate_id, &IdKind::Predicate),
                         auto_term(MownStr::from(
                             self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
                         ))
@@ -188,39 +177,22 @@ impl Graph for HdtGraph {
                     ])
                 }))
             }
-            (None, Some(p), Some(o)) => {
-                Box::new(PredicateObjectIter::new(&self.hdt.triples, p.1, o.1).map(move |sid| {
-                    Ok([
-                        IriRef::new_unchecked(MownStr::from(
-                            self.hdt.dict.id_to_string(sid, &IdKind::Subject).unwrap(),
-                        ))
-                        .into_term(),
-                        p.0.clone(),
-                        o.0.clone(),
-                    ])
-                }))
-            }
+            (None, Some(p), Some(o)) => Box::new(
+                PredicateObjectIter::new(&self.hdt.triples, p.1, o.1)
+                    .map(move |sid| Ok([self.id_term(sid, &IdKind::Subject), p.0.clone(), o.0.clone()])),
+            ),
             (None, Some(p), None) => Box::new(PredicateIter::new(&self.hdt.triples, p.1).map(move |t| {
                 Ok([
-                    IriRef::new_unchecked(MownStr::from(
-                        self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap(),
-                    ))
-                    .into_term(),
+                    self.id_term(t.subject_id, &IdKind::Subject),
                     p.0.clone(),
-                    IriRef::new_unchecked(MownStr::from(
-                        self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
-                    ))
-                    .into_term(),
+                    self.id_term(t.object_id, &IdKind::Object),
                 ])
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
                 Ok([
                     auto_term(MownStr::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
                         .unwrap(),
-                    IriRef::new_unchecked(MownStr::from(
-                        self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
-                    ))
-                    .into_term(),
+                    self.id_term(t.predicate_id, &IdKind::Predicate),
                     o.0.clone(),
                 ])
             })),
@@ -233,14 +205,13 @@ impl Graph for HdtGraph {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use sophia::api::prelude::Triple;
     use sophia::api::term::matcher::Any;
     use std::fs::File;
-    use std::rc::Rc;
     use std::result::Result;
 
     #[test]
     fn test_graph() {
-        type T = Rc<str>;
         init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
@@ -265,7 +236,6 @@ mod tests {
                 .map(|triple| triple.as_ref().unwrap())
                 .filter(|triple| triple.s().iri().is_some() && triple.s().iri().unwrap().to_string() == uri)
                 .collect();
-            //println!("{triples:?}");
             let with_s: Vec<_> = graph.triples_matching(Some(term), Any, Any).map(Result::unwrap).collect();
             // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
             // could break in the future e.g. because of ordering
@@ -280,7 +250,6 @@ mod tests {
         let p = SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
         let o = SimpleTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
         assert!(graph.triples_matching(Any, Any, Some(o.clone())).next().is_some());
-        let triple = (&s, &p, &o);
 
         let tvec = vec![[s.clone(), p.clone(), o.clone()]];
         assert_eq!(
