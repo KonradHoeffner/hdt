@@ -13,6 +13,7 @@
 //! and acknowledgement of all the original authors, please look at the <https://github.com/rdfhdt> organisation.
 //!
 //! # Example of loading and querying an HDT file
+//! Note that this since version 0.0.13 (currently in alpha and not yet on crates.io), Hdt is no longer generic.
 //!
 //! ```no_run
 //! use hdt::Hdt;
@@ -38,6 +39,8 @@
 //! let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/ontology/major")));
 //! let majors = graph.triples_matching(Some(s),Some(p),Any);
 //! ```
+//!
+//! Note that the HdtGraph syntax has changed slightly in version 0.0.13 (currently in alpha and not yet on crates.io) to align with Sophia 0.0.8-alpha.
 //!
 //! # Optional features
 //!

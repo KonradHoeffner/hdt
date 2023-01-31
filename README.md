@@ -71,6 +71,8 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 hdt = { version = "0.0.12", default-features = false }
 ```
 
+Version 0.0.13 with a slightly different syntax is currently in development on the main branch but not yet released on [crates.io](https://crates.io/crates/hdt).
+
 ## Performance and Benchmarks
 [The benchmarks](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb) show the performance of this and some other RDF libraries.
 The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.
@@ -100,4 +102,4 @@ If have a different type of request, feel free to send an email to [Konrad](mail
 ### Contribute
 We are happy to receive pull requests.
 Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the nightly toolchain both with and without the "sophia" feature active.
-`cargo clippy` should not report any warnings, though currently there are [false positives with unnecessary\_to\_owned](https://github.com/rust-lang/rust/issues/106374).
+`cargo clippy` should not report any warnings.
