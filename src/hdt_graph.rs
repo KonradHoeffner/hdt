@@ -85,10 +85,16 @@ fn term_string(t: &SimpleTerm) -> String {
         SimpleTerm::BlankNode(b) => "_:".to_owned() + &b.as_str(),
         SimpleTerm::Iri(i) => i.as_str().to_owned(),
         SimpleTerm::LiteralLanguage(l, lang) => {
-            format!("{l}@{}", lang.as_str())
+            format!("\"{l}\"@{}", lang.as_str())
         }
         SimpleTerm::LiteralDatatype(l, dt) => {
-            format!("{l}@{}", dt.as_str())
+            let xsd_string: &str = "http://www.w3.org/2001/XMLSchema#string";
+            let dts = dt.as_str();
+            if dts == xsd_string {
+                format!("\"{l}\"")
+            } else {
+                format!("\"{l}\"^^<{}>", dts)
+            }
         }
         _ => {
             panic!("Variable term strings and RDF-star are not supported.");
@@ -134,11 +140,6 @@ impl Graph for HdtGraph {
             // at least one term does not exist in the graph
             return Box::new(iter::empty());
         }
-        //return Box::new(iter::empty());
-        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
-            // at least one term does not exist in the graph
-            return Box::new(iter::empty());
-        }
         // TODO: improve error handling
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
@@ -153,10 +154,9 @@ impl Graph for HdtGraph {
                     Ok([
                         s.0.clone(),
                         p.0.clone(),
-                        IriRef::new_unchecked(MownStr::from(
-                            self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
-                        ))
-                        .into_term(),
+                        auto_term(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap().into())
+                            .unwrap()
+                            .into_term(),
                     ])
                 }))
             }
@@ -180,9 +180,10 @@ impl Graph for HdtGraph {
                             self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
                         ))
                         .into_term(),
-                        IriRef::new_unchecked(MownStr::from(
+                        auto_term(MownStr::from(
                             self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
                         ))
+                        .expect("auto term failed with object")
                         .into_term(),
                     ])
                 }))
@@ -214,10 +215,8 @@ impl Graph for HdtGraph {
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
                 Ok([
-                    IriRef::new_unchecked(MownStr::from(
-                        self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap(),
-                    ))
-                    .into_term(),
+                    auto_term(MownStr::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
+                        .unwrap(),
                     IriRef::new_unchecked(MownStr::from(
                         self.hdt.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
                     ))
@@ -237,6 +236,7 @@ mod tests {
     use sophia::api::term::matcher::Any;
     use std::fs::File;
     use std::rc::Rc;
+    use std::result::Result;
 
     #[test]
     fn test_graph() {
@@ -245,7 +245,7 @@ mod tests {
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
-        let triples: Vec<_> = graph.triples().collect();
+        let triples: Vec<Result<[SimpleTerm<'_>; 3], Infallible>> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";
         assert!(graph
@@ -263,10 +263,10 @@ mod tests {
             let filtered: Vec<_> = triples
                 .iter()
                 .map(|triple| triple.as_ref().unwrap())
-                .filter(|triple| triple.s().iri().unwrap().to_string() == uri)
+                .filter(|triple| triple.s().iri().is_some() && triple.s().iri().unwrap().to_string() == uri)
                 .collect();
-            let with_s: Vec<_> =
-                graph.triples_matching(Some(term), Any, Any).map(std::result::Result::unwrap).collect();
+            //println!("{triples:?}");
+            let with_s: Vec<_> = graph.triples_matching(Some(term), Any, Any).map(Result::unwrap).collect();
             // Sophia strings can't be compared directly, use the Debug trait for string comparison that is more brittle and less elegant
             // could break in the future e.g. because of ordering
             let filtered_string = format!("{filtered:?}");
@@ -276,37 +276,31 @@ mod tests {
                 "different results between triples() and triples_with_s() for {uri}"
             );
         }
-        /*
-        let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(meta_top)));
-        let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(
-            "http://www.w3.org/2000/01/rdf-schema#label",
-        )));
-        let o = SimpleTerm::from(Literal::new_lang_unchecked("top class", "en"));
-        assert!(graph.triples_matching(&o).next().is_some());
+        let s = SimpleTerm::Iri(IriRef::new_unchecked(meta_top.into()));
+        let p = SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
+        let o = SimpleTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
+        assert!(graph.triples_matching(Any, Any, Some(o.clone())).next().is_some());
         let triple = (&s, &p, &o);
 
-        let sp = graph.triples_matching(Some(s), Some(p),None).map(std::result::Result::unwrap).collect::<Vec<_>>();
-        let so = graph.triples_matching(Some(s), Some(o)).map(std::result::Result::unwrap).collect::<Vec<_>>();
-        let po = graph.triples_matching(Some(p), Some(o)).map(std::result::Result::unwrap).collect::<Vec<_>>();
-        // can't use assert_eq! directly on streaming triple mode to compare triple with result of triples_with_...
-        // let triple_vec = vec![(&s,&p,&o)];
-        // assert_eq!(triple_vec,graph.triples_matching(&s,&p).map(std::result::Result::unwrap).collect::<Vec<_>>());
-        // assert_eq!(triple_vec,graph.triples_matching(&s,&o).map(std::result::Result::unwrap).collect::<Vec<_>>());
-        // assert_eq!(triple_vec,graph.triples_matching(&p,&o).map(std::result::Result::unwrap).collect::<Vec<_>>());
-        for vec in [sp, so, po] {
-            assert_eq!(1, vec.len());
-            let e = &vec[0];
-            assert_eq!(e.s(), triple.0);
-            assert_eq!(e.p(), triple.1);
-            assert_eq!(e.o(), triple.2);
-        }
-        assert!(graph.triples_matching(&SimpleTerm::from("22.10".to_owned())).count() == 1);
-        let date = &SimpleTerm::from(LiteralDatatype(
-            "2022-10-20",
-            Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#date"),
-        ));
-        assert!(graph.triples_matching(date).count() == 1);
-        */
+        let tvec = vec![[s.clone(), p.clone(), o.clone()]];
+        assert_eq!(
+            tvec,
+            graph.triples_matching(Some(s.clone()), Some(p.clone()), Any).map(Result::unwrap).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            tvec,
+            graph.triples_matching(Some(s.clone()), Any, Some(o.clone())).map(Result::unwrap).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            tvec,
+            graph.triples_matching(Any, Some(p.clone()), Some(o.clone())).map(Result::unwrap).collect::<Vec<_>>()
+        );
+        assert_eq!(1, graph.triples_matching(Any, Any, Some("22.10".into_term::<SimpleTerm>())).count());
+        let date = SimpleTerm::LiteralDatatype(
+            "2022-10-20".into(),
+            IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#date".into()),
+        );
+        assert_eq!(1, graph.triples_matching(Any, Any, Some(date)).count());
         // not in snik meta but only in local test file to make sure explicit xsd:string works
         /*
         let testo = &SimpleTerm::from(LiteralDatatype(
