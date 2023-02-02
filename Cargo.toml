@@ -28,9 +28,14 @@ mownstr = { git="https://github.com/pchampin/mownstr", rev="c88467d" }
 default = ["sophia"]
 sophia = ["dep:sophia"]
 
+[[bench]]
+name = "bench"
+harness = false
+
 [profile.test]
 opt-level = 1
 
 [dev-dependencies]
 pretty_assertions = "1.3"
 env_logger = { version = "0.10", default-features = false, features = ["auto-color"] }
+criterion = { version = "0.4.0", default-features = false, features = ["cargo_bench_support", "html_reports"] }
