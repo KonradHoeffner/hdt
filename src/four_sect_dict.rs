@@ -183,9 +183,9 @@ mod tests {
 
         let dict = FourSectDict::read(&mut reader).unwrap();
         assert_eq!(dict.shared.num_strings(), 43, "wrong number of strings in the shared section");
-        assert_eq!(dict.subjects.num_strings(), 5, "wrong number of strings in the subject section");
-        assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");
-        assert_eq!(dict.objects.num_strings(), 132, "wrong number of strings in the objects section");
+        assert_eq!(dict.subjects.num_strings(), 6, "wrong number of strings in the subject section");
+        assert_eq!(dict.predicates.num_strings(), 24, "wrong number of strings in the predicates section");
+        assert_eq!(dict.objects.num_strings(), 133, "wrong number of strings in the objects section");
         assert_eq!(dict.string_to_id("_:b1", &IdKind::Subject), 1);
         assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, &IdKind::Subject).unwrap());
         assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, &IdKind::Subject).unwrap());

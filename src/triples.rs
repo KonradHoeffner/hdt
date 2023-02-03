@@ -348,7 +348,7 @@ mod tests {
         let _dict = FourSectDict::read(&mut reader).unwrap();
         let triples = TriplesBitmap::read_sect(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
-        assert_eq!(v.len(), 327);
+        assert_eq!(v.len(), 328);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);
@@ -373,13 +373,13 @@ mod tests {
         assert_eq!(0, SubjectIter::empty(&triples).count());
         // SPO
         assert_eq!(
-            vec![TripleId::new(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, &TripleId::new(14, 14, 154)).collect::<Vec<_>>()
+            vec![TripleId::new(14, 15, 155)],
+            SubjectIter::with_pattern(&triples, &TripleId::new(14, 15, 155)).collect::<Vec<_>>()
         );
         // SP
         assert_eq!(
-            vec![TripleId::new(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, &TripleId::new(14, 14, 0)).collect::<Vec<_>>()
+            vec![TripleId::new(14, 15, 155)],
+            SubjectIter::with_pattern(&triples, &TripleId::new(14, 15, 0)).collect::<Vec<_>>()
         );
         // S??
         for i in 1..num_subjects {

@@ -204,7 +204,7 @@ mod tests {
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
-        assert_eq!(v.len(), 327);
+        assert_eq!(v.len(), 328);
         assert_eq!(v, hdt.triples_with_pattern(None, None, None).collect::<Vec<_>>(), "all triples not equal ???");
         assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
@@ -242,5 +242,7 @@ mod tests {
             hdt.triples_with_pattern(Some(meta), None, Some(snikeu)).collect::<Vec<_>>(),
             "S?O multiple"
         );
+        let o = "\"testo\"";
+        assert_eq!(1, hdt.triples_with_pattern(Some("http://tests"), Some("http://testp"), Some(o)).count(),);
     }
 }

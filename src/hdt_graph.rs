@@ -217,7 +217,7 @@ mod tests {
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
         let triples: Vec<Result<[SimpleTerm<'_>; 3], Infallible>> = graph.triples().collect();
-        assert_eq!(triples.len(), 327);
+        assert_eq!(triples.len(), 328);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";
         assert!(graph
             .triples_matching(
@@ -270,13 +270,10 @@ mod tests {
             IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#date".into()),
         );
         assert_eq!(1, graph.triples_matching(Any, Any, Some(date)).count());
-        // not in snik meta but only in local test file to make sure explicit xsd:string works
-        /*
-        let testo = &SimpleTerm::from(LiteralDatatype(
-            "testo",
-            Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#string"),
-        ));
-        assert!(graph.triples_matching(testo).count() == 1);
-        */
+        let testo = SimpleTerm::LiteralDatatype(
+            "testo".into(),
+            IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#string".into()),
+        );
+        assert!(graph.triples_matching(Any, Any, Some(testo)).count() == 1);
     }
 }
