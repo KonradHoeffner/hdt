@@ -204,12 +204,11 @@ impl DictSectPFC {
         if id as usize > self.num_strings {
             return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
         }
-
         let block_index = id.saturating_sub(1) as usize / self.block_size;
         let string_index = id.saturating_sub(1) as usize % self.block_size;
         let mut position = self.sequence.get(block_index);
         let mut slen = self.strlen(position);
-        let mut string: Vec<u8> = self.packed_data[position..position + slen].to_owned();
+        let mut string: Vec<u8> = self.packed_data[position..position + slen].to_vec();
         //println!("block_index={} string_index={}, string={}", block_index, string_index, str::from_utf8(&string).unwrap());
         // loop takes around nearly half the time of the function
         for _ in 0..string_index {
@@ -218,7 +217,7 @@ impl DictSectPFC {
             position += vbyte_bytes;
             slen = self.strlen(position);
             string.truncate(delta);
-            string.append(&mut self.packed_data[position..position + slen].to_owned());
+            string.extend_from_slice(&self.packed_data[position..position + slen]);
         }
         // tried simdutf8::basic::from_utf8 but that didn't speed up extract that much
         match str::from_utf8(&string) {
