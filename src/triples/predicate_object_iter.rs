@@ -14,10 +14,11 @@ pub struct PredicateObjectIter<'a> {
 }
 
 impl<'a> PredicateObjectIter<'a> {
-    /// Create a new iterator over all triples with the given object ID.
-    /// Panics if the object does not exist.
+    /// Create a new iterator over all triples with the given predicate and object ID.
+    /// Panics if the predicate or object ID is 0.
     pub fn new(triples: &'a TriplesBitmap, p: Id, o: Id) -> Self {
-        assert!(o != 0, "object 0 does not exist, cant iterate");
+        assert_ne!(0, p, "predicate 0 does not exist, cant iterate");
+        assert_ne!(0, o, "object 0 does not exist, cant iterate");
         let mut low = triples.op_index.find(o);
         let mut high = triples.op_index.last(o);
         let get_y = |pos_index| {
