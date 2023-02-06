@@ -32,6 +32,9 @@ sophia = ["dep:sophia"]
 name = "bench"
 harness = false
 
+[lib]
+bench = false
+
 [profile.test]
 opt-level = 1
 
