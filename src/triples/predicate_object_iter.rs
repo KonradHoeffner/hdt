@@ -8,7 +8,6 @@ use std::cmp::Ordering;
 /// Iterator over all subject IDs with a given predicate and object ID, answering an (?S,P,O) query.
 pub struct PredicateObjectIter<'a> {
     triples: &'a TriplesBitmap,
-    p: Id,
     pos_index: usize,
     max_index: usize,
 }
@@ -26,27 +25,41 @@ impl<'a> PredicateObjectIter<'a> {
             let pos_y = triples.adjlist_z.bitmap.dict.rank(pos_z, true);
             triples.wavelet_y.get(pos_y as usize) as Id
         };
+        // Binary search with a twist:
+        // Each value may occur multiple times, so we search for the left and right borders.
         while low <= high {
             let mut mid = (low + high) / 2;
             match get_y(mid).cmp(&p) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => {
-                    // Each value may occur multiple times, so we search for the left border.
-                    let mut border_high = high;
-                    while low < border_high {
-                        mid = (low + border_high) / 2;
+                    let mut left_high = mid;
+                    while low < left_high {
+                        mid = (low + left_high) / 2;
                         match get_y(mid).cmp(&p) {
                             Ordering::Less => low = mid + 1,
-                            _ => border_high = mid,
+                            Ordering::Greater => {
+                                high = mid;
+                                left_high = mid
+                            }
+                            Ordering::Equal => left_high = mid,
                         }
                     }
-                    return PredicateObjectIter { triples, p, pos_index: low, max_index: high };
+                    // right border
+                    let mut right_low = low;
+                    while right_low < high {
+                        mid = (right_low + high).div_ceil(2);
+                        match get_y(mid).cmp(&p) {
+                            Ordering::Greater => high = mid - 1,
+                            _ => right_low = mid,
+                        }
+                    }
+                    return PredicateObjectIter { triples, pos_index: low, max_index: high };
                 }
             }
         }
         // not found
-        PredicateObjectIter { triples, p, pos_index: 999, max_index: 0 }
+        PredicateObjectIter { triples, pos_index: 999, max_index: 0 }
     }
 }
 
@@ -58,11 +71,8 @@ impl<'a> Iterator for PredicateObjectIter<'a> {
         }
         let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
-        let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
+        //let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
         //println!(" op p {y}");
-        if y != self.p {
-            return None;
-        }
         let s = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
         self.pos_index += 1;
         Some(s)
