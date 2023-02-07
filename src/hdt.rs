@@ -220,15 +220,21 @@ mod tests {
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), Some(o)).collect::<Vec<_>>(), "SPO");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), "SP?");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), None, Some(o)).collect::<Vec<_>>(), "S?O");
-        assert_eq!(triple_vec, hdt.triples_with_pattern(None, Some(p), Some(o)).collect::<Vec<_>>(), "?P?");
+        assert_eq!(triple_vec, hdt.triples_with_pattern(None, Some(p), Some(o)).collect::<Vec<_>>(), "?PO");
         let et = "http://www.snik.eu/ontology/meta/EntityType";
-        assert_eq!(4, hdt.subjects_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).count());
+        let meta = "http://www.snik.eu/ontology/meta";
+        let subjects = ["ApplicationComponent", "Method", "RepresentationType", "SoftwareProduct"]
+            .map(|s| meta.to_owned() + "/" + s)
+            .to_vec();
+        assert_eq!(
+            subjects,
+            hdt.subjects_with_po("http://www.w3.org/2000/01/rdf-schema#subClassOf", et).collect::<Vec<_>>()
+        );
         assert_eq!(
             12,
             hdt.triples_with_pattern(None, Some("http://www.w3.org/2000/01/rdf-schema#subClassOf"), None).count()
         );
         assert_eq!(20, hdt.triples_with_pattern(None, None, Some(et)).count());
-        let meta = "http://www.snik.eu/ontology/meta";
         let snikeu = "http://www.snik.eu";
         let triple_vec = [
             "http://purl.org/dc/terms/publisher", "http://purl.org/dc/terms/source",
