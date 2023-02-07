@@ -22,6 +22,7 @@ fn bench_query(c: &mut Criterion) {
     // count to prevent optimizing away function call
     //let mut group = c.benchmark_group("S??");
     let mut group = c.benchmark_group("query");
+    /*
     group.bench_function("1 triple IDs (vincent, ?, ?)", |b| {
         b.iter(|| SubjectIter::with_pattern(&triples, &TripleId::new(vincent_id, 0, 0)).count())
     });
@@ -38,11 +39,15 @@ fn bench_query(c: &mut Criterion) {
         b.iter(|| ObjectIter::new(&triples, person_id).count())
     });
     group.bench_function("6 str triples (?, ?, person)", |b| b.iter(|| twp(None, None, Some(person)).count()));
+    */
     //group.finish();
     //let mut group = c.benchmark_group("?PO");
     group.sample_size(10);
     group.bench_function("7 triple IDs (?, type, person)", |b| {
         b.iter(|| PredicateObjectIter::new(&triples, type_id, person_id).count())
+    });
+    group.bench_function("7.5 triple IDs (?, type, person) PredicateObjectIter2", |b| {
+        b.iter(|| PredicateObjectIter2::new(&triples, type_id, person_id).count())
     });
     group.bench_function("8 str subjects (?, type, person)", |b| {
         b.iter(|| hdt.subjects_with_po(&type_, person).count())

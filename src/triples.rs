@@ -14,6 +14,8 @@ mod subject_iter;
 pub use subject_iter::SubjectIter;
 mod predicate_iter;
 pub use predicate_iter::PredicateIter;
+mod predicate_object_iter2;
+pub use predicate_object_iter2::PredicateObjectIter2;
 mod predicate_object_iter;
 pub use predicate_object_iter::PredicateObjectIter;
 mod object_iter;

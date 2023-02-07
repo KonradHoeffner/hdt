@@ -162,7 +162,7 @@ impl Hdt {
                 }))
             }
             (None, Some(p), Some(o)) => {
-                Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
+                Box::new(crate::triples::PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
                     (
                         MownStr::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
                         p.0.clone(),
