@@ -99,7 +99,7 @@ pub struct TriplesBitmap {
     pub bitmap_y: Bitmap,
     /// adjacency list storing the object IDs
     pub adjlist_z: AdjList,
-    /// index for object-based access
+    /// Index for object-based access. Points to the predicate layer.
     pub op_index: OpIndex,
     /// wavelet matrix for predicate-based access
     pub wavelet_y: WaveletMatrix,
@@ -212,7 +212,7 @@ impl TriplesBitmap {
         let mut sequence_z = Sequence::read(reader)?;
 
         // construct adjacency lists
-        // construct object-based index to traverse from the leaves and support O?? queries
+        // construct object-based index to traverse from the leaves and support ??O and ?PO queries
         debug!("Building OPS index...");
         let entries = sequence_z.entries;
         // if it takes too long to calculate, can also pass in as parameter
@@ -224,26 +224,29 @@ impl TriplesBitmap {
         // In https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
         // they count the number of appearances in a sequence instead, which saves memory
         // temporarily but they need to loop over it an additional time.
-        for i in 0..entries {
-            let object = sequence_z.get(i);
+        for pos_z in 0..entries {
+            let object = sequence_z.get(pos_z);
             if object == 0 {
                 error!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            indicess[object - 1].push(i as u32); // hdt index counts from 1 but we count from 0 for simplicity
+            let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
+            indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
         let wavelet_y = wavelet_thread.join().unwrap();
+        /*
         let get_p = |pos_z: u32| {
             let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
             wavelet_y.get(pos_y as usize) as Id
         };
+        */
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
-            indices.sort_by_cached_key(|a| get_p(*a));
+            indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize));
             for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;

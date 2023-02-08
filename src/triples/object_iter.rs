@@ -21,7 +21,6 @@ impl<'a> ObjectIter<'a> {
     pub fn new(triples: &'a TriplesBitmap, o: Id) -> Self {
         assert!(o != 0, "object 0 does not exist, cant iterate");
         let pos_index = triples.op_index.find(o);
-        //debug_assert_eq!(o, triples.adjlist_z.get_id(pos_z as usize));
         let max_index = triples.op_index.last(o);
         //println!("ObjectIter o={} pos_index={} max_index={}", o, pos_index, max_index);
         ObjectIter { triples, o, pos_index, max_index }
@@ -34,8 +33,7 @@ impl<'a> Iterator for ObjectIter<'a> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_z = self.triples.op_index.sequence.get(self.pos_index) as u64;
-        let pos_y = self.triples.adjlist_z.bitmap.dict.rank(pos_z, true);
+        let pos_y = self.triples.op_index.sequence.get(self.pos_index) as u64;
         let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
         let x = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
         self.pos_index += 1;
