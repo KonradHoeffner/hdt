@@ -2,12 +2,11 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use hdt::triples::*;
 use hdt::Hdt;
 use hdt::IdKind;
-use sophia::api::ns::rdf;
 use std::fs::File;
 
 fn bench_query(c: &mut Criterion) {
     let vincent = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";
-    let type_ = rdf::type_.to_string();
+    let type_ = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
     let person = "http://dbpedia.org/ontology/Person";
     let file = File::open("tests/resources/persondata_en.hdt").expect("error opening file");
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");

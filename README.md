@@ -30,12 +30,12 @@ Add the following to Cargo.toml:
 
 ```toml
 [dependencies]
-hdt = "0.0.12"
+hdt = "0.0.13-alpha.0"
 ```
 
-Since version 0.0.7, nightly is required:
+Nightly is required:
 
-    rustup component add rustfmt --toolchain nightly
+    rustup toolchain install nightly
 
 ## Examples
 
@@ -43,9 +43,9 @@ Since version 0.0.7, nightly is required:
 use hdt::Hdt;
 
 let file = std::fs::File::open("example.hdt").expect("error opening file");
-let hdt = Hdt::Rc<str>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 // query
-let majors = hdt.triples_with_sp("http://dbpedia.org/resource/Leipzig", "http://dbpedia.org/ontology/major");
+let majors = hdt.triples_with_pattern(Some("http://dbpedia.org/resource/Leipzig"), Some("http://dbpedia.org/ontology/major"),None);
 println!("{:?}", majors.collect::<Vec<_>>());
 ```
 
@@ -53,28 +53,26 @@ You can also use the Sophia adapter to load HDT files and reduce memory consumpt
 
 ```rust
 use hdt::{Hdt,HdtGraph};
-use sophia::term::BoxTerm;
-use sophia::graph::Graph;
+use sophia::api::graph::Graph;
+use sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
+use mownstr::MownStr;
 
 let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-let hdt = Hdt::<std::rc::Rc<str>>::new(std::io::BufReader::new(file)).expect("error loading HDT");
+let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 let graph = HdtGraph::new(hdt);
-let s = BoxTerm::new_iri_unchecked("http://dbpedia.org/resource/Leipzig");
-let p = BoxTerm::new_iri_unchecked("http://dbpedia.org/ontology/major");
-let majors = graph.triples_with_sp(&s,&p);
+let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/resource/Leipzig")));
+let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/ontology/major")));
+let majors = graph.triples_matching(Some(s),Some(p),Any);
 ```
 
 If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.0.12", default-features = false }
+hdt = { version = "0.0.13-alpha.0", default-features = false }
 ```
 
-Version 0.0.13 with a slightly different syntax is currently in development on the main branch but not yet released on [crates.io](https://crates.io/crates/hdt).
-
-## Performance and Benchmarks
-[The benchmarks](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb) show the performance of this and some other RDF libraries.
+## Performance
 The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.
 When using large HDT files, make sure to enable the release profile, such as through `cargo build --release`, as this can be much faster than using the dev profile.
 
@@ -92,6 +90,16 @@ The provided test data is very small in order to keep the size of the crate down
     $ perf script > /tmp/test.perf
 
 Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
+
+## Library benchmark
+
+    cargo bench
+
+* requires [persondata\_en.ttl](http://downloads.dbpedia.org/2016-10/core-i18n/en/persondata_en.ttl.bz2) converted to HDT placed in `tests/resources`
+
+## Comparative benchmark suite
+
+[The separate benchmark suite](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb) compares the performance of this and some other RDF libraries.
 
 ## Community Guidelines
 
