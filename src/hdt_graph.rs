@@ -1,13 +1,13 @@
-//! *This module is available only if HDT is built with the `"sophia"` feature.*
-#[cfg(feature = "sophia")]
+// //! *This module is available only if HDT is built with the `"sophia"` feature.*
+//#[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
 
 use sophia::api::graph::{GTripleSource, Graph};
-//use sophia::api::term;
-use mownstr::MownStr;
+//use mownstr::MownStr;
+use sophia::api::MownStr;
 
 use sophia::api::term::FromTerm;
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};

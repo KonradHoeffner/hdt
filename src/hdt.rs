@@ -5,7 +5,8 @@ use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use log::{debug, error};
-use mownstr::MownStr;
+//use mownstr::MownStr;
+use sophia::api::MownStr;
 use std::io;
 use std::iter;
 use thiserror::Error;

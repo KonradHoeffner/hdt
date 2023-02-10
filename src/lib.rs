@@ -13,7 +13,6 @@
 //! and acknowledgement of all the original authors, please look at the <https://github.com/rdfhdt> organisation.
 //!
 //! # Example of loading and querying an HDT file
-//! Note that this since version 0.0.13 (currently in alpha and not yet on crates.io), Hdt is no longer generic.
 //!
 //! ```no_run
 //! use hdt::Hdt;
@@ -31,23 +30,21 @@
 //! use hdt::{Hdt,HdtGraph};
 //! use sophia::api::graph::Graph;
 //! use sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
-//! use mownstr::MownStr;
+//! //use mownstr::MownStr;
 //! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
 //! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! let graph = HdtGraph::new(hdt);
-//! let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/resource/Leipzig")));
-//! let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/ontology/major")));
+//! let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
+//! let p = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/ontology/major".into()));
 //! let majors = graph.triples_matching(Some(s),Some(p),Any);
 //! ```
 //!
-//! Note that the HdtGraph syntax has changed slightly in version 0.0.13 (currently in alpha and not yet on crates.io) to align with Sophia 0.0.8-alpha.
-//!
-//! # Optional features
-//!
-//! The following features are available.
-//!
-//! - **`sophia`** *(enabled by default)* — Implements the Graph trait from the [Sophia](https://crates.io/crates/sophia) RDF toolkit.
-//! This allows you to drastically reduce the RAM usage of an existing application based on Sophia that loads a large knowledge base but requires an input file in the HDT format.
+// # Optional features
+//
+// The following features are available.
+//
+// - **`sophia`** *(enabled by default)* — Implements the Graph trait from the [Sophia](https://crates.io/crates/sophia) RDF toolkit.
+// This allows you to drastically reduce the RAM usage of an existing application based on Sophia that loads a large knowledge base but requires an input file in the HDT format.
 #![feature(round_char_boundary)]
 #![feature(int_roundings)]
 #![warn(missing_docs)]
@@ -71,7 +68,7 @@ mod dict_sect_pfc;
 mod four_sect_dict;
 /// Types for representing triple sections.
 pub mod hdt;
-#[cfg(feature = "sophia")]
+//#[cfg(feature = "sophia")]
 /// Adapter for the Sophia library.
 pub mod hdt_graph;
 /// Types for representing the header.
@@ -84,7 +81,7 @@ use containers::ControlInfo;
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;
-#[cfg(feature = "sophia")]
+//#[cfg(feature = "sophia")]
 #[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
 pub use hdt_graph::HdtGraph;
 
