@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 bytesize = "1.1.0"
+crc = "3.0"
 crc-any = "2.3"
 iref = "2.2"
 langtag = "^0.3.2"
