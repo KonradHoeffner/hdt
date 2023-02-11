@@ -1,4 +1,3 @@
-use crc_any::CRCu16;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::io;
@@ -52,7 +51,8 @@ impl ControlInfo {
         use io::ErrorKind::{InvalidData, UnexpectedEof};
 
         // Keep track of what we are reading for computing the CRC afterwards.
-        let mut history: Vec<u8> = Vec::new();
+        let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
+        let mut digest = crc.digest();
 
         // 1. Read the HDT Cookie
         let mut hdt_cookie: [u8; 4] = [0; 4];
@@ -60,18 +60,18 @@ impl ControlInfo {
         if &hdt_cookie != b"$HDT" {
             return Err(Error::new(InvalidData, "Chunk is invalid HDT Control Information"));
         }
-        history.extend_from_slice(&hdt_cookie);
+        digest.update(&hdt_cookie);
 
         // 2. Read the Control Type
         let mut control_type: [u8; 1] = [0; 1];
         reader.read_exact(&mut control_type)?;
-        history.extend_from_slice(&control_type);
+        digest.update(&control_type);
         let control_type = ControlType::try_from(control_type[0])?;
 
         // 3. Read the Format
         let mut format = Vec::new();
         reader.read_until(0x00, &mut format)?;
-        history.extend_from_slice(&format);
+        digest.update(&format);
         if format.pop() != Some(0x00) {
             return Err(Error::from(UnexpectedEof));
         }
@@ -80,7 +80,7 @@ impl ControlInfo {
         // 4. Read the Properties
         let mut prop_str = Vec::new();
         reader.read_until(0x00, &mut prop_str)?;
-        history.extend_from_slice(&prop_str);
+        digest.update(&prop_str);
         if prop_str.pop() != Some(0x00) {
             return Err(Error::from(UnexpectedEof));
         }
@@ -99,9 +99,7 @@ impl ControlInfo {
         let crc_code: u16 = u16::from_le_bytes(crc_code);
 
         // 6. Check the CRC
-        let mut crc = CRCu16::crc16();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
+        if digest.finalize() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC16-ANSI checksum"));
         }
 
