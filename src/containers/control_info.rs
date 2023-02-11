@@ -57,10 +57,8 @@ impl ControlInfo {
         // 1. Read the HDT Cookie
         let mut hdt_cookie: [u8; 4] = [0; 4];
         reader.read_exact(&mut hdt_cookie)?;
-        if let Ok(hdt_cookie) = str::from_utf8(&hdt_cookie) {
-            if hdt_cookie != "$HDT" {
-                return Err(Error::new(InvalidData, "Chunk is invalid HDT Control Information"));
-            }
+        if &hdt_cookie != b"$HDT" {
+            return Err(Error::new(InvalidData, "Chunk is invalid HDT Control Information"));
         }
         history.extend_from_slice(&hdt_cookie);
 
