@@ -49,7 +49,7 @@ impl ControlInfo {
     /// Read and verify control information.
     pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         use io::Error;
-        use io::ErrorKind::InvalidData;
+        use io::ErrorKind::{InvalidData, UnexpectedEof};
 
         // Keep track of what we are reading for computing the CRC afterwards.
         let mut history: Vec<u8> = Vec::new();
@@ -72,10 +72,8 @@ impl ControlInfo {
         let mut format = Vec::new();
         reader.read_until(0x00, &mut format)?;
         history.extend_from_slice(&format);
-        if format.pop().is_none() {
-            // We failed to get rid of the trailing 0x00 byte,
-            // in theory we should never reach this branch.
-            unreachable!();
+        if format.pop() != Some(0x00) {
+            return Err(Error::from(UnexpectedEof));
         }
         let format = String::from_utf8(format).map_err(|e| Error::new(InvalidData, e))?;
 
@@ -83,10 +81,8 @@ impl ControlInfo {
         let mut prop_str = Vec::new();
         reader.read_until(0x00, &mut prop_str)?;
         history.extend_from_slice(&prop_str);
-        if prop_str.pop().is_none() {
-            // We failed to get rid of the trailing 0x00 byte,
-            // in theory we should never reach this branch.
-            unreachable!();
+        if prop_str.pop() != Some(0x00) {
+            return Err(Error::from(UnexpectedEof));
         }
         let prop_str = String::from_utf8(prop_str).map_err(|e| Error::new(InvalidData, e))?;
         let mut properties = HashMap::new();
