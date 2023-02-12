@@ -11,6 +11,7 @@ use std::fmt;
 use std::io;
 use std::io::BufRead;
 use std::str;
+use std::sync::Arc;
 use std::thread;
 use thiserror::Error;
 
@@ -20,7 +21,7 @@ pub struct DictSectPFC {
     num_strings: usize,
     block_size: usize,
     sequence: Sequence,
-    packed_data: Vec<u8>,
+    packed_data: Arc<[u8]>,
     /// whether CRC check was successful
     pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
@@ -287,14 +288,12 @@ impl DictSectPFC {
         // read packed data
         let mut packed_data = vec![0u8; packed_length];
         reader.read_exact(&mut packed_data)?;
+        let packed_data = Arc::<[u8]>::from(packed_data);
 
         // read packed data CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
-        // validate packed data CRC32
-        // higher temporary memory usage but CRC can be calculated in parallel
-        // TODO can this be done without cloning?
-        let cloned_data = packed_data.clone();
+        let cloned_data = Arc::clone(&packed_data);
         let crc_handle = Some(thread::spawn(move || {
             let crc_code = u32::from_le_bytes(crc_code);
             let mut crc = CRCu32::crc32c();
