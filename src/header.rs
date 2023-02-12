@@ -67,7 +67,7 @@ impl Header {
 
             Ok(Header { format: header_ci.format, length, body })
         } else {
-            Err(Error::new(InvalidData, "Header is missing header length."))
+            Err(Error::new(InvalidData, "Header's length is missing or invalid"))
         }
     }
 }
