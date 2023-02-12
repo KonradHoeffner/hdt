@@ -4,7 +4,6 @@ use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::containers::Sequence;
 use crate::triples::Id;
 use bytesize::ByteSize;
-use crc_any::{CRCu32, CRCu8};
 use log::error;
 use std::cmp::{min, Ordering};
 use std::fmt;
@@ -259,16 +258,18 @@ impl DictSectPFC {
         }
 
         // read section meta data
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest = crc.digest();
         // The CRC includes the type of the block, inaccuracy in the spec, careful.
-        let mut buffer = vec![0x02_u8];
+        digest.update(&[0x02]);
         // This was determined based on https://git.io/JthMG because the spec on this
         // https://www.rdfhdt.org/hdt-binary-format was inaccurate, it's 3 vbytes, not 2.
         let (num_strings, bytes_read) = read_vbyte(reader)?;
-        buffer.extend_from_slice(&bytes_read);
+        digest.update(&bytes_read);
         let (packed_length, bytes_read) = read_vbyte(reader)?;
-        buffer.extend_from_slice(&bytes_read);
+        digest.update(&bytes_read);
         let (block_size, bytes_read) = read_vbyte(reader)?;
-        buffer.extend_from_slice(&bytes_read);
+        digest.update(&bytes_read);
 
         // read section CRC8
         let mut crc_code = [0_u8];
@@ -276,9 +277,7 @@ impl DictSectPFC {
         let crc_code = crc_code[0];
 
         // validate section CRC8
-        let mut crc = CRCu8::crc8();
-        crc.digest(&buffer[..]);
-        if crc.get_crc() != crc_code {
+        if digest.finalize() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
         }
 
@@ -295,10 +294,10 @@ impl DictSectPFC {
         reader.read_exact(&mut crc_code)?;
         let cloned_data = Arc::clone(&packed_data);
         let crc_handle = Some(thread::spawn(move || {
-            let crc_code = u32::from_le_bytes(crc_code);
-            let mut crc = CRCu32::crc32c();
-            crc.digest(&cloned_data[..]);
-            crc.get_crc() == crc_code
+            let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+            let mut digest = crc.digest();
+            digest.update(&cloned_data[..]);
+            digest.finalize() == u32::from_le_bytes(crc_code)
         }));
 
         Ok(DictSectPFC { num_strings, block_size, sequence, packed_data, crc_handle })
