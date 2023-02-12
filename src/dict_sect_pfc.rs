@@ -11,7 +11,7 @@ use std::io;
 use std::io::BufRead;
 use std::str;
 use std::sync::Arc;
-use std::thread;
+use std::thread::{spawn, JoinHandle};
 use thiserror::Error;
 
 /// Dictionary section with plain front coding.
@@ -21,8 +21,6 @@ pub struct DictSectPFC {
     block_size: usize,
     sequence: Sequence,
     packed_data: Arc<[u8]>,
-    /// whether CRC check was successful
-    pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -245,7 +243,7 @@ impl DictSectPFC {
         self.num_strings
     }
 
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<(Self, JoinHandle<bool>)> {
         use io::Error;
         use io::ErrorKind::InvalidData;
 
@@ -293,14 +291,14 @@ impl DictSectPFC {
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
         let cloned_data = Arc::clone(&packed_data);
-        let crc_handle = Some(thread::spawn(move || {
+        let crc_handle = spawn(move || {
             let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
             let mut digest = crc.digest();
             digest.update(&cloned_data[..]);
             digest.finalize() == u32::from_le_bytes(crc_code)
-        }));
+        });
 
-        Ok(DictSectPFC { num_strings, block_size, sequence, packed_data, crc_handle })
+        Ok((DictSectPFC { num_strings, block_size, sequence, packed_data }, crc_handle))
     }
 }
 
@@ -337,7 +335,7 @@ mod tests {
             dict_ci.format
         );
 
-        let shared = DictSectPFC::read(&mut reader).unwrap();
+        let (shared, _) = DictSectPFC::read(&mut reader).unwrap();
         // the file contains IRIs that are used both as subject and object 23128
         assert_eq!(shared.num_strings, 43);
         assert_eq!(shared.packed_data.len(), 614);
@@ -351,7 +349,7 @@ mod tests {
         let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
         assert_eq!(sequence.data.len(), data_size);
 
-        let subjects = DictSectPFC::read(&mut reader).unwrap();
+        let (subjects, _) = DictSectPFC::read(&mut reader).unwrap();
         assert_eq!(subjects.num_strings, 5);
         for term in [
             "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
