@@ -5,6 +5,7 @@ use crate::ControlInfo;
 use crate::DictSectPFC;
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
+use std::thread::JoinHandle;
 use thiserror::Error;
 
 /// Position in an RDF triple.
@@ -110,36 +111,21 @@ impl FourSectDict {
         }
     }
 
-    /// Validates the checksums of all dictionary sections in parallel.
-    /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
-    /// This function must NOT be called more than once.
-    // TODO can this be simplified?
-    pub fn validate(&mut self) -> io::Result<()> {
-        let sects = [&mut self.shared, &mut self.subjects, &mut self.predicates, &mut self.objects];
-        let names = ["shared", "subject", "predicate", "object"];
-        for i in 0..sects.len() {
-            if !sects[i].crc_handle.take().unwrap().join().unwrap() {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("CRC Error in {} dictionary section.", names[i]),
-                ));
-            }
-        }
-        Ok(())
-    }
-
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<UnvalidatedFourSectDict> {
         use io::ErrorKind::InvalidData;
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
             return Err(Error::new(InvalidData, "Implementation only supports four section dictionaries"));
         }
 
-        Ok(FourSectDict {
-            shared: DictSectPFC::read(reader)?,
-            subjects: DictSectPFC::read(reader)?,
-            predicates: DictSectPFC::read(reader)?,
-            objects: DictSectPFC::read(reader)?,
+        let (shared, shared_crc) = DictSectPFC::read(reader)?;
+        let (subjects, subjects_crc) = DictSectPFC::read(reader)?;
+        let (predicates, predicates_crc) = DictSectPFC::read(reader)?;
+        let (objects, objects_crc) = DictSectPFC::read(reader)?;
+
+        Ok(UnvalidatedFourSectDict {
+            four_sect_dict: FourSectDict { shared, subjects, predicates, objects },
+            crc_handles: [shared_crc, subjects_crc, predicates_crc, objects_crc],
         })
     }
     /*
@@ -163,6 +149,31 @@ impl FourSectDict {
     }
 }
 
+/// A wrapper to ensure prevent using FourSectDict before its checksum have been validated
+pub struct UnvalidatedFourSectDict {
+    four_sect_dict: FourSectDict,
+    crc_handles: [JoinHandle<bool>; 4],
+}
+
+impl UnvalidatedFourSectDict {
+    /// Validates the checksums of all dictionary sections in parallel.
+    /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
+    /// This function must NOT be called more than once.
+    // TODO can this be simplified?
+    pub fn validate(self) -> io::Result<FourSectDict> {
+        let names = ["shared", "subject", "predicate", "object"];
+        for (name, handle) in names.iter().zip(self.crc_handles.into_iter()) {
+            if !handle.join().unwrap() {
+                return Err(Error::new(
+                    ErrorKind::InvalidData,
+                    format!("CRC Error in {name} dictionary section."),
+                ));
+            }
+        }
+        Ok(self.four_sect_dict)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,7 +192,7 @@ mod tests {
         ControlInfo::read(&mut reader).unwrap();
         Header::read(&mut reader).unwrap();
 
-        let dict = FourSectDict::read(&mut reader).unwrap();
+        let dict = FourSectDict::read(&mut reader).unwrap().validate().unwrap();
         assert_eq!(dict.shared.num_strings(), 43, "wrong number of strings in the shared section");
         assert_eq!(dict.subjects.num_strings(), 5, "wrong number of strings in the subject section");
         assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");

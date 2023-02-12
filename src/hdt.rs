@@ -42,9 +42,9 @@ impl Hdt {
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
-        let mut dict = FourSectDict::read(&mut reader)?;
+        let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let triples = TriplesBitmap::read_sect(&mut reader)?;
-        dict.validate()?;
+        let dict = unvalidated_dict.validate()?;
         let hdt = Hdt { dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
