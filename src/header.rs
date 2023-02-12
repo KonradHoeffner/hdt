@@ -36,7 +36,9 @@ impl Header {
             let mut body = BTreeSet::new();
 
             for line_slice in body_buffer.split(|b| b == &b'\n') {
-                if let Ok(Some(triple)) = triple_line(str::from_utf8(line_slice).unwrap()) {
+                let line =
+                    str::from_utf8(line_slice).map_err(|_| Error::new(InvalidData, "Header is not UTF-8"))?;
+                if let Ok(Some(triple)) = triple_line(line) {
                     let subject = match triple.subject {
                         ntriple::Subject::IriRef(iri) => Id::Named(iri),
                         ntriple::Subject::BNode(id) => Id::Blank(id),
