@@ -138,9 +138,6 @@ impl Sequence {
         reader.read_exact(&mut full_words)?;
         let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / 8 + 2);
         // read entry body
-        // keep track of history for CRC32
-        let mut history: Vec<u8> = Vec::with_capacity(full_byte_amount + 8);
-        history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize values
         for word in full_words.chunks_exact(size_of::<usize>()) {
@@ -150,6 +147,9 @@ impl Sequence {
                 return Err(Error::new(Other, "failed to read usize"));
             }
         }
+
+        // keep track of history for CRC32
+        let mut history = full_words;
 
         // read the last few bits, byte aligned
         let mut bits_read = 0;
