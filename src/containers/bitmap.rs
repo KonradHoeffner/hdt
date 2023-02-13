@@ -96,9 +96,6 @@ impl Bitmap {
         // div_ceil is unstable
         let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
-        // reset history for CRC32
-        history = Vec::with_capacity(full_byte_amount + 100);
-        history.extend_from_slice(&full_words);
 
         // turn the raw bytes into usize/u64 values
         for word in full_words.chunks_exact(size_of::<u64>()) {
@@ -108,6 +105,9 @@ impl Bitmap {
                 return Err(Error::new(Other, "failed to read u64"));
             }
         }
+
+        // reset history for CRC32
+        let mut history = full_words;
 
         let mut bits_read = 0;
         let mut last_value: u64 = 0;
