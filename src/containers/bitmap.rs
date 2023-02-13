@@ -1,7 +1,6 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
-use crc_any::{CRCu32, CRCu8};
 use rsdict::RsDict;
 use std::convert::TryFrom;
 use std::fmt;
@@ -84,9 +83,10 @@ impl Bitmap {
         let crc_code = crc_code[0];
 
         // validate section CRC8
-        let mut crc = CRCu8::crc8();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
+        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest = crc8.digest();
+        digest.update(&history);
+        if digest.finalize() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
         }
 
@@ -106,8 +106,10 @@ impl Bitmap {
             }
         }
 
-        // reset history for CRC32
-        let mut history = full_words;
+        // initiate computation of CRC32
+        let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut digest = crc32.digest();
+        digest.update(&full_words);
 
         let mut bits_read = 0;
         let mut last_value: u64 = 0;
@@ -116,7 +118,7 @@ impl Bitmap {
         while bits_read < last_word_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
-            history.extend_from_slice(&buffer);
+            digest.update(&buffer);
             last_value |= (buffer[0] as u64) << bits_read;
             bits_read += 8;
         }
@@ -128,9 +130,7 @@ impl Bitmap {
         let crc_code = u32::from_le_bytes(crc_code);
 
         // validate entry body CRC32
-        let mut crc = CRCu32::crc32c();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
+        if digest.finalize() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
         }
 
