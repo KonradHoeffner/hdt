@@ -1,6 +1,5 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
-use crc_any::{CRCu32, CRCu8};
 use std::fmt;
 use std::io;
 use std::io::BufRead;
@@ -123,9 +122,10 @@ impl Sequence {
         let crc_code = crc_code[0];
 
         // validate entry metadata CRC8
-        let mut crc = CRCu8::crc8();
-        crc.digest(&history[..]);
-        if crc.get_crc() != crc_code {
+        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest = crc8.digest();
+        digest.update(&history);
+        if digest.finalize() != crc_code {
             return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
         }
 
@@ -171,9 +171,10 @@ impl Sequence {
             let crc_code = u32::from_le_bytes(crc_code);
 
             // validate entry body CRC32
-            let mut crc = CRCu32::crc32c();
-            crc.digest(&history[..]);
-            crc.get_crc() == crc_code
+            let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+            let mut digest = crc32.digest();
+            digest.update(&history);
+            digest.finalize() == crc_code
         }));
 
         Ok(Sequence { entries, bits_per_entry, data, crc_handle })
