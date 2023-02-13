@@ -28,10 +28,10 @@
 //!
 //! ```no_run
 //! use hdt::{Hdt,HdtGraph};
-//! use sophia::api::graph::Graph;
-//! use sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
-//! //use mownstr::MownStr;
+//! use hdt::sophia::api::graph::Graph;
+//! use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
 //! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
+//!
 //! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 //! let graph = HdtGraph::new(hdt);
 //! let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
@@ -68,6 +68,8 @@ mod dict_sect_pfc;
 mod four_sect_dict;
 /// Types for representing triple sections.
 pub mod hdt;
+#[cfg(feature = "sophia")]
+pub use sophia;
 #[cfg(feature = "sophia")]
 /// Adapter for the Sophia library.
 pub mod hdt_graph;

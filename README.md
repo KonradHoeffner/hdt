@@ -49,19 +49,18 @@ let majors = hdt.triples_with_pattern(Some("http://dbpedia.org/resource/Leipzig"
 println!("{:?}", majors.collect::<Vec<_>>());
 ```
 
-You can also use the Sophia adapter to load HDT files and reduce memory consumption of an existing application based on Sophia:
+You can also use the Sophia adapter to load HDT files and reduce memory consumption of an existing application based on Sophia, which is re-exported as `hdt::sophia`:
 
 ```rust
 use hdt::{Hdt,HdtGraph};
-use sophia::api::graph::Graph;
-use sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
-use mownstr::MownStr;
+use hdt::sophia::api::graph::Graph;
+use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
 
 let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
 let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
 let graph = HdtGraph::new(hdt);
-let s = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/resource/Leipzig")));
-let p = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str("http://dbpedia.org/ontology/major")));
+let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
+let p = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/ontology/major".into()));
 let majors = graph.triples_matching(Some(s),Some(p),Any);
 ```
 
@@ -71,6 +70,10 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 [dependencies]
 hdt = { version = "0.0.13-alpha.0", default-features = false }
 ```
+
+## API Documentation
+
+See [docs.rs/latest/hdt](https://docs.rs/hdt) or generate for yourself with `cargo doc --no-deps` without disabling default features.
 
 ## Performance
 The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.
