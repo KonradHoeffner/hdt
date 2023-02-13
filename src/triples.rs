@@ -122,7 +122,7 @@ impl TriplesBitmap {
         let triples_ci = ControlInfo::read(reader)?;
 
         match &triples_ci.format[..] {
-            "<http://purl.org/HDT/hdt#triplesBitmap>" => Ok(TriplesBitmap::read(reader, &triples_ci)?),
+            "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::read(reader, &triples_ci),
             "<http://purl.org/HDT/hdt#triplesList>" => {
                 Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
             }
