@@ -123,17 +123,17 @@ impl Graph for HdtGraph {
         O: TermMatcher + 's,
     {
         let xso = sm.constant().map(|s| {
-            let simple = SimpleTerm::from_term(s.as_simple());
+            let simple = SimpleTerm::from_term(s.borrow_term());
             let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Subject);
             (simple, id)
         });
         let xpo = pm.constant().map(|p| {
-            let simple = SimpleTerm::from_term(p.as_simple());
+            let simple = SimpleTerm::from_term(p.borrow_term());
             let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Predicate);
             (simple, id)
         });
         let xoo = om.constant().map(|o| {
-            let simple = SimpleTerm::from_term(o.as_simple());
+            let simple = SimpleTerm::from_term(o.borrow_term());
             let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Object);
             (simple, id)
         });
