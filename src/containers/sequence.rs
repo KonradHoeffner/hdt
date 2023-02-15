@@ -76,7 +76,7 @@ impl Sequence {
         } else {
             let block_shift = (USIZE_BITS << 1) - bit_index - self.bits_per_entry;
             result = self.data[block_index] >> bit_index;
-            result |= (self.data[(block_index + 1)] << block_shift) >> result_shift;
+            result |= (self.data[block_index + 1] << block_shift) >> result_shift;
         }
         result
     }

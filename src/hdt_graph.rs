@@ -30,7 +30,10 @@ impl HdtGraph {
     }
 
     fn id_term(&self, id: Id, kind: &'static IdKind) -> SimpleTerm<'static> {
-        IriRef::new_unchecked(MownStr::from(self.hdt.dict.id_to_string(id, kind).unwrap())).into_term()
+        let s = MownStr::from(self.hdt.dict.id_to_string(id, kind).unwrap());
+        auto_term(s).unwrap()
+        // TODO: optimize by excluding cases depending on the id kind
+        //IriRef::new_unchecked(MownStr::from(s)).into_term()
     }
 }
 
@@ -269,6 +272,18 @@ mod tests {
             IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#date".into()),
         );
         assert_eq!(1, graph.triples_matching(Any, Any, Some(date)).count());
+        // test for errors involving blank nodes
+        let blank = SimpleTerm::BlankNode(BnodeId::new_unchecked("b1".into()));
+        // blank node as input
+        assert_eq!(3, graph.triples_matching(Some(&blank), Any, Any).count());
+        assert_eq!(1, graph.triples_matching(Any, Any, Some(&blank)).count());
+        // blank node as output
+        let rdftype =
+            SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".into()));
+        let owlrestriction =
+            SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2002/07/owl#Restriction".into()));
+        assert_eq!(1, graph.triples_matching(Any, Some(rdftype), Some(owlrestriction)).count());
+        //let method = "http://www.snik.eu/ontology/meta/Method";
         // not in snik meta but only in local test file to make sure explicit xsd:string works
         /*
         let testo = &SimpleTerm::from(LiteralDatatype(
