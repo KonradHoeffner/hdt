@@ -49,6 +49,7 @@
 #![feature(int_roundings)]
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
+#![warn(clippy::cargo)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
