@@ -39,7 +39,7 @@ impl<'a> PredicateObjectIter<'a> {
                             Ordering::Less => low = mid + 1,
                             Ordering::Greater => {
                                 high = mid;
-                                left_high = mid
+                                left_high = mid;
                             }
                             Ordering::Equal => left_high = mid,
                         }
