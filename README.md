@@ -1,6 +1,7 @@
 # HDT
 
 [![Latest Version](https://img.shields.io/crates/v/hdt.svg)](https://crates.io/crates/hdt)
+[![Lint and Test](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml)
 [![Documentation](https://docs.rs/hdt/badge.svg)](https://docs.rs/hdt/)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks--x.svg?style=social)](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb)
 
