@@ -255,20 +255,20 @@ mod tests {
         let s = HdtTerm::Iri(IriRef::new_unchecked(meta_top.into()));
         let p = HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
         let o = HdtTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
-        assert!(graph.triples_matching(Any, Any, Some(o.clone())).next().is_some());
+        assert!(graph.triples_matching(Any, Any, [o.borrow_term()]).next().is_some());
 
         let tvec = vec![[s.clone(), p.clone(), o.clone()]];
         assert_eq!(
             tvec,
-            graph.triples_matching(Some(s.clone()), Some(p.clone()), Any).map(Result::unwrap).collect::<Vec<_>>()
+            graph.triples_matching([s.borrow_term()], [p.borrow_term()], Any).map(Result::unwrap).collect::<Vec<_>>()
         );
         assert_eq!(
             tvec,
-            graph.triples_matching(Some(s.clone()), Any, Some(o.clone())).map(Result::unwrap).collect::<Vec<_>>()
+            graph.triples_matching([s.borrow_term()], Any, [o.borrow_term()]).map(Result::unwrap).collect::<Vec<_>>()
         );
         assert_eq!(
             tvec,
-            graph.triples_matching(Any, Some(p.clone()), Some(o.clone())).map(Result::unwrap).collect::<Vec<_>>()
+            graph.triples_matching(Any, [p.borrow_term()], [o.borrow_term()]).map(Result::unwrap).collect::<Vec<_>>()
         );
         assert_eq!(1, graph.triples_matching(Any, Any, ["22.10"]).count());
         let date = HdtTerm::LiteralDatatype(
