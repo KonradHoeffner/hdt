@@ -5,9 +5,9 @@ use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use log::{debug, error};
-use mownstr::MownStr;
 use std::io;
 use std::iter;
+use std::sync::Arc;
 use thiserror::Error;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
@@ -22,7 +22,7 @@ pub struct Hdt {
     pub triples: TriplesBitmap,
 }
 
-type StringTriple<'a> = (MownStr<'a>, MownStr<'a>, MownStr<'a>);
+type StringTriple = (Arc<str>, Arc<str>, Arc<str>);
 
 /// The error type for the `translate_id` method.
 #[derive(Error, Debug)]
@@ -117,10 +117,13 @@ impl Hdt {
     /// For example, `triples_with_pattern(None, Some(p), Some(o)` answers an ?PO pattern.
     pub fn triples_with_pattern<'a>(
         &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
-    ) -> Box<dyn Iterator<Item = StringTriple<'a>> + '_> {
-        let xso = sp.map(|s| (MownStr::from_str(s), self.dict.string_to_id(s, &IdKind::Subject)));
-        let xpo = pp.map(|p| (MownStr::from_str(p), self.dict.string_to_id(p, &IdKind::Predicate)));
-        let xoo = op.map(|o| (MownStr::from_str(o), self.dict.string_to_id(o, &IdKind::Object)));
+    ) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+        let xso: Option<(Arc<str>, usize)> =
+            sp.map(|s| (Arc::from(s), self.dict.string_to_id(s, &IdKind::Subject)));
+        let xpo: Option<(Arc<str>, usize)> =
+            pp.map(|p| (Arc::from(p), self.dict.string_to_id(p, &IdKind::Predicate)));
+        let xoo: Option<(Arc<str>, usize)> =
+            op.map(|o| (Arc::from(o), self.dict.string_to_id(o, &IdKind::Object)));
         if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
             // at least one term does not exist in the graph
             return Box::new(iter::empty());
@@ -139,7 +142,7 @@ impl Hdt {
                     (
                         s.0.clone(),
                         p.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                        Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                     )
                 }))
             }
@@ -147,7 +150,7 @@ impl Hdt {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
                     (
                         s.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
                         o.0.clone(),
                     )
                 }))
@@ -156,31 +159,27 @@ impl Hdt {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
                     (
                         s.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                        Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                     )
                 }))
             }
             (None, Some(p), Some(o)) => {
                 Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
-                    (
-                        MownStr::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
-                        p.0.clone(),
-                        o.0.clone(),
-                    )
+                    (Arc::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()), p.0.clone(), o.0.clone())
                 }))
             }
             (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
                 (
-                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
                     p.0.clone(),
-                    MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                    Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                 )
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 (
-                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                    Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
                     o.0.clone(),
                 )
             })),
@@ -215,7 +214,7 @@ mod tests {
         let s = "http://www.snik.eu/ontology/meta/Top";
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
         let o = "\"top class\"@en";
-        let triple_vec = vec![(MownStr::from(s), MownStr::from(p), MownStr::from(o))];
+        let triple_vec = vec![(Arc::from(s), Arc::from(p), Arc::from(o))];
         // triple patterns with 2-3 terms
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), Some(o)).collect::<Vec<_>>(), "SPO");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), "SP?");
@@ -241,7 +240,7 @@ mod tests {
             "http://xmlns.com/foaf/0.1/homepage",
         ]
         .into_iter()
-        .map(|p| (MownStr::from(meta), MownStr::from(p), MownStr::from(snikeu)))
+        .map(|p| (Arc::from(meta), Arc::from(p), Arc::from(snikeu)))
         .collect::<Vec<_>>();
         assert_eq!(
             triple_vec,

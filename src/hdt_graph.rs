@@ -13,6 +13,7 @@ use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, Simp
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
 use std::iter;
+use std::sync::Arc;
 
 /// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
@@ -39,7 +40,8 @@ impl HdtGraph {
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term(s: MownStr) -> io::Result<SimpleTerm> {
+fn auto_term(s: Arc<str>) -> io::Result<SimpleTerm<'static>> {
+    let s = MownStr::from(s.to_string());
     match s.chars().next() {
         None => Err(Error::new(ErrorKind::InvalidData, "empty input")),
         Some('"') => match s.rfind('"') {
@@ -110,7 +112,11 @@ impl Graph for HdtGraph {
     fn triples(&self) -> GTripleSource<Self> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         Box::new(self.hdt.triples().map(move |(s, p, o)| {
-            Ok([auto_term(s).unwrap(), SimpleTerm::Iri(IriRef::new_unchecked(p)), auto_term(o).unwrap()])
+            Ok([
+                auto_term(s).unwrap(),
+                SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from(p.to_string()))),
+                auto_term(o).unwrap(),
+            ])
         }))
     }
 
@@ -171,11 +177,9 @@ impl Graph for HdtGraph {
                     Ok([
                         s.0.clone(),
                         self.id_term(t.predicate_id, &IdKind::Predicate),
-                        auto_term(MownStr::from(
-                            self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
-                        ))
-                        .expect("auto term failed with object")
-                        .into_term(),
+                        auto_term(Arc::from(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()))
+                            .expect("auto term failed with object")
+                            .into_term(),
                     ])
                 }))
             }
@@ -192,7 +196,7 @@ impl Graph for HdtGraph {
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
                 Ok([
-                    auto_term(MownStr::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
+                    auto_term(Arc::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
                         .unwrap(),
                     self.id_term(t.predicate_id, &IdKind::Predicate),
                     o.0.clone(),
