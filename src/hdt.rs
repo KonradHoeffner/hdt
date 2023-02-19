@@ -56,21 +56,13 @@ impl Hdt {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
     }
 
-    /// Don't use this for many triples with shared values as you won't benefit from deduplication.
-    fn translate_id(&self, t: TripleId) -> Result<StringTriple, TranslateErr> {
-        let s = self.dict.id_to_string(t.subject_id, &IdKind::Subject).map_err(|e| TranslateErr { e, t })?;
-        let p = self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).map_err(|e| TranslateErr { e, t })?;
-        let o = self.dict.id_to_string(t.object_id, &IdKind::Object).map_err(|e| TranslateErr { e, t })?;
-        Ok((s.into(), p.into(), o.into()))
-    }
-
     /// An iterator visiting *all* triples as strings in order.
     /// Using this method with a filter can be inefficient for large graphs,
     /// because the strings are stored in compressed form and must be decompressed and allocated.
     /// Whenever possible, use [`Hdt::triples_with_pattern`] instead.
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
-        // TODO deduplicate
-        self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
+        let mut triple_cache = TripleCache::new(self);
+        self.triples.into_iter().map(move |ids| triple_cache.translate(ids).unwrap())
     }
 
     /// Get all objects with the given subject and property.
@@ -184,6 +176,56 @@ impl Hdt {
                 )
             })),
             (None, None, None) => Box::new(self.triples()),
+        }
+    }
+}
+
+/// A TripleCache stores the Arc<str> of the last returned triple
+#[derive(Clone, Debug)]
+pub struct TripleCache<'a> {
+    hdt: &'a super::Hdt,
+    idx: [usize; 3],
+    arc: [Option<Arc<str>>; 3],
+}
+
+impl<'a> TripleCache<'a> {
+    /// Build a new [`TripleCache`] for the given [`Hdt`]
+    pub fn new(hdt: &'a super::Hdt) -> Self {
+        TripleCache { hdt, idx: [0; 3], arc: [None, None, None] }
+    }
+
+    /// Get the string representation of the subject `sid`.
+    pub fn get_s_string(&mut self, sid: usize) -> Result<Arc<str>, DictErr> {
+        self.get_x_string(sid, 0, &IdKind::Subject)
+    }
+
+    /// Get the string representation of the predicate `pid`.
+    pub fn get_p_string(&mut self, pid: usize) -> Result<Arc<str>, DictErr> {
+        self.get_x_string(pid, 1, &IdKind::Predicate)
+    }
+
+    /// Get the string representation of the object `oid`.
+    pub fn get_o_string(&mut self, oid: usize) -> Result<Arc<str>, DictErr> {
+        self.get_x_string(oid, 2, &IdKind::Object)
+    }
+
+    /// Translate a triple of indexes into a triple of strings.
+    pub fn translate(&mut self, t: TripleId) -> Result<StringTriple, TranslateErr> {
+        Ok((
+            self.get_s_string(t.subject_id).map_err(|e| TranslateErr { e, t })?,
+            self.get_p_string(t.predicate_id).map_err(|e| TranslateErr { e, t })?,
+            self.get_o_string(t.object_id).map_err(|e| TranslateErr { e, t })?,
+        ))
+    }
+
+    fn get_x_string(&mut self, i: usize, pos: usize, kind: &'static IdKind) -> Result<Arc<str>, DictErr> {
+        debug_assert!(i != 0);
+        if self.idx[pos] == i {
+            Ok(self.arc[pos].as_ref().unwrap().clone())
+        } else {
+            let ret: Arc<str> = self.hdt.dict.id_to_string(i, kind)?.into();
+            self.arc[pos] = Some(ret.clone());
+            Ok(ret)
         }
     }
 }
