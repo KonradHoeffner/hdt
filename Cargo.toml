@@ -24,6 +24,7 @@ sucds = "0.6.0"
 thiserror = "1.0.37"
 log = "0.4"
 mownstr = "0.2.0"
+lazy_static = "1.4"
 
 [features]
 default = ["sophia"]

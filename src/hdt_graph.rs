@@ -5,15 +5,16 @@ use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
 
-use mownstr::MownStr;
 use sophia::api::graph::{GTripleSource, Graph};
 
-use sophia::api::term::FromTerm;
-use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
+use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, Term};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
 use std::iter;
 use std::sync::Arc;
+
+mod term;
+pub use term::HdtTerm;
 
 /// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
@@ -31,18 +32,36 @@ impl HdtGraph {
         self.hdt.size_in_bytes()
     }
 
-    fn id_term(&self, id: Id, kind: &'static IdKind) -> SimpleTerm<'static> {
-        let s = Arc::from(self.hdt.dict.id_to_string(id, kind).unwrap());
-        auto_term(s).unwrap()
+    fn id_term(&self, id: Id, kind: &'static IdKind) -> HdtTerm {
+        auto_term(self.hdt.dict.id_to_string(id, kind).unwrap().into()).unwrap()
         // TODO: optimize by excluding cases depending on the id kind
         //IriRef::new_unchecked(MownStr::from(s)).into_term()
+    }
+
+    /// Return
+    /// - Ok(None) if tm is not a constant matcher
+    /// - Ok(Some(term, term_id))) if tm is a constant matcher
+    /// - Err(()) if tm is a constant matcher, but its only term is not in this graph
+    fn unpack_matcher<T: TermMatcher>(&self, tm: T, kind: &IdKind) -> Result<Option<(HdtTerm, Id)>, ()> {
+        match tm.constant() {
+            Some(t) => match HdtTerm::try_from(t.borrow_term()) {
+                Some(t) => {
+                    let id = self.hdt.dict.string_to_id(&term_string(&t), kind);
+                    if id == 0 {
+                        return Err(());
+                    }
+                    Ok(Some((t, id)))
+                }
+                None => Err(()),
+            },
+            None => Ok(None),
+        }
     }
 }
 
 /// Create the correct Sophia term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
-fn auto_term(s: Arc<str>) -> io::Result<SimpleTerm<'static>> {
-    let s = MownStr::from(s.to_string());
+fn auto_term(s: Arc<str>) -> io::Result<HdtTerm> {
     match s.chars().next() {
         None => Err(Error::new(ErrorKind::InvalidData, "empty input")),
         Some('"') => match s.rfind('"') {
@@ -51,17 +70,16 @@ fn auto_term(s: Arc<str>) -> io::Result<SimpleTerm<'static>> {
                 format!("missing right quotation mark in literal string {s}"),
             )),
             Some(index) => {
-                let lex = &s[1..index];
+                let lex = Arc::from(&s[1..index]);
                 let rest = &s[index + 1..];
                 // literal with no language tag and no datatype
                 if rest.is_empty() {
-                    return Ok(lex.into_term());
+                    return Ok(HdtTerm::LiteralDatatype(lex, term::XSD_STRING.clone()));
                 }
-                let lex = MownStr::from_str(lex);
                 // either language tag or datatype
                 if let Some(tag_index) = rest.find('@') {
-                    let tag = LanguageTag::new_unchecked(MownStr::from_str(&rest[tag_index + 1..]));
-                    return Ok(SimpleTerm::from_term(SimpleTerm::LiteralLanguage(lex, tag)));
+                    let tag = LanguageTag::new_unchecked(Arc::from(&rest[tag_index + 1..]));
+                    return Ok(HdtTerm::LiteralLanguage(lex, tag));
                 }
                 // datatype
                 let mut dt_split = rest.split("^^");
@@ -69,29 +87,29 @@ fn auto_term(s: Arc<str>) -> io::Result<SimpleTerm<'static>> {
                 match dt_split.next() {
                     Some(dt) => {
                         let unquoted = &dt[1..dt.len() - 1];
-                        let dt = IriRef::new_unchecked(MownStr::from_str(unquoted));
-                        Ok(SimpleTerm::from_term(SimpleTerm::LiteralDatatype(lex, dt)))
+                        let dt = IriRef::new_unchecked(Arc::from(unquoted));
+                        Ok(HdtTerm::LiteralDatatype(lex, dt))
                     }
                     None => Err(Error::new(ErrorKind::InvalidData, format!("empty datatype in {s}"))),
                 }
             }
         },
-        Some('_') => Ok(BnodeId::new_unchecked(MownStr::from_str(&s[2..])).into_term()),
-        _ => Ok(SimpleTerm::Iri(IriRef::new_unchecked(s))),
+        Some('_') => Ok(HdtTerm::BlankNode(BnodeId::new_unchecked(Arc::from(&s[2..])))),
+        _ => Ok(HdtTerm::Iri(IriRef::new_unchecked(Arc::from(&s[..])))),
     }
 }
 
 // Convert a SimpleTerm into the HDT String format.
 // Sophia doesn't include the _: prefix for blank node strings but HDT expects it
 // not needed for property terms, as they can't be blank nodes
-fn term_string(t: &SimpleTerm) -> String {
+fn term_string(t: &HdtTerm) -> String {
     match t {
-        SimpleTerm::BlankNode(b) => "_:".to_owned() + b.as_str(),
-        SimpleTerm::Iri(i) => i.as_str().to_owned(),
-        SimpleTerm::LiteralLanguage(l, lang) => {
+        HdtTerm::BlankNode(b) => "_:".to_owned() + b.as_str(),
+        HdtTerm::Iri(i) => i.as_str().to_owned(),
+        HdtTerm::LiteralLanguage(l, lang) => {
             format!("\"{l}\"@{}", lang.as_str())
         }
-        SimpleTerm::LiteralDatatype(l, dt) => {
+        HdtTerm::LiteralDatatype(l, dt) => {
             let xsd_string: &str = "http://www.w3.org/2001/XMLSchema#string";
             let dts = dt.as_str();
             if dts == xsd_string {
@@ -100,24 +118,17 @@ fn term_string(t: &SimpleTerm) -> String {
                 format!("\"{l}\"^^<{dts}>")
             }
         }
-        _ => {
-            panic!("Variable term strings and RDF-star are not supported.");
-        }
     }
 }
 
 impl Graph for HdtGraph {
-    type Triple<'a> = [SimpleTerm<'a>; 3];
+    type Triple<'a> = [HdtTerm; 3];
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     fn triples(&self) -> GTripleSource<Self> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         Box::new(self.hdt.triples().map(move |(s, p, o)| {
-            Ok([
-                auto_term(s).unwrap(),
-                SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from(p.to_string()))),
-                auto_term(o).unwrap(),
-            ])
+            Ok([auto_term(s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(o).unwrap()])
         }))
     }
 
@@ -129,25 +140,18 @@ impl Graph for HdtGraph {
         P: TermMatcher + 's,
         O: TermMatcher + 's,
     {
-        let xso = sm.constant().map(|s| {
-            let simple = SimpleTerm::from_term(s.borrow_term());
-            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Subject);
-            (simple, id)
-        });
-        let xpo = pm.constant().map(|p| {
-            let simple = SimpleTerm::from_term(p.borrow_term());
-            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Predicate);
-            (simple, id)
-        });
-        let xoo = om.constant().map(|o| {
-            let simple = SimpleTerm::from_term(o.borrow_term());
-            let id = self.hdt.dict.string_to_id(&term_string(&simple), &IdKind::Object);
-            (simple, id)
-        });
-        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
-            // at least one term does not exist in the graph
-            return Box::new(iter::empty());
-        }
+        let xso = match self.unpack_matcher(sm, &IdKind::Subject) {
+            Err(_) => return Box::new(iter::empty()),
+            Ok(x) => x,
+        };
+        let xpo = match self.unpack_matcher(pm, &IdKind::Predicate) {
+            Err(_) => return Box::new(iter::empty()),
+            Ok(x) => x,
+        };
+        let xoo = match self.unpack_matcher(om, &IdKind::Object) {
+            Err(_) => return Box::new(iter::empty()),
+            Ok(x) => x,
+        };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
@@ -163,8 +167,7 @@ impl Graph for HdtGraph {
                         s.0.clone(),
                         p.0.clone(),
                         auto_term(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap().into())
-                            .unwrap()
-                            .into_term(),
+                            .unwrap(),
                     ])
                 }))
             }
@@ -179,8 +182,7 @@ impl Graph for HdtGraph {
                         s.0.clone(),
                         self.id_term(t.predicate_id, &IdKind::Predicate),
                         auto_term(Arc::from(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()))
-                            .expect("auto term failed with object")
-                            .into_term(),
+                            .expect("auto term failed with object"),
                     ])
                 }))
             }
@@ -223,21 +225,19 @@ mod tests {
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
-        let triples: Vec<Result<[SimpleTerm<'_>; 3], Infallible>> = graph.triples().collect();
+        let triples: Vec<Result<[HdtTerm; 3], Infallible>> = graph.triples().collect();
         assert_eq!(triples.len(), 327);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";
         assert!(graph
             .triples_matching(
-                Some(SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(
-                    "http://www.snik.eu/ontology/meta"
-                )))),
+                Some(HdtTerm::Iri(IriRef::new_unchecked(Arc::from("http://www.snik.eu/ontology/meta")))),
                 Any,
                 Any
             )
             .next()
             .is_some());
         for uri in [meta_top, "http://www.snik.eu/ontology/meta", "doesnotexist"] {
-            let term = SimpleTerm::Iri(IriRef::new_unchecked(MownStr::from_str(uri)));
+            let term = HdtTerm::Iri(IriRef::new_unchecked(Arc::from(uri)));
             let filtered: Vec<_> = triples
                 .iter()
                 .map(|triple| triple.as_ref().unwrap())
@@ -253,9 +253,9 @@ mod tests {
                 "different results between triples() and triples_with_s() for {uri}"
             );
         }
-        let s = SimpleTerm::Iri(IriRef::new_unchecked(meta_top.into()));
-        let p = SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
-        let o = SimpleTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
+        let s = HdtTerm::Iri(IriRef::new_unchecked(meta_top.into()));
+        let p = HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
+        let o = HdtTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
         assert!(graph.triples_matching(Any, Any, Some(o.clone())).next().is_some());
 
         let tvec = vec![[s.clone(), p.clone(), o.clone()]];
@@ -271,22 +271,22 @@ mod tests {
             tvec,
             graph.triples_matching(Any, Some(p.clone()), Some(o.clone())).map(Result::unwrap).collect::<Vec<_>>()
         );
-        assert_eq!(1, graph.triples_matching(Any, Any, Some("22.10".into_term::<SimpleTerm>())).count());
-        let date = SimpleTerm::LiteralDatatype(
+        assert_eq!(1, graph.triples_matching(Any, Any, ["22.10"]).count());
+        let date = HdtTerm::LiteralDatatype(
             "2022-10-20".into(),
             IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#date".into()),
         );
         assert_eq!(1, graph.triples_matching(Any, Any, Some(date)).count());
         // test for errors involving blank nodes
-        let blank = SimpleTerm::BlankNode(BnodeId::new_unchecked("b1".into()));
+        let blank = HdtTerm::BlankNode(BnodeId::new_unchecked("b1".into()));
         // blank node as input
         assert_eq!(3, graph.triples_matching(Some(&blank), Any, Any).count());
         assert_eq!(1, graph.triples_matching(Any, Any, Some(&blank)).count());
         // blank node as output
         let rdftype =
-            SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".into()));
+            HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/1999/02/22-rdf-syntax-ns#type".into()));
         let owlrestriction =
-            SimpleTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2002/07/owl#Restriction".into()));
+            HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2002/07/owl#Restriction".into()));
         assert_eq!(1, graph.triples_matching(Any, Some(rdftype), Some(owlrestriction)).count());
         //let method = "http://www.snik.eu/ontology/meta/Method";
         // not in snik meta but only in local test file to make sure explicit xsd:string works
