@@ -73,25 +73,6 @@ impl Hdt {
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
     }
 
-    /// Get all objects with the given subject and property.
-    pub fn objects_with_sp(&self, s: &str, p: &str) -> Box<dyn Iterator<Item = String> + '_> {
-        let sid = self.dict.string_to_id(s, &IdKind::Subject);
-        let pid = self.dict.string_to_id(p, &IdKind::Predicate);
-        if sid == 0 || pid == 0 {
-            return Box::new(iter::empty());
-        }
-        let s_owned = s.to_owned();
-        let p_owned = p.to_owned();
-        Box::new(
-            SubjectIter::with_pattern(&self.triples, &TripleId::new(sid, pid, 0))
-                .map(move |tid| self.dict.id_to_string(tid.object_id, &IdKind::Object))
-                .filter_map(move |r| {
-                    r.map_err(|e| error!("Error on triple with subject {s_owned} and property {p_owned}: {e}"))
-                        .ok()
-                }),
-        )
-    }
-
     /// Get all subjects with the given property and object (?PO pattern).
     /// Use this over `triples_with_pattern(None,Some(p),Some(o))` if you don't need whole triples.
     pub fn subjects_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = String> + '_> {
