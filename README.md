@@ -99,7 +99,7 @@ Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
 
     cargo bench
 
-* requires [persondata\_en.ttl](http://downloads.dbpedia.org/2016-10/core-i18n/en/persondata_en.ttl.bz2) converted to HDT placed in `tests/resources`
+* requires [persondata\_en.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2) placed in `tests/resources`
 
 ## Comparative benchmark suite
 
