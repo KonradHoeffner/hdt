@@ -33,10 +33,11 @@ impl<'a> Iterator for ObjectIter<'a> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_y = self.triples.op_index.sequence.get(self.pos_index) as u64;
-        let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
-        let x = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
+        let pos_y = self.triples.op_index.sequence.get(self.pos_index);
+        let y = self.triples.wavelet_y.get(pos_y) as Id;
+        let x = self.triples.bitmap_y.dict.rank(pos_y as u64, true) as Id + 1;
         self.pos_index += 1;
-        Some(self.triples.coord_to_triple(x, y, self.o).unwrap())
+        Some(TripleId::new(x, y, self.o))
+        //Some(self.triples.coord_to_triple(x, y, self.o).unwrap())
     }
 }
