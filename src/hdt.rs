@@ -39,6 +39,11 @@ impl Hdt {
     /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
     /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
+    /// # Example
+    /// ```
+    /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+    /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
+    /// ```
     pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
