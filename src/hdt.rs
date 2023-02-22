@@ -163,13 +163,28 @@ impl Hdt {
                     MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                 )
             })),
-            (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
-                (
-                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                    o.0.clone(),
-                )
-            })),
+            (None, None, Some(o)) => {
+                let mut last_t = TripleId::new(0, 0, 0);
+                let mut last_s = MownStr::from("");
+                let mut last_p = MownStr::from("");
+                Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
+                    let s = if last_t.subject_id == t.subject_id {
+                        last_s.clone()
+                    } else {
+                        last_s = MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap());
+                        last_s.clone()
+                    };
+                    let p = if last_t.predicate_id == t.predicate_id {
+                        last_p.clone()
+                    } else {
+                        last_p =
+                            MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap());
+                        last_p.clone()
+                    };
+                    last_t = t;
+                    (s, p, o.0.clone())
+                }))
+            }
             (None, None, None) => Box::new(self.triples()),
         }
     }
