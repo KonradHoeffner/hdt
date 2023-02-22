@@ -28,6 +28,12 @@ fn bench_query(c: &mut Criterion) {
     let triples = &graph.hdt.triples;
 
     // count to prevent optimizing away function call
+    let mut group = c.benchmark_group("??? (all)");
+    group.sample_size(10);
+    group.bench_function("0.1 all triple IDs", |b| b.iter(|| graph.hdt.triples.into_iter().count()));
+    group.bench_function("0.2 all str triples", |b| b.iter(|| graph.hdt.triples().count()));
+    group.bench_function("0.3 all Sophia triples", |b| b.iter(|| graph.triples().count()));
+    group.finish();
     let mut group = c.benchmark_group("S??");
     //let mut group = c.benchmark_group("query");
     group.bench_function("1.1 (vincent, ?, ?) triple IDs", |b| {
