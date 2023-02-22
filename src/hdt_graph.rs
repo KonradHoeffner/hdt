@@ -16,7 +16,8 @@ use std::iter;
 
 /// Adapter to use HDT as a Sophia graph.
 pub struct HdtGraph {
-    hdt: Hdt,
+    /// Wrapped HDT instance
+    pub hdt: Hdt,
 }
 
 impl HdtGraph {
