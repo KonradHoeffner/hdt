@@ -211,6 +211,7 @@ impl<'a> TripleCache<'a> {
         } else {
             let ret: Arc<str> = self.hdt.dict.id_to_string(i, kind)?.into();
             self.arc[pos] = Some(ret.clone());
+            self.idx[pos] = i;
             Ok(ret)
         }
     }
