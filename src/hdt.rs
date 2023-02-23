@@ -5,7 +5,6 @@ use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter
 use crate::FourSectDict;
 use bytesize::ByteSize;
 use log::{debug, error};
-use mownstr::MownStr;
 use std::io;
 use std::iter;
 use thiserror::Error;
@@ -22,7 +21,7 @@ pub struct Hdt {
     pub triples: TriplesBitmap,
 }
 
-type StringTriple<'a> = (MownStr<'a>, MownStr<'a>, MownStr<'a>);
+type StringTriple<'a> = (&'a str,&'a str, &'a str);
 
 /// The error type for the `translate_id` method.
 #[derive(Error, Debug)]
@@ -60,13 +59,13 @@ impl Hdt {
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
     }
-
+/*
     /// Don't use this for many triples with shared values as you won't benefit from deduplication.
     fn translate_id(&self, t: TripleId) -> Result<StringTriple, TranslateErr> {
         let s = self.dict.id_to_string(t.subject_id, &IdKind::Subject).map_err(|e| TranslateErr { e, t })?;
         let p = self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).map_err(|e| TranslateErr { e, t })?;
         let o = self.dict.id_to_string(t.object_id, &IdKind::Object).map_err(|e| TranslateErr { e, t })?;
-        Ok((s.into(), p.into(), o.into()))
+        Ok((&s, &p, &o))
     }
 
     /// An iterator visiting *all* triples as strings in order.
@@ -76,7 +75,7 @@ impl Hdt {
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
         // TODO deduplicate
         self.triples.into_iter().map(|id| self.translate_id(id).unwrap())
-    }
+    }*/
 
     /// Get all subjects with the given property and object (?PO pattern).
     /// Use this over `triples_with_pattern(None,Some(p),Some(o))` if you don't need whole triples.
@@ -102,38 +101,42 @@ impl Hdt {
     /// Get all triples that fit the given triple patterns, where `None` stands for a variable.
     /// For example, `triples_with_pattern(None, Some(p), Some(o)` answers an ?PO pattern.
     pub fn triples_with_pattern<'a>(
-        &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
-    ) -> Box<dyn Iterator<Item = StringTriple<'a>> + '_> {
-        let xso = sp.map(|s| (MownStr::from_str(s), self.dict.string_to_id(s, &IdKind::Subject)));
-        let xpo = pp.map(|p| (MownStr::from_str(p), self.dict.string_to_id(p, &IdKind::Predicate)));
-        let xoo = op.map(|o| (MownStr::from_str(o), self.dict.string_to_id(o, &IdKind::Object)));
+        &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>, pool: &'a mut Vec<String>
+    ) -> Vec<StringTriple<'a>> {
+        let xso = sp.map(|s| (s, self.dict.string_to_id(s, &IdKind::Subject)));
+        let xpo = pp.map(|p| (p, self.dict.string_to_id(p, &IdKind::Predicate)));
+        let xoo = op.map(|o| (o, self.dict.string_to_id(o, &IdKind::Object)));
+        let mut result = Vec::<_>::new();
         if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
             // at least one term does not exist in the graph
-            return Box::new(iter::empty());
+            return result;
         }
         // TODO: improve error handling
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
                 if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
-                    Box::new(iter::once((s.0, p.0, o.0)))
+                    result.push((s.0, p.0, o.0))
                 } else {
-                    Box::new(iter::empty())
                 }
             }
             (Some(s), Some(p), None) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
-                    (
-                        s.0.clone(),
-                        p.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
-                    )
-                }))
-            }
+                for t in SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0))
+                {
+                        let o = self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap();
+                        {pool.push(o);}
+                        result.push
+                    ((
+                        s.0,
+                        p.0,
+                        &*pool.last().unwrap()
+                    ))
+                };
+            }/*
             (Some(s), None, Some(o)) => {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
                     (
                         s.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                        self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
                         o.0.clone(),
                     )
                 }))
@@ -142,15 +145,15 @@ impl Hdt {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
                     (
                         s.0.clone(),
-                        MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                        MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                        self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
+                        self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
                     )
                 }))
             }
             (None, Some(p), Some(o)) => {
                 Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
                     (
-                        MownStr::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
+                        self.dict.id_to_string(sid, &IdKind::Subject).unwrap(),
                         p.0.clone(),
                         o.0.clone(),
                     )
@@ -158,20 +161,23 @@ impl Hdt {
             }
             (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
                 (
-                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
+                    self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap(),
                     p.0.clone(),
-                    MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                    self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap(),
                 )
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 (
-                    MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                    self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap(),
+                    self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap(),
                     o.0.clone(),
                 )
             })),
             (None, None, None) => Box::new(self.triples()),
+            */
+            _ => panic!("not implemented yet")
         }
+        result
     }
 }
 
@@ -201,7 +207,7 @@ mod tests {
         let s = "http://www.snik.eu/ontology/meta/Top";
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
         let o = "\"top class\"@en";
-        let triple_vec = vec![(MownStr::from(s), MownStr::from(p), MownStr::from(o))];
+        let triple_vec = vec![(s, p, o)];
         // triple patterns with 2-3 terms
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), Some(o)).collect::<Vec<_>>(), "SPO");
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), "SP?");
@@ -227,7 +233,7 @@ mod tests {
             "http://xmlns.com/foaf/0.1/homepage",
         ]
         .into_iter()
-        .map(|p| (MownStr::from(meta), MownStr::from(p), MownStr::from(snikeu)))
+        .map(|p| (meta, p, snikeu))
         .collect::<Vec<_>>();
         assert_eq!(
             triple_vec,
