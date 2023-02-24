@@ -123,8 +123,8 @@ impl Hdt {
             (Some(s), Some(p), None) => {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
                     (
-                        s.0.clone(),
-                        p.0.clone(),
+                        s.0.borrowed(),
+                        p.0.borrowed(),
                         MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                     )
                 }))
@@ -132,16 +132,16 @@ impl Hdt {
             (Some(s), None, Some(o)) => {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
                     (
-                        s.0.clone(),
+                        s.0.borrowed(),
                         MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                        o.0.clone(),
+                        o.0.borrowed(),
                     )
                 }))
             }
             (Some(s), None, None) => {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
                     (
-                        s.0.clone(),
+                        s.0.borrowed(),
                         MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
                         MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                     )
@@ -151,15 +151,15 @@ impl Hdt {
                 Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
                     (
                         MownStr::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()),
-                        p.0.clone(),
-                        o.0.clone(),
+                        p.0.borrowed(),
+                        o.0.borrowed(),
                     )
                 }))
             }
             (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
                 (
                     MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    p.0.clone(),
+                    p.0.borrowed(),
                     MownStr::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
                 )
             })),
@@ -167,7 +167,7 @@ impl Hdt {
                 (
                     MownStr::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
                     MownStr::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                    o.0.clone(),
+                    o.0.borrowed(),
                 )
             })),
             (None, None, None) => Box::new(self.triples()),

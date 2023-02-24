@@ -1,12 +1,13 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use hdt::triples::*;
 use hdt::Hdt;
+#[cfg(feature = "sophia")]
 use hdt::HdtGraph;
 use hdt::IdKind;
+#[cfg(feature = "sophia")]
 use sophia::api::graph::Graph;
-use sophia::api::term::matcher::Any;
-use sophia::api::term::IriRef;
-use sophia::api::term::SimpleTerm;
+#[cfg(feature = "sophia")]
+use sophia::api::term::{matcher::Any, IriRef, SimpleTerm};
 use std::fs::File;
 
 fn bench_query(c: &mut Criterion) {
@@ -20,18 +21,25 @@ fn bench_query(c: &mut Criterion) {
     let vincent_id = hdt.dict.string_to_id(vincent, &IdKind::Subject);
     let type_id = hdt.dict.string_to_id(type_, &IdKind::Predicate);
     let person_id = hdt.dict.string_to_id(person, &IdKind::Object);
+    #[cfg(feature = "sophia")]
     let graph = HdtGraph::new(hdt);
+    #[cfg(feature = "sophia")]
+    let hdt = graph.hdt;
+    #[cfg(feature = "sophia")]
     let vincent_term = SimpleTerm::Iri(IriRef::new_unchecked(vincent.into()));
+    #[cfg(feature = "sophia")]
     let type_term = SimpleTerm::Iri(IriRef::new_unchecked(type_.into()));
+    #[cfg(feature = "sophia")]
     let person_term = SimpleTerm::Iri(IriRef::new_unchecked(person.into()));
-    let twp = |s, p, o| graph.hdt.triples_with_pattern(s, p, o);
-    let triples = &graph.hdt.triples;
+    let twp = |s, p, o| hdt.triples_with_pattern(s, p, o);
+    let triples = &hdt.triples;
 
     // count to prevent optimizing away function call
     let mut group = c.benchmark_group("??? (all)");
     group.sample_size(10);
-    group.bench_function("0.1 all triple IDs", |b| b.iter(|| graph.hdt.triples.into_iter().count()));
-    group.bench_function("0.2 all str triples", |b| b.iter(|| graph.hdt.triples().count()));
+    group.bench_function("0.1 all triple IDs", |b| b.iter(|| hdt.triples.into_iter().count()));
+    group.bench_function("0.2 all str triples", |b| b.iter(|| hdt.triples().count()));
+    #[cfg(feature = "sophia")]
     group.bench_function("0.3 all Sophia triples", |b| b.iter(|| graph.triples().count()));
     group.finish();
     let mut group = c.benchmark_group("S??");
@@ -40,6 +48,7 @@ fn bench_query(c: &mut Criterion) {
         b.iter(|| SubjectIter::with_pattern(triples, &TripleId::new(vincent_id, 0, 0)).count())
     });
     group.bench_function("1.2 (vincent, ?, ?) str triples", |b| b.iter(|| twp(Some(vincent), None, None).count()));
+    #[cfg(feature = "sophia")]
     group.bench_function("1.3 (vincent, ?, ?) Sophia triples", |b| {
         b.iter(|| graph.triples_matching(Some(&vincent_term), Any, Any).count())
     });
@@ -51,6 +60,7 @@ fn bench_query(c: &mut Criterion) {
         b.iter(|| PredicateIter::new(triples, type_id).count())
     });
     group.bench_function("2.2 (?, type, ?) str triples", |b| b.iter(|| twp(None, Some(type_), None).count()));
+    #[cfg(feature = "sophia")]
     group.bench_function("2.3 (?, type, ?) Sophia triples", |b| {
         b.iter(|| graph.triples_matching(Any, Some(&type_term), Any).count())
     });
@@ -60,6 +70,7 @@ fn bench_query(c: &mut Criterion) {
         b.iter(|| ObjectIter::new(triples, person_id).count())
     });
     group.bench_function("3.2 (?, ?, person) str triples", |b| b.iter(|| twp(None, None, Some(person)).count()));
+    #[cfg(feature = "sophia")]
     group.bench_function("3.3 (?, ?, person) Sophia triples", |b| {
         b.iter(|| graph.triples_matching(Any, Any, Some(&person_term)).count())
     });
@@ -71,11 +82,12 @@ fn bench_query(c: &mut Criterion) {
         b.iter(|| PredicateObjectIter::new(triples, type_id, person_id).count())
     });
     group.bench_function("4.2 (?, type, person) str subjects", |b| {
-        b.iter(|| graph.hdt.subjects_with_po(type_, person).count())
+        b.iter(|| hdt.subjects_with_po(type_, person).count())
     });
     group.bench_function("4.3 (?, type, person) str triples", |b| {
         b.iter(|| twp(None, Some(type_), Some(person)).count())
     });
+    #[cfg(feature = "sophia")]
     group.bench_function("4.4 (?, type, person) Sophia triples", |b| {
         b.iter(|| graph.triples_matching(Any, Some(&type_term), Some(&person_term)).count())
     });

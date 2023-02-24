@@ -4,10 +4,8 @@ use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
-
 use mownstr::MownStr;
 use sophia::api::graph::{GTripleSource, Graph};
-
 use sophia::api::term::FromTerm;
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, SimpleTerm, Term};
 use std::convert::Infallible;

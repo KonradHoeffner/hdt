@@ -24,10 +24,10 @@ sophia = { version="0.8.0-alpha.0", optional = true }
 sucds = "0.6.0"
 thiserror = "1.0.37"
 log = "0.4"
-mownstr = "0.2.0"
+mownstr = { version = "0.2.1", path = "../mownstr" }
 
 [features]
-default = ["sophia"]
+#default = ["sophia"]
 sophia = ["dep:sophia"]
 
 [[bench]]
