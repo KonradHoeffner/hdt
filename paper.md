@@ -68,4 +68,65 @@ Extensions such as HDT++ [@serializingrdf] or iHDT++ [@ihdt] are currently not s
 We thank Pierre-Antoine Champin for explaining the details of Sophia and for creating [the benchmark suite](https://github.com/pchampin/sophia_benchmark) 
 that the [HDT benchmarks](https://github.com/KonradHoeffner/hdt_benchmark) are based on and for the thorough code review.
 
+# Preliminaries
+
+## RDF
+
+The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each consisting of a *subject*, *predicate* and *object*.
+A set of triples is called an *RDF graph*, where the subjects and objects can be visualized as nodes and the predicates as labeled, directed edges.
+Predicates are always IRIs, however subjects and objects can also be *blank nodes* and objects can also be *literals*.
+There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing and human readability.
+For example, the N-Triples serialization of the fact "the mayor of Leipzig is Burkhard Jung" from DBpedia is:
+
+```ntriples
+<http://dbpedia.org/resource/Leipzig> <http://dbpedia.org/ontology/mayor>
+    (linebreak) <http://dbpedia.org/resource/Burkhard_Jung> .
+```
+
+## Querying RDF
+The default query language 
+
+## Triple Patterns
+
+In a *triple pattern*, each part of the triple is either a constant or a variable, resulting in eight different types of triple patterns. 
+We denote the triple pattern with all constants as SPO (matching one or zero triples) and the pattern with all constants with ??? (matching all triples in the graph).
+The other triple patterns are denoted analogously.
+
+## Header Data Triples
+
+![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as a tree.
+Image source and further information in @hdt2012.
+\label{fig:bt}](img/bt.png){ width=100% }
+
+## Load an HDT file
+
+```rust
+use hdt::Hdt;
+use std::fs::File;
+use std::io::BufReader;
+
+let f = File::open("example.hdt").expect("error opening file");
+let hdt = Hdt::new(std::io::BufReader::new(f)).expect("error loading HDT");
+```
+## Query SP? pattern
+
+For example, we can select majors of Leipzig from DBpedia using an SP? triple pattern where the subject (Leipzig) and predicate (major) are constant and the object is a variable.
+Continuing the previous example of loading a file, we can get an iterator over all triples that match the pattern:
+
+```rust
+let majors = hdt.triples_with_pattern(
+    Some("http://dbpedia.org/resource/Leipzig"),
+    Some("http://dbpedia.org/ontology/major"),
+    None);
+println!("{:?}", majors.collect::<Vec<_>>());
+```
+
+All patterns with constant subject (SPO, SP?, SO? and S??) are answered using the Bitmap Triples structure.
+
+## Query PO? pattern
+
+![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P? and ??O patterns.
+Image source and further information in @hdt2012.
+\label{fig:foq}](img/hdt-foq.png){ width=50% }
+
 # References
