@@ -1,5 +1,5 @@
 ---
-title: 'HDT: A Rust library for the Header Data Triples binary RDF compression format'
+title: 'HDT: A Rust library for the Header Dictionary Triples binary RDF compression format'
 tags:
   - Rust
   - HDT
@@ -26,7 +26,7 @@ bibliography: paper.bib
 
 # Summary
 
-We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Data Triples (HDT) binary RDF compression format described by @hdt2012 and @hdt2013.
+We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Dictionary Triples (HDT) binary RDF compression format.
 This allows writing high-performance Rust applications that load and query HDT files using triple patterns.
 Existing Rust applications using the Sophia [@sophia] library can easily and drastically reduce their RAM usage by using the provided Sophia HDT adapter.
 
@@ -52,15 +52,18 @@ Each part of the pattern is either a constant or a variable, resulting in eight 
 We denote the triple pattern type with all constants as SPO (matching one or zero triples) and the type with all constants with ??? (matching all triples in the graph).
 The other triple patterns are denoted analogously.
 
-## Header Data Triples
+## Header Dictionary Triples
 While text-based RDF serialization formats can be read by humans, they are too verbose to be practical on large graphs.
-The serialized size of a graph can be drastically lowered by using the Header Data Triples (HDT) binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+The serialized size of a graph can be drastically lowered by using the Header Dictionary Triples (HDT) binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+
 
 ![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as a tree.
 Image source and further information in @hdt2012.
 \label{fig:bt}](img/bt.png){ width=100% }
 
-All patterns with constant subject (SPO, SP?, SO? and S??) as well as ??? are answered using the Bitmap Triples structure, see \autoref{fig:bt}.
+All patterns with constant subject (SPO, SP?, SO? and S??) as well as ??? are answered using the Bitmap Triples structure, see \autoref{fig:bt}, while the other
+patterns are answered using HDT-FoQ, see \autoref{fig:foq}.
+As HDT is a very complex format, we recommend referring to @hdt2012 and @hdt2013 for a comprehensive documentation.
 
 ![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P? and ??O patterns.
 Image source and further information in @hdt2012.
@@ -138,8 +141,9 @@ Longterm availability of SPARQL endpoints is often compromised [@readyforaction]
 To insulate against such problems, Semantic Web applications may integrate and query an RDF graph using libraries such as Apache Jena [@jena] for Java,
 RDFlib [@rdflib] for Python, librdf [@librdf] for C or Sophia [@sophia] for Rust.
 However those libraries do not scale to large RDF graphs due to their excessive memory usage, see \autoref{fig:benchmark},
-which can be drastically lowered by using the Header Data Triples (HDT) binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
-Implementations existed for C++ [@hdtcpp] and Java [@hdtjava] but not for Rust, a popular modern, statically typed high-level programming language that allows writing performant software while still ensuring memory safety,
+which can be drastically lowered by using the Header Dictionary Triples (HDT) binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+Implementations existed for C++ [@hdtcpp] and Java [@hdtjava].
+We present the first (to the best of our knowledge) implementation of HDT in Rust, which is a popular modern, statically typed high-level programming language that allows writing performant software while still ensuring memory safety,
 which aligns with the challenges to the adoption of the Semantic Web.
 The Rust HDT library is used through the included Sophia adapter by the RickView [@rickview] RDF browser to publish large knowledge bases, for example LinkedSpending [@linkedspending] at <https://linkedspending.aksw.org>,
 which previously suffered from frequent downtimes when based on a SPARQL endpoint.
@@ -156,7 +160,7 @@ Versions: Apache Jena 4.6.1, n3.js 1.6.3, librdf 1.0.17, RDFlib 6.2.0, sophia 0.
 # Limitations
 
 HDT is a read-only file format.
-For querying *and* modification of large RDF graphs, SPARQL queries on a separate endpoint are better suited.
+For querying and *modification* of large RDF graphs, SPARQL queries on a separate endpoint are better suited.
 *hdt-rs* does not supply additional command line tools, for example for converting different RDF serializations to and from HDT.
 For this purpose, the command line tools of hdt-cpp [@hdtcpp] and hdt-java [@hdtjava] can be used.
 Extensions such as HDT++ [@serializingrdf] or iHDT++ [@ihdt] are currently not supported.
