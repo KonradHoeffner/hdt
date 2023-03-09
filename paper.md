@@ -27,7 +27,7 @@ bibliography: paper.bib
 # Summary
 
 We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Dictionary Triples (HDT) binary RDF compression format.
-This allows writing high-performance Rust applications that load and query HDT files using triple patterns.
+This allows writing high-performance Rust applications that load and query HDT datasets using triple patterns.
 Existing Rust applications using the Sophia [@sophia] library can easily and drastically reduce their RAM usage by using the provided Sophia HDT adapter.
 
 # Preliminaries
@@ -54,7 +54,13 @@ The other triple patterns are denoted analogously.
 
 ## Header Dictionary Triples
 While text-based RDF serialization formats can be read by humans, they are too verbose to be practical on large graphs.
-The serialized size of a graph can be drastically lowered by using the Header Dictionary Triples (HDT) binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+The serialized size of a graph can be drastically lowered by using the HDT binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+The three components of an HDT datasets are:
+The *header* contains metadata in uncompressed RDF that describes the dataset.
+The *dictionary* stores all the *RDF terms* (IRIs, literals and blank nodes) in the dataset,
+compressed them using front-coding [@frontcoding] and assigns a unique numerical identifier to each of them.
+Each term thus needs to be stored only once, even if it is referenced multiple times.
+The *triples* component 
 
 
 ![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as a tree.
