@@ -36,7 +36,8 @@ Existing Rust applications using the Sophia [@sophia] library can easily and dra
 
 The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each consisting of a *subject*, *predicate* and *object*.
 A set of triples is called an *RDF graph*, where the subjects and objects can be visualized as nodes and the predicates as labeled, directed edges.
-Predicates are always IRIs, however subjects and objects can also be *blank nodes* and objects can also be *literals*.
+A predicate is always an *IRI* (Internationalized Resource Identifier), which is a generalization of an URI that permits additional characters.
+Subjects and objects can also be *blank nodes* and objects can also be *literals*.
 There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing and human readability.
 For example, the N-Triples serialization of the fact "the mayor of Leipzig is Burkhard Jung" from DBpedia [@dbpedia] is:
 
@@ -54,14 +55,11 @@ The other triple patterns are denoted analogously.
 
 ## Header Dictionary Triples
 While text-based RDF serialization formats can be read by humans, they are too verbose to be practical on large graphs.
-The serialized size of a graph can be drastically lowered by using the HDT binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
-The three components of an HDT datasets are:
-The *header* contains metadata in uncompressed RDF that describes the dataset.
-The *dictionary* stores all the *RDF terms* (IRIs, literals and blank nodes) in the dataset,
-compressed them using front-coding [@frontcoding] and assigns a unique numerical identifier to each of them.
-Each term thus needs to be stored only once, even if it is referenced multiple times.
-The *triples* component 
-
+The serialized size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+The *header* contains metadata as uncompressed RDF that describes the dataset.
+The *dictionary* stores all the *RDF terms* (IRIs, literals and blank nodes) in the dataset in compressed form using front-coding [@frontcoding],
+and assigns a unique numerical identifier (ID) to each of them.
+This allows the *triples* component to store the adjacency matrix of the graph using those IDs in compressed form.
 
 ![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as a tree.
 Image source and further information in @hdt2012.
