@@ -1,5 +1,5 @@
 ---
-title: 'HDT: A Rust library for the Header Dictionary Triples binary RDF compression format'
+title: 'hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format'
 tags:
   - Rust
   - HDT
@@ -28,7 +28,7 @@ bibliography: paper.bib
 
 We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Dictionary Triples (HDT) binary RDF compression format.
 This allows writing high-performance Rust applications that load and query HDT datasets using triple patterns.
-Existing Rust applications using the Sophia [@sophia] library can easily and drastically reduce their RAM usage by using the provided Sophia HDT adapter.
+Existing Rust applications using the Sophia library [@sophia] can easily and drastically reduce their RAM usage by using the provided Sophia HDT adapter.
 
 # Preliminaries
 
@@ -120,10 +120,10 @@ let hdt = Hdt::new(BufReader::new(f)).expect("error loading HDT");
 Find the mayor of Leipzig from DBpedia using an SP? triple pattern:
 
 ```rust
-let mayors = hdt.triples_with_pattern(
+hdt.triples_with_pattern(
     Some("http://dbpedia.org/resource/Leipzig"),
     Some("http://dbpedia.org/ontology/mayor"),
-    None);
+    None).next();
 ```
 
 ## Query ?PO pattern
@@ -131,10 +131,10 @@ let mayors = hdt.triples_with_pattern(
 Which city has Burkhard Jung as the mayor?
 
 ```rust
-let mayors = hdt.triples_with_pattern(
+hdt.triples_with_pattern(
     None,
     Some("http://dbpedia.org/ontology/mayor"),
-    Some("http://dbpedia.org/resource/Leipzig"));
+    Some("http://dbpedia.org/resource/Burkhard_Jung")).next();
 ```
 
 ## Use HDT with the Sophia library
