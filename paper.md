@@ -99,6 +99,13 @@ The index files that hdt-java and hdt-cpp produce are deleted before each run.
 Versions: Apache Jena 4.6.1, n3.js 1.6.3, librdf 1.0.17, RDFlib 6.2.0, sophia 0.8.0-alpha, hdt-rs 0.0.13-alpha, hdt-java 3.0.9, hdt-cpp master fbcb31a, OpenJDK 19, Node.js 16.18.0, clang 14.0.6, Python 3.10.8, rustc 1.69.0-nightly (target-cpu=native), GCC 12.2.1.
 \label{fig:benchmark}](img/benchmark.png){ width=100% }
 
+| Library			|	Memory Allocation in MB|	Load Time			|	Load Time			|
+| :--------------:	| :--------------------:| :---------------:		| :---------------: 	|
+| hdt\_cpp			| $$	| $1.640 \times 10^5$	| $1.640 \times 10^5$	|
+| hdt\_java			| |||
+
+: todo fill out this caption average
+
 # Examples
 
 ## Add the dependency to a Rust application
