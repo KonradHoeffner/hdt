@@ -61,7 +61,7 @@ The *dictionary* stores all the *RDF terms* (IRIs, literals and blank nodes) in 
 and assigns a unique numerical identifier (ID) to each of them.
 This allows the *triples* component to store the adjacency matrix of the graph using those IDs in compressed form.
 
-![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as a tree.
+![The Bitmap Triples structure represents the adjacency matrix of the RDF graph as trees.
 Image source and further information in @hdt2012.
 \label{fig:bt}](img/bt.png){ width=100% }
 
@@ -99,12 +99,35 @@ The index files that hdt-java and hdt-cpp produce are deleted before each run.
 Versions: Apache Jena 4.6.1, n3.js 1.6.3, librdf 1.0.17, RDFlib 6.2.0, sophia 0.8.0-alpha, hdt-rs 0.0.13-alpha, hdt-java 3.0.9, hdt-cpp master fbcb31a, OpenJDK 19, Node.js 16.18.0, clang 14.0.6, Python 3.10.8, rustc 1.69.0-nightly (target-cpu=native), GCC 12.2.1.
 \label{fig:benchmark}](img/benchmark.png){ width=100% }
 
-| Library			|	Memory Allocation in MB|	Load Time			|	Load Time			|
-| :--------------:	| :--------------------:| :---------------:		| :---------------: 	|
-| hdt\_cpp			| $$	| $1.640 \times 10^5$	| $1.640 \times 10^5$	|
-| hdt\_java			| |||
+| Library			|	Memory in MB|	Load Time in ms	|	Query Time in ms			|
+|:---|----------------:|----------:|---------:|----------:|
+| hdt_cpp         |       			**112** |     1985 |       362 |
+| sophia_hdt      |       			263 |      930 |       355 |
+| hdt_rs          |   			    264 |      **912** |       315 |
+| hdt_java (DelayedString)  |       738 |     3170 |       **214** |
+| hdt_java (String)       |       	785 |     3476 |       **321** |
+| sophia_lg       |       			**834** |  **11656** |        85 |
+| sophia          | 			   1371 |    15990 |        **20** |
+| jena (java)     | 			   5352 |    40400 |       159 |
+| n3js (js)       | 			  12404 |   100820 |       654 |
+| rdflib (python) |     		  14481 |   182002 |       940 |
+|librdf (c) | -- | -- | -- |
 
-: todo fill out this caption average
+: Rounded averages over four runs on the complete persondata dataset containing 10310105 triples (rightmost points in \autoref{fig:benchmark}) serialized as a 90 MB HDT and 1.2 GB RDF Turtle file.
+Sorted by memory usage for of the graph. For better comparision, results for hdt_java are given both with and without calling `DelayedString::toString` on the results.
+Measured values are subject to considerable fluctuations, see vertical bars in \autoref{fig:benchmark}.\label{tab:benchmark}
+
+\autoref{tab:benchmark} demonstrates the advantage of HDT libraries in memory usage with hdt_cpp only using 112 MB compared to 834 MB for the most memory-efficient tested non-HDT RDF library of sophia_lg (LightGraph).
+When comparing only Rust libraries, sophia_lg still needs more than three times the amount of memory that hdt_rs does.
+Memory consumption is calculated by comparing resident set size before and after graph loading and index generation, in between which memory usage may be higher.
+Converting other formats to HDT in the first place is also a time and memory intensive process.
+The uncompressed and fully indexed Sophia FastGraph (sophia) strongly outperforms the HDT libraries in ?PO query time, with 20ms compared to 214ms respectively 321ms for hdt_java.
+While being the fastest querying HDT library in this test, hdt_java has a large memory usage for an HDT library placing it near the much faster sophia_lg.
+The large overhead on small graph sizes for hdt_java in \autoref{fig:benchmark} suggests that these considerations might turn out differently with larger graph sizes.
+In fact, HDT allows loading much larger datasets, however at that point several of the tested libraries could not have been included, such as rdflib, which already uses more than 14 GB of memory to load the ~10 million triples.
+hdt_rs achieves the lowest graph loading time with 912ms compared to more than 11s for the fastest loading non-HDT library sophia_lg.
+hdt_cpp and hdt_java can speed up loading by reusing previously saved indexes but these were deleted between runs to achieve consistent measurements.
+
 
 # Examples
 
@@ -122,6 +145,7 @@ use std::{fs::File,io::BufReader};
 let f = File::open("example.hdt").expect("error opening file");
 let hdt = Hdt::new(BufReader::new(f)).expect("error loading HDT");
 ```
+
 ## Query SP? pattern
 
 Find the mayor of Leipzig from DBpedia using an SP? triple pattern:
