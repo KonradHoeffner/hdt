@@ -186,6 +186,7 @@ let p = SimpleTerm::Iri(
     IriRef::new_unchecked("http://dbpedia.org/ontology/mayor".into()));
 let mayors = graph.triples_matching(Some(s),Some(p),Any);
 ```
+
 # Limitations
 
 HDT is read-only.
