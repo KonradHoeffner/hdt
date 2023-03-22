@@ -199,5 +199,6 @@ Extensions such as HDT++ [@serializingrdf] or iHDT++ [@ihdt] are unsupported.
 
 We thank Pierre-Antoine Champin for explaining the details of Sophia and for creating [the benchmark suite](https://github.com/pchampin/sophia_benchmark) 
 that the [HDT benchmarks](https://github.com/KonradHoeffner/hdt_benchmark) are based on and for the thorough code review.
+We thank Edgard Marx for proofreading the paper.
 
 # References
