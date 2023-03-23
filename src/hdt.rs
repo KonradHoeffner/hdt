@@ -107,6 +107,7 @@ impl Hdt {
             return Box::new(iter::empty());
         }
         // TODO: improve error handling
+        let mut cache = TripleCache::new(self);
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
                 if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
@@ -137,8 +138,8 @@ impl Hdt {
                 Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
                     (
                         s.0.clone(),
-                        Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                        Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
+                        cache.get_p_string(t.predicate_id).unwrap(),
+                        cache.get_o_string(t.object_id).unwrap(),
                     )
                 }))
             }
@@ -148,16 +149,12 @@ impl Hdt {
                 }))
             }
             (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
-                (
-                    Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    p.0.clone(),
-                    Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
-                )
+                (cache.get_s_string(t.subject_id).unwrap(), p.0.clone(), cache.get_o_string(t.object_id).unwrap())
             })),
             (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 (
-                    Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()),
-                    Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
+                    cache.get_s_string(t.subject_id).unwrap(),
+                    cache.get_p_string(t.predicate_id).unwrap(),
                     o.0.clone(),
                 )
             })),
