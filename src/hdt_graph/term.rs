@@ -25,6 +25,7 @@ pub enum HdtTerm {
 
 impl HdtTerm {
     /// Convert t into an HdtTerm if it is a supported kind of term.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn try_from<T: Term>(t: T) -> Option<HdtTerm> {
         match t.kind() {
             TermKind::Iri => t.iri().map(|iri| HdtTerm::Iri(iri.map_unchecked(mown2arc))),
@@ -51,8 +52,7 @@ impl Term for HdtTerm {
         match self {
             HdtTerm::Iri(_) => TermKind::Iri,
             HdtTerm::BlankNode(_) => TermKind::BlankNode,
-            HdtTerm::LiteralDatatype(_, _) => TermKind::Literal,
-            HdtTerm::LiteralLanguage(_, _) => TermKind::Literal,
+            HdtTerm::LiteralDatatype(_, _) | HdtTerm::LiteralLanguage(_, _) => TermKind::Literal,
         }
     }
 
@@ -76,8 +76,7 @@ impl Term for HdtTerm {
 
     fn lexical_form(&self) -> Option<mownstr::MownStr> {
         match self {
-            HdtTerm::LiteralDatatype(lex, _) => Some(lex.as_ref().into()),
-            HdtTerm::LiteralLanguage(lex, _) => Some(lex.as_ref().into()),
+            HdtTerm::LiteralDatatype(lex, _) | HdtTerm::LiteralLanguage(lex, _) => Some(lex.as_ref().into()),
             _ => None,
         }
     }
@@ -107,5 +106,5 @@ impl PartialEq for HdtTerm {
 impl Eq for HdtTerm {}
 
 fn mown2arc(m: MownStr) -> Arc<str> {
-    Box::<str>::from(m.to_owned()).into()
+    Box::<str>::from(m).into()
 }

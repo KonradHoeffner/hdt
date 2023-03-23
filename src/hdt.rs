@@ -173,7 +173,7 @@ pub struct TripleCache<'a> {
 
 impl<'a> TripleCache<'a> {
     /// Build a new [`TripleCache`] for the given [`Hdt`]
-    pub fn new(hdt: &'a super::Hdt) -> Self {
+    pub const fn new(hdt: &'a super::Hdt) -> Self {
         TripleCache { hdt, idx: [0; 3], arc: [None, None, None] }
     }
 
