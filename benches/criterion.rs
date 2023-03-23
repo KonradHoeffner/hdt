@@ -21,7 +21,7 @@ fn load() -> HdtGraph {
     HdtGraph::new(hdt)
 }
 
-fn bench_query(c: &mut Criterion) {
+fn query(c: &mut Criterion) {
     let graph = load();
     let triples = &graph.hdt.triples;
     let twp = |s, p, o| graph.hdt.triples_with_pattern(s, p, o);
@@ -88,5 +88,5 @@ fn bench_query(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_query);
-criterion_main!(benches);
+criterion_group!(criterion, query);
+criterion_main!(criterion);

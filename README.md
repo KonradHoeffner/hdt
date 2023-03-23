@@ -95,11 +95,18 @@ The provided test data is very small in order to keep the size of the crate down
 
 Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
 
-## Library benchmark
+## Criterion benchmark
 
-    cargo bench
+    cargo bench --bench criterion
 
 * requires [persondata\_en.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2) placed in `tests/resources`
+
+## iai benchmark
+
+    cargo bench --bench iai
+
+* requires [persondata\_en\_10k.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en_10k.hdt.bz2) placed in `tests/resources`
+* requires [Valgrind](https://valgrind.org/) to be installed
 
 ## Comparative benchmark suite
 
