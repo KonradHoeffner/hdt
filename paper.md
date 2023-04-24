@@ -16,7 +16,7 @@ authors:
     equal-contrib: true
     affiliation: 2
 affiliations:
- - name: Institute for Medical Informatics, Statistics and Epidemiology, Medical Faculty, Leipzig University
+ - name: Institute for Medical Informatics, Statistics, and Epidemiology, Medical Faculty, Leipzig University
    index: 1
  - name: Independent Researcher, Belgium
    index: 2
@@ -34,11 +34,11 @@ Existing Rust applications using the Sophia library [@sophia] can easily and dra
 
 ## RDF
 
-The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each consisting of a *subject*, *predicate* and *object*.
+The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each consisting of a *subject*, *predicate*, and *object*.
 A set of triples is called an *RDF graph*, where the subjects and objects can be visualized as nodes and the predicates as labeled, directed edges.
 A predicate is always an *IRI* (Internationalized Resource Identifier), which is a generalization of an URI that permits additional characters.
 Subjects and objects can also be *blank nodes* and objects can also be *literals*.
-There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing and human readability.
+There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing, and human readability.
 For example, the N-Triples representation of the fact "the mayor of Leipzig is Burkhard Jung" from DBpedia [@dbpedia] is:
 
 ```ntriples
@@ -57,7 +57,7 @@ The other triple patterns are denoted analogously.
 While text-based RDF serialization formats can be read by humans, they are too verbose to be practical on large graphs.
 The serialized size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
 The *header* contains metadata as uncompressed RDF that describes the dataset.
-The *dictionary* stores all the *RDF terms* (IRIs, literals and blank nodes) in the dataset in compressed form using front-coding [@frontcoding],
+The *dictionary* stores all the *RDF terms* (IRIs, literals, and blank nodes) in the dataset in compressed form using front-coding [@frontcoding],
 and assigns a unique numerical identifier (ID) to each of them.
 This allows the *triples* component to store the adjacency matrix of the graph using those IDs in compressed form.
 
@@ -65,25 +65,25 @@ This allows the *triples* component to store the adjacency matrix of the graph u
 Image source and further information in @hdt2012.
 \label{fig:bt}](img/bt.png){ width=100% }
 
-All patterns with constant subject (SPO, SP?, SO? and S??) as well as ??? are answered using the Bitmap Triples structure, see \autoref{fig:bt}, while the other
+All patterns with constant subject (SPO, SP?, SO?, and S??) as well as ??? are answered using the Bitmap Triples structure, see \autoref{fig:bt}, while the other
 patterns are answered using HDT-FoQ, see \autoref{fig:foq}.
 As HDT is a very complex format, we recommend referring to @hdt2012 and @hdt2013 for a comprehensive documentation.
 
-![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P? and ??O patterns.
+![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P?, and ??O patterns.
 Image source and further information in @hdt2012.
 \label{fig:foq}](img/hdt-foq.png){ width=50% }
 
 # Statement of need
 
 Semantic Web technologies have seen adoption by major tech companies in recent years
-but widespread use is still inhibited by a lack of freely available performant, accessible, robust and adaptable tooling [@semanticwebreview].
+but widespread use is still inhibited by a lack of freely available performant, accessible, robust, and adaptable tooling [@semanticwebreview].
 SPARQL endpoints provide a standard publication channel and API to any RDF graph but they are not suitable for all use cases.
 On small graphs, there is a large relative overhead in both memory and CPU resources.
 On large graphs on the other hand, query complexity and shared access may cause an overload of the server, causing delayed or missed responses.
 Longterm availability of SPARQL endpoints is often compromised [@readyforaction], which impacts all applications depending on them.
 
 To insulate against such problems, Semantic Web applications may integrate and query an RDF graph using libraries such as Apache Jena [@jena] for Java,
-RDFlib [@rdflib] for Python, librdf [@librdf] for C or Sophia [@sophia] for Rust.
+RDFlib [@rdflib] for Python, librdf [@librdf] for C, or Sophia [@sophia] for Rust.
 However those libraries do not scale to large RDF graphs due to their excessive memory usage, see \autoref{fig:benchmark}.
 To complement hdt-cpp [@hdtcpp] and hdt-java [@hdtjava], we implement HDT in Rust, which is a popular modern, statically typed high-level programming language that allows writing performant software while still ensuring memory safety,
 which aligns with the challenges to the adoption of the Semantic Web.
@@ -92,7 +92,7 @@ which previously suffered from frequent downtimes when based on a SPARQL endpoin
 
 # Benchmark
 
-![Dataset loading time, memory usage (resident set size) and ?PO triple pattern query time of different RDF libraries on an Intel i9-12900k CPU based on the benchmark suite of @sophia.
+![Dataset loading time, memory usage (resident set size), and ?PO triple pattern query time of different RDF libraries on an Intel i9-12900k CPU based on the benchmark suite of @sophia.
 librdf was not benchmarked on $10^6$ triples and beyond due to graph loading exceeding several hours.
 hdt-java produces `DelayedString` instances, which are converted to strings to account for the time that would otherwise be spent later.
 The index files that hdt-java and hdt-cpp produce are deleted before each run.
