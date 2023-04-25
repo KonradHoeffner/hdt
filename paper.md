@@ -39,7 +39,7 @@ A set of triples is called an *RDF graph*, where the subjects and objects can be
 A predicate is always an *IRI* (Internationalized Resource Identifier), which is a generalization of a URI that permits additional characters.
 Subjects and objects can also be *blank nodes* and objects can also be *literals*.
 There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing, and human readability.
-For example, the N-Triples representation of the fact "the mayor of Leipzig is Burkhard Jung" from DBpedia [@dbpedia] is:
+For example, the N-Triples representation of the fact *"the mayor of Leipzig is Burkhard Jung"* from DBpedia [@dbpedia] is:
 
 ```ntriples
 <http://dbpedia.org/resource/Leipzig> <http://dbpedia.org/ontology/mayor>
@@ -50,7 +50,7 @@ For example, the N-Triples representation of the fact "the mayor of Leipzig is B
 
 *Triple patterns* allow matching a subset of a graph.
 Each part of the pattern is either a constant or a variable, resulting in eight different types. 
-We denote the pattern type with all constants as SPO (matching one or zero triples) and the type with all constants with ??? (matching all triples in the graph).
+We denote the pattern type with all constants as SPO (*subject-predicate-object*, matching one or zero triples) and the type with all variables with ??? (matching all triples in the graph).
 The other triple patterns are denoted analogously.
 
 ## Header Dictionary Triples
