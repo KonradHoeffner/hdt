@@ -27,18 +27,18 @@ bibliography: paper.bib
 # Summary
 
 We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Dictionary Triples (HDT) binary RDF compression format.
-This allows writing high-performance Rust applications that load and query HDT datasets using triple patterns.
-Existing Rust applications using the Sophia library [@sophia] can easily and drastically reduce their RAM usage by using the provided Sophia HDT adapter.
+This allows the writing of high-performance Rust applications that load and query HDT datasets using triple patterns.
+Existing Rust applications that use the Sophia library [@sophia] can easily and greatly reduce their RAM usage by using the provided Sophia HDT adapter.
 
 # Preliminaries
 
 ## RDF
 
-The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each consisting of a *subject*, *predicate*, and *object*.
-A set of triples is called an *RDF graph*, where the subjects and objects can be visualized as nodes and the predicates as labeled, directed edges.
-A predicate is always an *IRI* (Internationalized Resource Identifier), which is a generalization of a URI that permits additional characters.
+The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each of which consists of a *subject*, a *predicate*, and an *object*.
+A set of triples is called an *RDF graph*, where the subjects and objects can be visualised as nodes and the predicates as labelled, directed edges.
+A predicate is always an *IRI* (Internationalised Resource Identifier), which is a generalisation of a URI that allows additional characters.
 Subjects and objects can also be *blank nodes* and objects can also be *literals*.
-There are multiple text-based RDF serialization formats with different compromises between verbosity, ease of automatic processing, and human readability.
+There are several text-based RDF serialisation formats with different compromises between verbosity, ease of automatic processing, and human readability.
 For example, the N-Triples representation of the fact *"the mayor of Leipzig is Burkhard Jung"* from DBpedia [@dbpedia] is:
 
 ```ntriples
@@ -50,12 +50,12 @@ For example, the N-Triples representation of the fact *"the mayor of Leipzig is 
 
 *Triple patterns* allow matching a subset of a graph.
 Each part of the pattern is either a constant or a variable, resulting in eight different types. 
-We denote the pattern type with all constants as SPO (*subject-predicate-object*, matching one or zero triples) and the type with all variables with ??? (matching all triples in the graph).
+We denote the pattern type with all constants as SPO (*subject-predicate-object*, matching one or zero triples) and the type with all variables as ??? (matching all triples in the graph).
 The other triple patterns are denoted analogously.
 
 ## Header Dictionary Triples
-While text-based RDF serialization formats can be read by humans, they are too verbose to be practical on large graphs.
-The serialized size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+While text-based RDF serialisation formats can be read by humans, they are too verbose to be practical on large graphs.
+The serialised size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
 The *header* contains metadata as uncompressed RDF that describes the dataset.
 The *dictionary* stores all the *RDF terms* (IRIs, literals, and blank nodes) in the dataset in compressed form using front-coding [@frontcoding],
 and assigns a unique numerical identifier (ID) to each of them.
@@ -75,27 +75,27 @@ Image source and further information in @hdt2012.
 
 # Statement of need
 
-Semantic Web technologies have seen adoption by major tech companies in recent years
+Semantic Web technologies have been adopted by major tech companies in recent years
 but widespread use is still inhibited by a lack of freely available performant, accessible, robust, and adaptable tooling [@semanticwebreview].
 SPARQL endpoints provide a standard publication channel and API to any RDF graph but they are not suitable for all use cases.
 On small graphs, there is a large relative overhead in both memory and CPU resources.
-On large graphs on the other hand, query complexity and shared access may cause an overload of the server, causing delayed or missed responses.
-Long-term availability of SPARQL endpoints is often compromised [@readyforaction], which impacts all applications depending on them.
+On large graphs, on the other hand, query complexity and shared access may cause an overload of the server, causing delayed or missed responses.
+The long-term availability of SPARQL endpoints is often compromised [@readyforaction], which impacts all applications that depend on them.
 
-To insulate against such problems, Semantic Web applications may integrate and query an RDF graph using libraries such as Apache Jena [@jena] for Java,
+To insulate against such problems, Semantic Web applications can integrate and query an RDF graph using libraries such as Apache Jena [@jena] for Java,
 RDFlib [@rdflib] for Python, librdf [@librdf] for C, or Sophia [@sophia] for Rust.
-However those libraries do not scale to large RDF graphs due to their excessive memory usage, see \autoref{fig:benchmark}.
-To complement hdt-cpp [@hdtcpp] and hdt-java [@hdtjava], we implement HDT in Rust, which is a popular modern, statically typed high-level programming language that allows writing performant software while still ensuring memory safety,
-which aligns with the challenges to the adoption of the Semantic Web.
-hdt-rs is used through the included Sophia adapter by the RickView [@rickview] RDF browser to publish large graphs, for example LinkedSpending [@linkedspending] at <https://linkedspending.aksw.org>,
-which previously suffered from frequent downtimes when based on a SPARQL endpoint.
+However these libraries do not scale to large RDF graphs due to their excessive memory usage, see \autoref{fig:benchmark}.
+To complement hdt-cpp [@hdtcpp] and hdt-java [@hdtjava], we implement HDT in Rust, which is a popular modern, statically typed high-level programming language that allows writing performant software while ensuring memory safety,
+which meets the challenges of Semantic Web adoption.
+hdt-rs is used by the RDF browser RickView [@rickview] via the included Sophia adapter to publish large graphs, for example LinkedSpending [@linkedspending] at <https://linkedspending.aksw.org>,
+which previously suffered from frequent downtime when based on a SPARQL endpoint.
 
 # Benchmark
 
-![Dataset loading time, memory usage (resident set size), and ?PO triple pattern query time of different RDF libraries on an Intel i9-12900k CPU based on the benchmark suite of @sophia.
-librdf was not benchmarked on $10^6$ triples and beyond due to graph loading exceeding several hours.
-hdt-java produces `DelayedString` instances, which are converted to strings to account for the time that would otherwise be spent later.
-The index files that hdt-java and hdt-cpp produce are deleted before each run.
+![Dataset load time, memory usage (resident set size), and ?PO triple pattern query time of different RDF libraries on an Intel i9-12900k CPU based on the benchmark suite of @sophia.
+librdf was not benchmarked on $10^6$ triples and beyond due to graph loading times exceeding several hours.
+hdt-java produces `DelayedString` instances that are converted to strings to account for the time that would otherwise be spent later.
+The index files created by hdt-java and hdt-cpp produce are deleted before each run.
 Versions: Apache Jena 4.6.1, n3.js 1.6.3, librdf 1.0.17, RDFlib 6.2.0, sophia 0.8.0-alpha, hdt-rs 0.0.13-alpha, hdt-java 3.0.9, hdt-cpp master fbcb31a, OpenJDK 19, Node.js 16.18.0, clang 14.0.6, Python 3.10.8, rustc 1.69.0-nightly (target-cpu=native), GCC 12.2.1.
 \label{fig:benchmark}](img/benchmark.png){ width=100% }
 
@@ -113,13 +113,13 @@ Versions: Apache Jena 4.6.1, n3.js 1.6.3, librdf 1.0.17, RDFlib 6.2.0, sophia 0.
 | rdflib (python) |        14481 |          182002 |              940 |
 | librdf (c)      |           -- |              -- |               -- |
 
-: Rounded averages over four runs on the complete person data dataset containing 10310105 triples (rightmost points in \autoref{fig:benchmark}) serialized as a 90 MB HDT and 1.2 GB RDF Turtle file.
+: Rounded averages over four runs on the complete person data dataset containing 10310105 triples (rightmost points in \autoref{fig:benchmark}) serialised as a 90 MB HDT and 1.2 GB RDF Turtle file.
 Sorted by memory usage of the graph. For better comparison, results for hdt_java are given both with and without calling `DelayedString::toString` on the results.
-Measured values are subject to considerable fluctuations, see vertical bars in \autoref{fig:benchmark}.\label{tab:benchmark}
+The measured values are subject to considerable fluctuations, see the vertical bars in \autoref{fig:benchmark}.\label{tab:benchmark}
 
-\autoref{tab:benchmark} demonstrates the advantage of HDT libraries in memory usage, with hdt_cpp only using 112 MB compared to 834 MB for the most memory-efficient tested non-HDT RDF library of sophia_lg (LightGraph).
-When comparing only Rust libraries, sophia_lg still needs more than three times the amount of memory that hdt_rs does.
-Memory consumption is calculated by comparing resident set size before and after graph loading and index generation, in between which memory usage may be higher.
+\autoref{tab:benchmark} demonstrates the advantage of HDT libraries in memory usage, with hdt_cpp using only 112 MB compared to 834 MB for the most memory-efficient non-HDT RDF library tested, sophia_lg (LightGraph).
+When comparing only Rust libraries, sophia_lg still uses more than three times as much memory as hdt_rs.
+The memory consumption is calculated by comparing the resident set size before and after graph loading and index generation, in between the memory usage may be higher.
 Converting other formats to HDT in the first place is also a time and memory-intensive process.
 The uncompressed and fully indexed Sophia FastGraph (sophia) strongly outperforms the HDT libraries in ?PO query time, with 20ms compared to 214ms respectively 321ms for hdt_java.
 While being the fastest querying HDT library in this test, hdt_java has a large memory usage for an HDT library placing it near the much faster sophia_lg.
