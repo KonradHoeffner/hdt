@@ -71,7 +71,7 @@ As HDT is a complex format, we recommend referring to @hdt2012 and @hdt2013 for 
 
 ![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P?, and ??O patterns.
 Image source and further information in @hdt2012.
-\label{fig:foq}](img/hdt-foq.png){ width=50% }
+\label{fig:foq}](img/hdt-foq.png){ width=55% }
 
 # Statement of need
 
