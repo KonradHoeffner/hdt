@@ -1,6 +1,6 @@
 use crate::triples::Id;
 use crate::triples::TriplesBitmap;
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 // see filterPredSubj in "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36

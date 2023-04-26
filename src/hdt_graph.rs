@@ -7,10 +7,10 @@ use log::debug;
 
 use sophia::api::graph::{GTripleSource, Graph};
 
+use core::convert::Infallible;
+use core::iter;
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, Term};
-use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
-use std::iter;
 use std::sync::Arc;
 
 mod term;
@@ -213,10 +213,10 @@ impl Graph for HdtGraph {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use core::result::Result;
     use sophia::api::prelude::Triple;
     use sophia::api::term::matcher::Any;
     use std::fs::File;
-    use std::result::Result;
 
     #[test]
     fn test_graph() {

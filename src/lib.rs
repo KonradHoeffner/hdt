@@ -65,6 +65,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::if_not_else)]
 #![warn(clippy::missing_const_for_fn)]
+#![warn(clippy::std_instead_of_core)]
 /// Types for storing and reading data.
 pub mod containers;
 // Types for representing dictionaries.

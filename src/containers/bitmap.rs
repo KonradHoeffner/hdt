@@ -1,12 +1,12 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
+use core::convert::TryFrom;
+use core::mem::size_of;
 use rsdict::RsDict;
-use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
-use std::mem::size_of;
 
 //const USIZE_BITS: usize = usize::BITS as usize;
 

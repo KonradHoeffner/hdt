@@ -2,7 +2,7 @@
 use crate::containers::Bitmap;
 use crate::containers::Sequence;
 use crate::triples::Id;
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 /// Adjacency list including a compact integer sequence and a bitmap for efficient access of that sequence using rank and select queries.
 #[derive(Debug)]

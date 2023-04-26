@@ -1,10 +1,10 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
 use bytesize::ByteSize;
+use core::cmp::Ordering;
+use core::convert::TryFrom;
 use log::{debug, error};
 use rsdict::RsDict;
-use std::cmp::Ordering;
-use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
