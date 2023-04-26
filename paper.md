@@ -66,12 +66,12 @@ Image source and further information in @hdt2012.
 \label{fig:bt}](img/bt.png){ width=100% }
 
 All patterns with constant subject (SPO, SP?, SO?, and S??) as well as the one with all variables (???) are answered using the Bitmap Triples structure (see \autoref{fig:bt}), while the other
-patterns use HDT-FoQ, see \autoref{fig:foq}.
+patterns use the HDT *Focused on Querying* (HDT-FoQ) extension, see \autoref{fig:foq}.
 As HDT is a complex format, we recommend referring to @hdt2012 and @hdt2013 for comprehensive documentation.
 
 ![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P?, and ??O patterns.
 Image source and further information in @hdt2012.
-\label{fig:foq}](img/hdt-foq.png){ width=55% }
+\label{fig:foq}](img/hdt-foq.png){ width=50% }
 
 # Statement of need
 
