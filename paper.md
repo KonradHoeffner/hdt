@@ -28,7 +28,7 @@ bibliography: paper.bib
 
 We present the Rust library hdt-rs (named "hdt" in the context of Rust libraries, such as [on crates.io](https://crates.io/crates/hdt)) for the Header Dictionary Triples (HDT) binary RDF compression format.
 This allows the writing of high-performance Rust applications that load and query HDT datasets using triple patterns.
-Existing Rust applications that use the Sophia library [@sophia] can easily and greatly reduce their RAM usage by using the provided Sophia HDT adapter.
+Existing Rust applications that use the [Sophia library](https://crates.io/crates/sophia) [@sophia] can easily and greatly reduce their RAM usage by using the provided Sophia HDT adapter.
 
 # Preliminaries
 
@@ -36,26 +36,26 @@ Existing Rust applications that use the Sophia library [@sophia] can easily and 
 
 The *Resource Description Framework* (RDF) is a data model that represents information using *triples*, each of which consists of a *subject*, a *predicate*, and an *object*.
 A set of triples is called an *RDF graph*, where the subjects and objects can be visualised as nodes and the predicates as labelled, directed edges.
-A predicate is always an *IRI* (Internationalised Resource Identifier), which is a generalisation of a URI that allows additional characters.
+Predicates are always *IRIs* (Internationalised Resource Identifiers), which are generalisations of a URIs that allow additional characters.
 Subjects and objects can also be *blank nodes* and objects can also be *literals*.
 There are several text-based RDF serialisation formats with different compromises between verbosity, ease of automatic processing, and human readability.
 For example, the N-Triples representation of the fact *"the mayor of Leipzig is Burkhard Jung"* from DBpedia [@dbpedia] is:
 
 ```ntriples
-<http://dbpedia.org/resource/Leipzig> <http://dbpedia.org/ontology/mayor>
-    (no linebreak) <http://dbpedia.org/resource/Burkhard_Jung> .
+<http://dbpedia.org/resource/Leipzig> <http://dbpedia.org/ontology/mayor> \
+    <http://dbpedia.org/resource/Burkhard_Jung> .
 ```
 
 ## Triple Patterns
 
-*Triple patterns* allow matching a subset of a graph.
+*Triple patterns* match a subset of a graph.
 Each part of the pattern is either a constant or a variable, resulting in eight different types. 
-We denote the pattern type with all constants as SPO (*subject-predicate-object*, matching one or zero triples) and the type with all variables as ??? (matching all triples in the graph).
+We denote the pattern type with all constants as SPO (*subject-predicate-object*, matches one or zero triples) and the type with all variables as ??? (matches all triples in the graph).
 The other triple patterns are denoted analogously.
 
 ## Header Dictionary Triples
-While text-based RDF serialisation formats can be read by humans, they are too verbose to be practical on large graphs.
-The serialised size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing efficient queries.
+While text-based RDF serialisation formats can be read by humans, they are too verbose to be practical for large graphs.
+The serialised size of a graph can be drastically lowered by using the Header Dictionary Triples binary RDF format, which can be loaded into memory in compressed form while still allowing for efficient queries.
 The *header* contains metadata as uncompressed RDF that describes the dataset.
 The *dictionary* stores all the *RDF terms* (IRIs, literals, and blank nodes) in the dataset in compressed form using front-coding [@frontcoding],
 and assigns a unique numerical identifier (ID) to each of them.
@@ -65,9 +65,9 @@ This allows the *triples* component to store the adjacency matrix of the graph u
 Image source and further information in @hdt2012.
 \label{fig:bt}](img/bt.png){ width=100% }
 
-All patterns with constant subject (SPO, SP?, SO?, and S??) as well as ??? are answered using the Bitmap Triples structure, see \autoref{fig:bt}, while the other
-patterns are answered using HDT-FoQ, see \autoref{fig:foq}.
-As HDT is a very complex format, we recommend referring to @hdt2012 and @hdt2013 for a comprehensive documentation.
+All patterns with constant subject (SPO, SP?, SO?, and S??) as well as the one with all variables (???) are answered using the Bitmap Triples structure (see \autoref{fig:bt}), while the other
+patterns use HDT-FoQ, see \autoref{fig:foq}.
+As HDT is a complex format, we recommend referring to @hdt2012 and @hdt2013 for comprehensive documentation.
 
 ![The HDT *Focused on Querying* (HDT-FoQ) extension allows efficient queries with ?PO, ?P?, and ??O patterns.
 Image source and further information in @hdt2012.
@@ -118,15 +118,15 @@ Sorted by memory usage of the graph. For better comparison, results for hdt_java
 The measured values are subject to considerable fluctuations, see the vertical bars in \autoref{fig:benchmark}.\label{tab:benchmark}
 
 \autoref{tab:benchmark} demonstrates the advantage of HDT libraries in memory usage, with hdt_cpp using only 112 MB compared to 834 MB for the most memory-efficient non-HDT RDF library tested, sophia_lg (LightGraph).
-When comparing only Rust libraries, sophia_lg still uses more than three times as much memory as hdt_rs.
-The memory consumption is calculated by comparing the resident set size before and after graph loading and index generation, in between the memory usage may be higher.
+When comparing only Rust libraries, sophia_lg still uses over three times as much memory as hdt_rs.
+The memory consumption is calculated by comparing the resident set size before and after graph loading and index generation, with the caveat that the memory usage may be higher during graph loading.
 Converting other formats to HDT in the first place is also a time and memory-intensive process.
 The uncompressed and fully indexed Sophia FastGraph (sophia) strongly outperforms the HDT libraries in ?PO query time, with 20ms compared to 214ms respectively 321ms for hdt_java.
-While being the fastest querying HDT library in this test, hdt_java has a large memory usage for an HDT library placing it near the much faster sophia_lg.
-The large overhead on small graph sizes for hdt_java in \autoref{fig:benchmark} suggests that these considerations might turn out differently with larger graph sizes.
-In fact, HDT allows loading much larger datasets, however at that point several of the tested libraries could not have been included, such as rdflib, which already uses more than 14 GB of memory to load the ~10 million triples.
+While being the fastest querying HDT library in this test, hdt_java has a large memory usage for an HDT library placing it closer to the much faster sophia_lg.
+The large overhead on small graph sizes for hdt_java in \autoref{fig:benchmark} suggests that with larger graph sizes, these considerations might yield different results.
+In fact, HDT allows loading much larger datasets, but at that point, several of the tested libraries could not have been included, such as rdflib, which already uses over 14 GB of memory to load the ~10 million triples.
 hdt_rs achieves the lowest graph-loading time with 912ms compared to more than 11s for the fastest-loading non-HDT library sophia_lg.
-hdt_cpp and hdt_java can speed up loading by reusing previously saved indexes but these were deleted between runs to achieve consistent measurements.
+hdt_cpp and hdt_java can speed up loading by reusing previously saved indexes, but these were deleted between runs to achieve consistent measurements.
 
 
 # Examples
@@ -189,16 +189,15 @@ let mayors = graph.triples_matching(Some(s),Some(p),Any);
 
 # Limitations
 
-HDT is read-only.
-For querying and modification of large graphs, a separate SPARQL endpoint is better suited.
+HDT is read-only, so for querying and modifying large graphs, we recommend to use a separate SPARQL endpoint.
 We do not supply command line tools for converting other formats to and from HDT.
 Instead, the tools of hdt-cpp and hdt-java can be used.
 Extensions such as HDT++ [@serializingrdf] or iHDT++ [@ihdt] are unsupported.
 
 # Acknowledgements
 
-We thank Pierre-Antoine Champin for explaining the details of Sophia and for creating [the benchmark suite](https://github.com/pchampin/sophia_benchmark) 
+We express our gratitude to Pierre-Antoine Champin for explaining the intricacies of Sophia and for developing [the benchmark suite](https://github.com/pchampin/sophia_benchmark) 
 that the [HDT benchmarks](https://github.com/KonradHoeffner/hdt_benchmark) are based on and for the thorough code review.
-We thank Edgard Marx for proofreading the paper.
+We extend our thanks to Edgard Marx for proofreading the paper.
 
 # References
