@@ -130,6 +130,7 @@ hdt_cpp and hdt_java can speed up loading by reusing previously saved indexes, b
 
 
 # Examples
+Further examples are available in the [API documentation](https://docs.rs/hdt/latest/hdt/) and [in the code repository](https://github.com/KonradHoeffner/hdt/tree/main/examples).
 
 ## Add the dependency to a Rust application
 
