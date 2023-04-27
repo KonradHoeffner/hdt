@@ -17,7 +17,7 @@ pub struct SubjectIter<'a> {
 
 impl<'a> SubjectIter<'a> {
     /// Create an iterator over all triples.
-    pub const fn new(triples: &'a TriplesBitmap) -> Self {
+    pub fn new(triples: &'a TriplesBitmap) -> Self {
         SubjectIter {
             triples,
             x: 1, // was 0 in the old code but it should start at 1
@@ -114,7 +114,7 @@ impl<'a> Iterator for SubjectIter<'a> {
             return None;
         }
 
-        let y = self.triples.wavelet_y.get(self.pos_y) as Id;
+        let y = self.triples.wavelet_y.access(self.pos_y).unwrap() as Id;
 
         if self.search_z > 0 {
             self.pos_y += 1;

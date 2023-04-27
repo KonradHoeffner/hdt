@@ -18,7 +18,7 @@ impl<'a> PredicateIter<'a> {
     /// Panics if the object does not exist.
     pub fn new(triples: &'a TriplesBitmap, p: Id) -> Self {
         assert!(p != 0, "object 0 does not exist, cant iterate");
-        let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p as usize);
+        let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p as usize).unwrap();
         //println!("the predicate {} is used by {} subjects in the index", p, occs);
         PredicateIter { triples, p, i: 0, pos_z: 0, os: 0, s: 0, occs }
     }
@@ -32,7 +32,7 @@ impl<'a> Iterator for PredicateIter<'a> {
         }
         if self.os == 0 {
             // Algorithm 1 findSubj from Martinez et al. 2012 ******
-            let pos_y = self.triples.wavelet_y.select(self.i, self.p as usize) as u64;
+            let pos_y = self.triples.wavelet_y.select(self.i, self.p as usize).unwrap() as u64;
             self.s = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;
             // *****************************************************
             // SP can have multiple O

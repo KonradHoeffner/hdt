@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::io;
 use std::io::BufRead;
-use sucds::{CompactVector, Searial, WaveletMatrix, WaveletMatrixBuilder};
+use sucds::{bit_vectors::Rank9Sel, char_sequences::WaveletMatrix, int_vectors::CompactVector, Serializable};
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;
@@ -102,7 +102,7 @@ pub struct TriplesBitmap {
     /// Index for object-based access. Points to the predicate layer.
     pub op_index: OpIndex,
     /// wavelet matrix for predicate-based access
-    pub wavelet_y: WaveletMatrix,
+    pub wavelet_y: WaveletMatrix<Rank9Sel>,
 }
 
 impl fmt::Debug for TriplesBitmap {
@@ -155,7 +155,7 @@ impl TriplesBitmap {
 
         while low < high {
             let mid = (low + high) / 2;
-            match self.wavelet_y.get(mid).cmp(&element) {
+            match self.wavelet_y.access(mid).unwrap().cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => return Some(mid),
@@ -169,15 +169,17 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix {
+    fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
         debug!("Building wavelet matrix...");
-        let mut wavelet_builder = WaveletMatrixBuilder::with_width(sequence.bits_per_entry);
+        let mut builder =
+            CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder");
+        // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
         for x in &sequence {
-            wavelet_builder.push(x);
+            builder.push_int(x).unwrap();
         }
         assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
         drop(sequence);
-        let wavelet = wavelet_builder.build().expect("Error building the wavelet matrix. Aborting.");
+        let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
         debug!("built wavelet matrix with length {}", wavelet.len());
         wavelet
     }
@@ -235,22 +237,23 @@ impl TriplesBitmap {
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
-        let mut cv = CompactVector::with_capacity(entries, sucds::util::needed_bits(entries));
+        let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         let wavelet_y = wavelet_thread.join().unwrap();
         /*
         let get_p = |pos_z: u32| {
             let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
-            wavelet_y.get(pos_y as usize) as Id
+            wavelet_y.access(pos_y as usize).unwrap() as Id
         };
         */
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
-            indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize));
+            indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
             for index in indices {
                 bitmap_index_dict.push(first);
                 first = false;
-                cv.push(index as usize);
+                cv.push_int(index as usize).unwrap();
             }
         }
         let bitmap_index = Bitmap { dict: bitmap_index_dict };

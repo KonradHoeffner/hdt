@@ -1,6 +1,7 @@
 use crate::triples::Id;
 use crate::triples::TriplesBitmap;
 use std::cmp::Ordering;
+use sucds::int_vectors::Access;
 
 // see filterPredSubj in "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36
@@ -21,8 +22,8 @@ impl<'a> PredicateObjectIter<'a> {
         let mut low = triples.op_index.find(o);
         let mut high = triples.op_index.last(o);
         let get_y = |pos_index| {
-            let pos_y = triples.op_index.sequence.get(pos_index) as u64;
-            triples.wavelet_y.get(pos_y as usize) as Id
+            let pos_y = triples.op_index.sequence.access(pos_index).unwrap() as u64;
+            triples.wavelet_y.access(pos_y as usize).unwrap() as Id
         };
         // Binary search with a twist:
         // Each value may occur multiple times, so we search for the left and right borders.
@@ -68,7 +69,7 @@ impl<'a> Iterator for PredicateObjectIter<'a> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_y = self.triples.op_index.sequence.get(self.pos_index) as u64;
+        let pos_y = self.triples.op_index.sequence.access(self.pos_index).unwrap() as u64;
         //let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
         //println!(" op p {y}");
         let s = self.triples.bitmap_y.dict.rank(pos_y, true) as Id + 1;

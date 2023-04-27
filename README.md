@@ -32,7 +32,7 @@ Add the following to Cargo.toml:
 
 ```toml
 [dependencies]
-hdt = "0.0.13-alpha.0"
+hdt = "0.1.1"
 ```
 
 Nightly is required:
@@ -70,8 +70,10 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.0.13-alpha.0", default-features = false }
+hdt = { version = "0.1.1", default-features = false }
 ```
+
+There is also a runnable example are [in the examples folder](https://github.com/KonradHoeffner/hdt/tree/main/examples), which you can run with `cargo run --example query`.
 
 ## API Documentation
 

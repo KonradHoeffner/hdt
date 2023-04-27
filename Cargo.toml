@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.1.0"
+version = "0.1.1"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -20,7 +20,7 @@ langtag = "^0.3.2"
 ntriple = "^0.1.1"
 rsdict = { version = "0.0.6", features = ["simd"] }
 sophia = { version = "0.8.0-alpha.0", optional = true }
-sucds = "0.6.0"
+sucds = "0.7.0"
 thiserror = "1.0.37"
 log = "0.4"
 mownstr = "0.2.0"
