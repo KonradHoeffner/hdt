@@ -4,6 +4,7 @@
 [![Lint and Test](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml)
 [![Documentation](https://docs.rs/hdt/badge.svg)](https://docs.rs/hdt/)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks--x.svg?style=social)](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb)
+[![DOI](https://zenodo.org/badge/541577178.svg)](https://zenodo.org/badge/latestdoi/541577178)
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
