@@ -1,7 +1,7 @@
+use crate::containers::read_sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
-use crate::containers::Sequence;
 use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
@@ -12,6 +12,8 @@ use std::io::BufRead;
 use std::str;
 use std::sync::Arc;
 use std::thread::{spawn, JoinHandle};
+use sucds::int_vectors::{Access, CompactVector};
+use sucds::Serializable;
 use thiserror::Error;
 
 /// Dictionary section with plain front coding.
@@ -19,7 +21,7 @@ use thiserror::Error;
 pub struct DictSectPFC {
     num_strings: usize,
     block_size: usize,
-    sequence: Sequence,
+    sequence: CompactVector,
     packed_data: Arc<[u8]>,
 }
 
@@ -66,7 +68,7 @@ impl DictSectPFC {
     */
 
     fn index_str(&self, index: usize) -> &str {
-        let position: usize = self.sequence.get(index);
+        let position: usize = self.sequence.access(index).unwrap();
         let length = self.strlen(position);
         str::from_utf8(&self.packed_data[position..position + length]).unwrap()
     }
@@ -81,7 +83,7 @@ impl DictSectPFC {
         }
         // binary search
         let mut low: usize = 0;
-        let mut high = self.sequence.entries.saturating_sub(2); // should be -1 but only works with -2, investigate
+        let mut high = self.sequence.len().saturating_sub(2); // should be -1 but only works with -2, investigate
         let max = high;
         let mut mid = high;
         while low <= high {
@@ -143,11 +145,11 @@ impl DictSectPFC {
     }
 
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
-        if block >= self.sequence.entries {
+        if block >= self.sequence.len() {
             return 0;
         }
 
-        let mut pos = self.sequence.get(block);
+        let mut pos = self.sequence.access(block).unwrap();
         let mut temp_string = String::new();
 
         //let mut delta: u64 = 0;
@@ -204,7 +206,7 @@ impl DictSectPFC {
         }
         let block_index = id.saturating_sub(1) as usize / self.block_size;
         let string_index = id.saturating_sub(1) as usize % self.block_size;
-        let mut position = self.sequence.get(block_index);
+        let mut position = self.sequence.access(block_index).unwrap();
         let mut slen = self.strlen(position);
         let mut string: Vec<u8> = self.packed_data[position..position + slen].to_vec();
         //println!("block_index={} string_index={}, string={}", block_index, string_index, str::from_utf8(&string).unwrap());
@@ -280,7 +282,7 @@ impl DictSectPFC {
         }
 
         // read sequence log array
-        let sequence = Sequence::read(reader)?;
+        let (sequence, sequence_crc) = read_sequence(reader)?;
 
         // read packed data
         let mut packed_data = vec![0u8; packed_length];
@@ -346,8 +348,8 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
-        assert_eq!(sequence.data.len(), data_size);
+        let data_size = (sequence.width() * sequence.len() + 63) / 64;
+        assert_eq!(sequence.len(), data_size);
 
         let (subjects, _) = DictSectPFC::read(&mut reader).unwrap();
         assert_eq!(subjects.num_strings, 5);
@@ -361,7 +363,7 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries + 63) / 64;
-        assert_eq!(sequence.data.len(), data_size);
+        let data_size = (sequence.width() * sequence.len() + 63) / 64;
+        assert_eq!(sequence.len(), data_size);
     }
 }

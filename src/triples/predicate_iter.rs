@@ -1,6 +1,7 @@
 use crate::triples::Id;
 use crate::triples::TripleId;
 use crate::triples::TriplesBitmap;
+use sucds::int_vectors::Access;
 
 /// Iterator over all triples with a given property ID, answering an (?S,P,?O) query.
 pub struct PredicateIter<'a> {
@@ -45,7 +46,7 @@ impl<'a> Iterator for PredicateIter<'a> {
             self.pos_z += 1;
         }
 
-        let o = self.triples.adjlist_z.sequence.get(self.pos_z) as Id;
+        let o = self.triples.adjlist_z.sequence.access(self.pos_z).unwrap() as Id;
         if self.os == 0 {
             self.i += 1;
         }

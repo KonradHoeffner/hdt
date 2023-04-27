@@ -15,4 +15,4 @@ mod control_info;
 pub use adj_list::AdjList;
 pub use bitmap::Bitmap;
 pub use control_info::{ControlInfo, ControlType};
-pub use sequence::Sequence;
+pub use sequence::read_sequence;

@@ -1,21 +1,22 @@
 //! Adjacency list containing an integer sequence and a bitmap with rank and select support.
 use crate::containers::Bitmap;
-use crate::containers::Sequence;
 use crate::triples::Id;
 use std::cmp::Ordering;
+use sucds::int_vectors::CompactVector;
+use sucds::Serializable;
 
-/// Adjacency list including a compact integer sequence and a bitmap for efficient access of that sequence using rank and select queries.
+/// Adjacency list including a compact integer sequence and a bitmap for efficient get_int of that sequence using rank and select queries.
 #[derive(Debug)]
 pub struct AdjList {
     /// Compact integer sequence.
-    pub sequence: Sequence,
+    pub sequence: CompactVector,
     /// Helper structure for rank and select queries.
     pub bitmap: Bitmap,
 }
 
 impl AdjList {
     /// Adjacency list with the given sequence and bitmap.
-    pub const fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
+    pub const fn new(sequence: CompactVector, bitmap: Bitmap) -> Self {
         AdjList { sequence, bitmap }
     }
 
@@ -31,17 +32,17 @@ impl AdjList {
 
     /// Get the ID at the given position.
     pub fn get_id(&self, word_index: usize) -> Id {
-        self.sequence.get(word_index) as Id
+        self.sequence.get_int(word_index).unwrap() as Id
     }
 
     /// Number of entries in both the integer sequence and the bitmap.
     pub const fn len(&self) -> usize {
-        self.sequence.entries
+        self.sequence.len()
     }
 
     /// Whether the list is emtpy
     pub const fn is_empty(&self) -> bool {
-        self.sequence.entries == 0
+        self.sequence.is_empty()
     }
 
     /// Find the first position for the given ID, counting from 1.
@@ -66,7 +67,7 @@ impl AdjList {
         let mut high = end;
         while low < high {
             let mid = (low + high) / 2;
-            match self.sequence.get(mid).cmp(&element) {
+            match self.sequence.get_int(mid).unwrap().cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => return Some(mid),

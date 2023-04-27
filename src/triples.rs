@@ -1,4 +1,5 @@
-use crate::containers::{AdjList, Bitmap, Sequence};
+use crate::containers::read_sequence;
+use crate::containers::{AdjList, Bitmap};
 use crate::ControlInfo;
 use bytesize::ByteSize;
 use log::{debug, error};
@@ -169,17 +170,12 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
+    fn build_wavelet(sequence: CompactVector) -> WaveletMatrix<Rank9Sel> {
         debug!("Building wavelet matrix...");
-        let mut builder =
-            CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
-        for x in &sequence {
-            builder.push_int(x).unwrap();
-        }
-        assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
-        drop(sequence);
-        let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
+        //assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
+        //drop(sequence);
+        let wavelet = WaveletMatrix::new(sequence).expect("Error building the wavelet matrix. Aborting.");
         debug!("built wavelet matrix with length {}", wavelet.len());
         wavelet
     }
@@ -209,16 +205,16 @@ impl TriplesBitmap {
         let bitmap_z = Bitmap::read(reader)?;
 
         // read sequences
-        let sequence_y = Sequence::read(reader)?;
+        let (sequence_y, sequence_y_crc) = read_sequence(reader)?;
         let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let mut sequence_z = Sequence::read(reader)?;
+        let (sequence_z, sequence_z_crc) = read_sequence(reader)?;
 
         // construct adjacency lists
         // construct object-based index to traverse from the leaves and support ??O and ?PO queries
         debug!("Building OPS index...");
-        let entries = sequence_z.entries;
+        let entries = sequence_z.len();
         // if it takes too long to calculate, can also pass in as parameter
-        let max_object = sequence_z.into_iter().max().unwrap().to_owned();
+        let max_object = sequence_z.iter().max().unwrap().to_owned();
         // limited to < 2^32 objects
         let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
 
@@ -227,7 +223,7 @@ impl TriplesBitmap {
         // they count the number of appearances in a sequence instead, which saves memory
         // temporarily but they need to loop over it an additional time.
         for pos_z in 0..entries {
-            let object = sequence_z.get(pos_z);
+            let object = sequence_z.get_int(pos_z).unwrap();
             if object == 0 {
                 error!("ERROR: There is a zero value in the Z level.");
                 continue;
@@ -259,7 +255,7 @@ impl TriplesBitmap {
         let bitmap_index = Bitmap { dict: bitmap_index_dict };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         debug!("built OPS index");
-        assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
+        assert!(sequence_z_crc.join().unwrap(), "sequence_z CRC check failed.");
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
