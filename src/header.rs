@@ -1,8 +1,9 @@
 use crate::containers::rdf::{Id, Literal, Term, Triple};
 use crate::containers::ControlInfo;
+use eyre::{eyre, Result, WrapErr};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
-use std::io;
+
 use std::io::BufRead;
 use std::str;
 
@@ -19,26 +20,21 @@ pub struct Header {
 
 impl Header {
     /// Reader needs to be positioned directly after the global control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
-
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         let header_ci = ControlInfo::read(reader)?;
         if header_ci.format != "ntriples" {
-            return Err(Error::new(InvalidData, "Headers currently only support the NTriples format"));
+            return Err(eyre!("Invalid header format {}, only 'ntriples' is supported", header_ci.format));
         }
 
-        let length = header_ci
-            .get("length")
-            .and_then(|v| v.parse::<usize>().ok())
-            .ok_or_else(|| Error::new(InvalidData, "Header's length is missing or invalid"))?;
+        let ls = header_ci.get("length").ok_or_else(|| eyre!("missing header length"))?;
+        let length = ls.parse::<usize>().wrap_err_with(|| format!("invalid header length '{ls}'"))?;
 
         let mut body_buffer: Vec<u8> = vec![0; length];
         reader.read_exact(&mut body_buffer)?;
         let mut body = BTreeSet::new();
 
         for line_slice in body_buffer.split(|b| b == &b'\n') {
-            let line = str::from_utf8(line_slice).map_err(|_| Error::new(InvalidData, "Header is not UTF-8"))?;
+            let line = str::from_utf8(line_slice).wrap_err("Header is not UTF-8")?;
             if let Ok(Some(triple)) = triple_line(line) {
                 let subject = match triple.subject {
                     ntriple::Subject::IriRef(iri) => Id::Named(iri),
@@ -65,7 +61,6 @@ impl Header {
                 body.insert(Triple::new(subject, predicate, object));
             }
         }
-
         Ok(Header { format: header_ci.format, length, body })
     }
 }

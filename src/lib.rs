@@ -104,6 +104,7 @@ mod tests {
 
     pub fn init() {
         INIT.call_once(|| {
+            color_eyre::install().unwrap();
             env_logger::init();
         });
     }

@@ -1,3 +1,4 @@
+use eyre::{eyre, Result};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::io;
@@ -46,7 +47,7 @@ pub struct ControlInfo {
 
 impl ControlInfo {
     /// Read and verify control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         use io::Error;
         use io::ErrorKind::{InvalidData, UnexpectedEof};
 
@@ -58,7 +59,7 @@ impl ControlInfo {
         let mut hdt_cookie: [u8; 4] = [0; 4];
         reader.read_exact(&mut hdt_cookie)?;
         if &hdt_cookie != b"$HDT" {
-            return Err(Error::new(InvalidData, "Chunk is invalid HDT Control Information"));
+            return Err(eyre!("Chunk {hdt_cookie:?} does not equal the HDT cookie '$HDT'"));
         }
         digest.update(&hdt_cookie);
 
@@ -73,7 +74,7 @@ impl ControlInfo {
         reader.read_until(0x00, &mut format)?;
         digest.update(&format);
         if format.pop() != Some(0x00) {
-            return Err(Error::from(UnexpectedEof));
+            return Err(eyre!("invalid separator"));
         }
         let format = String::from_utf8(format).map_err(|e| Error::new(InvalidData, e))?;
 
@@ -82,7 +83,7 @@ impl ControlInfo {
         reader.read_until(0x00, &mut prop_str)?;
         digest.update(&prop_str);
         if prop_str.pop() != Some(0x00) {
-            return Err(Error::from(UnexpectedEof));
+            return Err(Error::from(UnexpectedEof).into());
         }
         let prop_str = String::from_utf8(prop_str).map_err(|e| Error::new(InvalidData, e))?;
         let mut properties = HashMap::new();
@@ -100,7 +101,7 @@ impl ControlInfo {
 
         // 6. Check the CRC
         if digest.finalize() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC16-ANSI checksum"));
+            return Err(eyre!("Invalid CRC16-ANSI checksum"));
         }
 
         Ok(ControlInfo { control_type, format, properties })

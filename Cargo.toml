@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.1.1"
+version = "0.1.2"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -25,6 +25,7 @@ thiserror = "1.0.37"
 log = "0.4"
 mownstr = "0.2.0"
 lazy_static = "1.4"
+eyre = "0.6.8"
 
 [features]
 default = ["sophia"]
@@ -49,3 +50,4 @@ pretty_assertions = "1.3"
 env_logger = { version = "0.10", default-features = false, features = ["auto-color"] }
 criterion = { version = "0.4.0", default-features = false, features = ["cargo_bench_support", "html_reports"] }
 iai = "0.1.1"
+color-eyre = "0.6.2"

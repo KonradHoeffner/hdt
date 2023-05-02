@@ -1,10 +1,10 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
+use eyre::{eyre, Result};
 use rsdict::RsDict;
 use std::convert::TryFrom;
 use std::fmt;
-use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
 
@@ -30,7 +30,6 @@ impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
     pub fn new(data: Vec<u64>) -> Self {
         let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
-        //let dict = RsDict::from_blocks((data.clone() as Vec<u64>).into_iter()); // keep data. faster get_bit but more RAM.
         Bitmap { dict }
     }
 
@@ -41,28 +40,11 @@ impl Bitmap {
 
     /// Whether the node given position is the last child of its parent.
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
-        // Each block in the bitmap has `USIZE_BITS` many bits. If `usize` is 64 bits, and we are
-        // looking for the 65th word in the sequence this means we need the first bit of the second
-        // `usize` in `self.data`.
-        /*
-        // We can get the right usize `block` by dividing by the amount of bits in the usize.
-        let block_index = word_index / USIZE_BITS;
-
-        // We need to determine the value of the bit at a given `bit_index`
-        let bit_index = word_index % USIZE_BITS;
-        let bit_flag = 1_u64 << bit_index;
-
-        // If the `bit_flag` is set to one, the bitwise and will be equal to the `bit_flag`.
-        self.data[block_index] & bit_flag == bit_flag
-        */
         self.dict.get_bit(word_index as u64)
     }
 
     /// Read bitmap from a suitable point within HDT file data and verify checksums.
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use std::io::Error;
-        use std::io::ErrorKind::{InvalidData, Other};
-
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         let mut history: Vec<u8> = Vec::with_capacity(5);
 
         // read the type
@@ -70,7 +52,7 @@ impl Bitmap {
         reader.read_exact(&mut bitmap_type)?;
         history.extend_from_slice(&bitmap_type);
         if bitmap_type[0] != 1 {
-            return Err(Error::new(InvalidData, "no support this type of bitmap"));
+            return Err(eyre!("Read unsupported bitmap type {} != 1", bitmap_type[0]));
         }
 
         // read the number of bits
@@ -86,8 +68,9 @@ impl Bitmap {
         let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut digest = crc8.digest();
         digest.update(&history);
-        if digest.finalize() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
+        let crc_calculated = digest.finalize();
+        if crc_calculated != crc_code {
+            return Err(eyre!("Invalid CRC8-CCIT checksum {crc_calculated}, expected {crc_code}"));
         }
 
         // read all but the last word, last word is byte aligned
@@ -97,12 +80,11 @@ impl Bitmap {
         let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
 
-        // turn the raw bytes into usize/u64 values
         for word in full_words.chunks_exact(size_of::<u64>()) {
             if let Ok(word_data) = <[u8; 8]>::try_from(word) {
                 data.push(u64::from_le_bytes(word_data));
             } else {
-                return Err(Error::new(Other, "failed to read u64"));
+                return Err(eyre!("Failed to turn raw bytes into u64"));
             }
         }
 
@@ -130,8 +112,9 @@ impl Bitmap {
         let crc_code = u32::from_le_bytes(crc_code);
 
         // validate entry body CRC32
-        if digest.finalize() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC32C checksum"));
+        let crc_calculated = digest.finalize();
+        if crc_calculated != crc_code {
+            return Err(eyre!("Invalid CRC32C checksum {crc_calculated}, expected {crc_code}"));
         }
 
         Ok(Self::new(data))

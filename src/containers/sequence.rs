@@ -1,7 +1,8 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
+use eyre::{eyre, Result};
 use std::fmt;
-use std::io;
+
 use std::io::BufRead;
 use std::mem::size_of;
 use std::thread;
@@ -86,11 +87,7 @@ impl Sequence {
     }
 
     /// Read sequence including metadata from HDT data.
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
-        use io::ErrorKind::Other;
-
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         // read entry metadata
         // keep track of history for CRC8
         let mut history: Vec<u8> = Vec::new();
@@ -100,7 +97,7 @@ impl Sequence {
         reader.read_exact(&mut buffer)?;
         history.extend_from_slice(&buffer);
         if buffer[0] != 1 {
-            return Err(Error::new(InvalidData, "Invalid LogArray type"));
+            return Err(eyre!("Invalid LogArray type {} != 1", buffer[0]));
         }
 
         // read number of bits per entry
@@ -109,7 +106,7 @@ impl Sequence {
         history.extend_from_slice(&buffer);
         let bits_per_entry = buffer[0] as usize;
         if bits_per_entry > USIZE_BITS {
-            return Err(Error::new(InvalidData, "entry size too large (>64 bit)"));
+            return Err(eyre!("entry size of {bits_per_entry} bit too large (>64 bit)"));
         }
 
         // read number of entries
@@ -126,7 +123,7 @@ impl Sequence {
         let mut digest = crc8.digest();
         digest.update(&history);
         if digest.finalize() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
+            return Err(eyre!("Invalid CRC8-CCIT checksum"));
         }
 
         // read body data
@@ -144,7 +141,7 @@ impl Sequence {
             if let Ok(word_data) = <[u8; 8]>::try_from(word) {
                 data.push(usize::from_le_bytes(word_data));
             } else {
-                return Err(Error::new(Other, "failed to read usize"));
+                return Err(eyre!("failed to read usize"));
             }
         }
 
