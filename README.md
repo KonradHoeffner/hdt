@@ -4,7 +4,7 @@
 [![Lint and Test](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml)
 [![Documentation](https://docs.rs/hdt/badge.svg)](https://docs.rs/hdt/)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks--x.svg?style=social)](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb)
-[![DOI](https://zenodo.org/badge/541577178.svg)](https://zenodo.org/badge/latestdoi/541577178)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
@@ -120,6 +120,33 @@ Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
 ### Issues and Support
 If you have a problem with the software, want to report a bug or have a feature request, please use the [issue tracker](https://github.com/KonradHoeffner/hdt/issues).
 If have a different type of request, feel free to send an email to [Konrad](mailto:konrad.hoeffner@uni-leipzig.de).
+
+### Citation
+
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
+
+If you use this library in your research, please cite our paper in the Journal of Open Source Software.
+We also provide a [CITATION.cff](./CITATION.cff) file.
+
+#### BibTeX entry
+
+```bibtex
+@article{hdtrs,
+  doi = {10.21105/joss.05114},
+  year = {2023},
+  publisher = {The Open Journal},
+  volume = {8},
+  number = {84},
+  pages = {5114},
+  author = {Konrad Höffner and Tim Baccaert},
+  title = {hdt-rs: {A} {R}ust library for the {H}eader {D}ictionary {T}riples binary {RDF} compression format},
+  journal = {Journal of Open Source Software}
+}
+```
+
+#### Citation string
+
+Höffner et al., (2023). hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format. Journal of Open Source Software, 8(84), 5114, https://doi.org/10.21105/joss.05114
 
 ### Contribute
 We are happy to receive pull requests.
