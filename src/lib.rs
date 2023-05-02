@@ -24,21 +24,26 @@
 //! println!("{:?}", majors.collect::<Vec<_>>());
 //! ```
 //!
-//! Using the Sophia adapter:
-//!
-//! ```no_run
-//! use hdt::{Hdt,HdtGraph};
-//! use hdt::sophia::api::graph::Graph;
-//! use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
-//! let file = std::fs::File::open("dbpedia.hdt").expect("error opening file");
-//!
-//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
-//! let graph = HdtGraph::new(hdt);
-//! let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
-//! let p = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/ontology/major".into()));
-//! let majors = graph.triples_matching(Some(s),Some(p),Any);
-//! ```
-//!
+#![cfg_attr(
+    feature = "sophia",
+    doc = r##"
+Using the Sophia adapter:
+
+```
+use hdt::{Hdt,HdtGraph};
+use hdt::sophia::api::graph::Graph;
+use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
+
+fn query(hdt: Hdt)
+{
+  let graph = HdtGraph::new(hdt);
+  let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
+  let p = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/ontology/major".into()));
+  let majors = graph.triples_matching(Some(s),Some(p),Any);
+}
+```
+"##
+)]
 // # Optional features
 //
 // The following features are available.

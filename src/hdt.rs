@@ -65,6 +65,12 @@ impl Hdt {
     /// Using this method with a filter can be inefficient for large graphs,
     /// because the strings are stored in compressed form and must be decompressed and allocated.
     /// Whenever possible, use [`Hdt::triples_with_pattern`] instead.
+    /// # Example
+    /// ```
+    /// fn print_first_triple(hdt: hdt::Hdt) {
+    ///     println!("{:?}", hdt.triples().next().expect("no triple in the graph"));
+    /// }
+    /// ```
     pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
         let mut triple_cache = TripleCache::new(self);
         self.triples.into_iter().map(move |ids| triple_cache.translate(ids).unwrap())
@@ -72,6 +78,16 @@ impl Hdt {
 
     /// Get all subjects with the given property and object (?PO pattern).
     /// Use this over `triples_with_pattern(None,Some(p),Some(o))` if you don't need whole triples.
+    /// # Example
+    /// Who was born in Leipzig?
+    /// ```
+    /// fn query(dbpedia: hdt::Hdt) {
+    ///     for person in dbpedia.subjects_with_po(
+    ///       "http://dbpedia.org/ontology/birthPlace", "http://dbpedia.org/resource/Leipzig") {
+    ///       println!("{person:?}");
+    ///     }
+    /// }
+    /// ```
     pub fn subjects_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = String> + '_> {
         let pid = self.dict.string_to_id(p, &IdKind::Predicate);
         let oid = self.dict.string_to_id(o, &IdKind::Object);
@@ -92,7 +108,16 @@ impl Hdt {
     }
 
     /// Get all triples that fit the given triple patterns, where `None` stands for a variable.
-    /// For example, `triples_with_pattern(None, Some(p), Some(o)` answers an ?PO pattern.
+    /// For example, `triples_with_pattern(Some(s), Some(p), None)` answers an SP? pattern.
+    /// # Example
+    /// What is the capital of the United States of America?
+    /// ```
+    /// fn query(dbpedia: hdt::Hdt) {
+    ///   println!("{:?}", dbpedia.triples_with_pattern(
+    ///     Some("http://dbpedia.org/resource/United_States"), Some("http://dbpedia.org/ontology/capital"), None)
+    ///     .next().expect("no capital found").2);
+    /// }
+    /// ```
     pub fn triples_with_pattern<'a>(
         &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
     ) -> Box<dyn Iterator<Item = StringTriple> + '_> {
@@ -163,7 +188,7 @@ impl Hdt {
     }
 }
 
-/// A TripleCache stores the Arc<str> of the last returned triple
+/// A TripleCache stores the `Arc<str>` of the last returned triple
 #[derive(Clone, Debug)]
 pub struct TripleCache<'a> {
     hdt: &'a super::Hdt,

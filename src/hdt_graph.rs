@@ -125,6 +125,13 @@ impl Graph for HdtGraph {
     type Triple<'a> = [HdtTerm; 3];
     type Error = Infallible; // infallible for now, figure out what to put here later
 
+    /// # Example
+    /// ```
+    /// use hdt::sophia::api::graph::Graph;
+    /// fn print_first_triple(graph: hdt::HdtGraph) {
+    ///     println!("{:?}", graph.triples().next().expect("no triple in the graph"));
+    /// }
+    /// ```
     fn triples(&self) -> GTripleSource<Self> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
         Box::new(self.hdt.triples().map(move |(s, p, o)| {
@@ -134,6 +141,19 @@ impl Graph for HdtGraph {
 
     /// Only supports constant and "any" matchers.
     /// Non-constant matchers are supposed to be "any" matchers.
+    /// # Example
+    /// Who was born in Leipzig?
+    /// ```
+    /// use hdt::{Hdt,HdtGraph};
+    /// use hdt::sophia::api::graph::Graph;
+    /// use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
+    ///
+    /// fn query(dbpedia: hdt::HdtGraph) {
+    ///     let birth_place = SimpleTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/ontology/birthPlace".into()));
+    ///     let leipzig = SimpleTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/resource/Leipzig".into()));
+    ///     let persons = dbpedia.triples_matching(Any, Some(birth_place), Some(leipzig));
+    /// }
+    /// ```
     fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self>
     where
         S: TermMatcher + 's,
