@@ -1,8 +1,18 @@
+---
 name: Lint and Test
 
 on:
-  - push
-  - pull_request
+  push:
+    paths-ignore:
+      - '.gitignore'
+      - 'CITATION.cff'
+      - 'LICENSE'
+      - 'README.md'
+    pull_request:
+      - '.gitignore'
+      - 'CITATION.cff'
+      - 'LICENSE'
+      - 'README.md'
 
 jobs:
   build:
@@ -10,8 +20,8 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-          #- os: macos-latest
-          #- os: windows-latest
+          # - os: macos-latest
+          # - os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -19,7 +29,7 @@ jobs:
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt,clippy
-      - name: fmt 
+      - name: fmt
         run: cargo fmt -- --check
       - name: clippy
         run: cargo clippy --no-deps --all-features
