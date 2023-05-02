@@ -1,12 +1,13 @@
 use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
 use bytesize::ByteSize;
+use eyre::{eyre, Result, WrapErr};
 use log::{debug, error};
 use rsdict::RsDict;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::io;
+
 use std::io::BufRead;
 use sucds::{bit_vectors::Rank9Sel, char_sequences::WaveletMatrix, int_vectors::CompactVector, Serializable};
 
@@ -35,9 +36,9 @@ pub enum Order {
 }
 
 impl TryFrom<u32> for Order {
-    type Error = std::io::Error;
+    type Error = eyre::Error;
 
-    fn try_from(original: u32) -> Result<Self, Self::Error> {
+    fn try_from(original: u32) -> Result<Self> {
         match original {
             0 => Ok(Order::Unknown),
             1 => Ok(Order::SPO),
@@ -46,7 +47,7 @@ impl TryFrom<u32> for Order {
             4 => Ok(Order::POS),
             5 => Ok(Order::OSP),
             6 => Ok(Order::OPS),
-            _ => Err(Self::Error::new(io::ErrorKind::InvalidData, "Unrecognized order")),
+            _ => Err(eyre!("Unrecognized order")),
         }
     }
 }
@@ -116,17 +117,13 @@ impl fmt::Debug for TriplesBitmap {
 
 impl TriplesBitmap {
     /// read the whole triple section including control information
-    pub fn read_sect<R: BufRead>(reader: &mut R) -> io::Result<Self> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
+    pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
         let triples_ci = ControlInfo::read(reader)?;
 
         match &triples_ci.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::read(reader, &triples_ci),
-            "<http://purl.org/HDT/hdt#triplesList>" => {
-                Err(Error::new(InvalidData, "Triples Lists are not supported yet."))
-            }
-            _ => Err(Error::new(InvalidData, "Unknown triples listing format.")),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
+            _ => Err(eyre!("Unknown triples listing format.")),
         }
     }
 
@@ -177,10 +174,10 @@ impl TriplesBitmap {
         for x in &sequence {
             builder.push_int(x).unwrap();
         }
-        assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "wavelet source CRC check failed.");
+        assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "Wavelet source CRC check failed.");
         drop(sequence);
         let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
-        debug!("built wavelet matrix with length {}", wavelet.len());
+        debug!("Built wavelet matrix with length {}", wavelet.len());
         wavelet
     }
 
@@ -192,21 +189,18 @@ impl TriplesBitmap {
     }
     */
 
-    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> io::Result<Self> {
-        use std::io::Error;
-        use std::io::ErrorKind::InvalidData;
-
+    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
         // read order
         let order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
             order = Order::try_from(n)?;
         } else {
-            return Err(Error::new(InvalidData, "Unrecognized order"));
+            return Err(eyre!("Unrecognized order"));
         }
 
         // read bitmaps
-        let bitmap_y = Bitmap::read(reader)?;
-        let bitmap_z = Bitmap::read(reader)?;
+        let bitmap_y = Bitmap::read(reader).wrap_err("Failed to read Y level bitmap")?;
+        let bitmap_z = Bitmap::read(reader).wrap_err("Failed to read Z level bitmap")?;
 
         // read sequences
         let sequence_y = Sequence::read(reader)?;
@@ -238,7 +232,7 @@ impl TriplesBitmap {
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_dict = RsDict::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|err| eyre!(Box::new(err)))?;
         let wavelet_y = wavelet_thread.join().unwrap();
         /*
         let get_p = |pos_z: u32| {
@@ -267,14 +261,9 @@ impl TriplesBitmap {
     /// Transform the given IDs of the layers in triple section order to a triple ID.
     /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
     /// Other orders may lead to undefined behaviour.
-    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> io::Result<TripleId> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
+    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
         if x == 0 || y == 0 || z == 0 {
-            return Err(Error::new(
-                InvalidData,
-                format!("({x},{y},{z}) none of the components of a triple may be 0."),
-            ));
+            return Err(eyre!(format!("({x},{y},{z}) none of the components of a triple may be 0."),));
         }
         match self.order {
             Order::SPO => Ok(TripleId::new(x, y, z)),
@@ -283,7 +272,7 @@ impl TriplesBitmap {
             Order::POS => Ok(TripleId::new(y, z, x)),
             Order::OSP => Ok(TripleId::new(z, x, y)),
             Order::OPS => Ok(TripleId::new(z, y, x)),
-            Order::Unknown => Err(Error::new(InvalidData, "unknown triples order")),
+            Order::Unknown => Err(eyre!("unknown triples order")),
         }
     }
 }

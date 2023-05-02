@@ -4,8 +4,9 @@ use crate::header::Header;
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use crate::FourSectDict;
 use bytesize::ByteSize;
+use eyre::WrapErr;
 use log::{debug, error};
-use std::io;
+use std::error::Error;
 use std::iter;
 use std::sync::Arc;
 use thiserror::Error;
@@ -44,11 +45,12 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn new<R: std::io::BufRead>(mut reader: R) -> io::Result<Self> {
-        ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
-        let unvalidated_dict = FourSectDict::read(&mut reader)?;
-        let triples = TriplesBitmap::read_sect(&mut reader)?;
+    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self, Box<dyn Error>> {
+        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
+        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
+        let unvalidated_dict =
+            FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
+        let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
         let dict = unvalidated_dict.validate()?;
         let hdt = Hdt { dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));

@@ -3,6 +3,7 @@ use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
 use crate::ControlInfo;
 use crate::DictSectPFC;
+use eyre::{WrapErr,eyre, Result};
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;
@@ -111,17 +112,16 @@ impl FourSectDict {
         }
     }
 
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<UnvalidatedFourSectDict> {
-        use io::ErrorKind::InvalidData;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict> {
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-            return Err(Error::new(InvalidData, "Implementation only supports four section dictionaries"));
+            return Err(eyre!("Implementation only supports four section dictionaries"));
         }
 
-        let (shared, shared_crc) = DictSectPFC::read(reader)?;
-        let (subjects, subjects_crc) = DictSectPFC::read(reader)?;
-        let (predicates, predicates_crc) = DictSectPFC::read(reader)?;
-        let (objects, objects_crc) = DictSectPFC::read(reader)?;
+        let (shared, shared_crc) = DictSectPFC::read(reader).wrap_err("Failed to read shared section")?;
+        let (subjects, subjects_crc) = DictSectPFC::read(reader).wrap_err("Failed to read subject section")?;
+        let (predicates, predicates_crc) = DictSectPFC::read(reader).wrap_err("Failed to read predicate section")?;
+        let (objects, objects_crc) = DictSectPFC::read(reader).wrap_err("Failed to read object section")?;
 
         Ok(UnvalidatedFourSectDict {
             four_sect_dict: FourSectDict { shared, subjects, predicates, objects },
