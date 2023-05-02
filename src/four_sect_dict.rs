@@ -149,7 +149,7 @@ impl FourSectDict {
     }
 }
 
-/// A wrapper to ensure prevent using FourSectDict before its checksum have been validated
+/// A wrapper to ensure prevent using FourSectDict before its checksum has been validated
 pub struct UnvalidatedFourSectDict {
     four_sect_dict: FourSectDict,
     crc_handles: [JoinHandle<bool>; 4],
@@ -158,8 +158,6 @@ pub struct UnvalidatedFourSectDict {
 impl UnvalidatedFourSectDict {
     /// Validates the checksums of all dictionary sections in parallel.
     /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
-    /// This function must NOT be called more than once.
-    // TODO can this be simplified?
     pub fn validate(self) -> io::Result<FourSectDict> {
         let names = ["shared", "subject", "predicate", "object"];
         for (name, handle) in names.iter().zip(self.crc_handles.into_iter()) {

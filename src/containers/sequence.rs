@@ -1,6 +1,7 @@
 use crate::containers::vbyte::read_vbyte;
 //use bytesize::ByteSize;
 //use std::fmt;
+use eyre::{Result, WrapErr};
 use std::io;
 use std::io::BufRead;
 use std::mem::size_of;
@@ -25,11 +26,7 @@ impl fmt::Debug for Sequence {
 */
 
 /// Read sequence including metadata from HDT data.
-pub fn read_sequence<R: BufRead>(reader: &mut R) -> io::Result<(CompactVector, thread::JoinHandle<bool>)> {
-    use io::Error;
-    use io::ErrorKind::InvalidData;
-    use io::ErrorKind::Other;
-
+pub fn read_sequence<R: BufRead>(reader: &mut R) -> Result<(CompactVector, thread::JoinHandle<bool>)> {
     // read entry metadata
     // keep track of history for CRC8
     let mut history: Vec<u8> = Vec::new();
@@ -39,7 +36,7 @@ pub fn read_sequence<R: BufRead>(reader: &mut R) -> io::Result<(CompactVector, t
     reader.read_exact(&mut buffer)?;
     history.extend_from_slice(&buffer);
     if buffer[0] != 1 {
-        return Err(Error::new(InvalidData, "Invalid LogArray type"));
+        return Err(eyre!("Invalid LogArray type {}", buffer[0]));
     }
 
     // read number of bits per entry
@@ -48,7 +45,7 @@ pub fn read_sequence<R: BufRead>(reader: &mut R) -> io::Result<(CompactVector, t
     history.extend_from_slice(&buffer);
     let bits_per_entry = buffer[0] as usize;
     if bits_per_entry > USIZE_BITS {
-        return Err(Error::new(InvalidData, "entry size too large (>64 bit)"));
+        return Err(eyre!("entry size {bits_per_entry} too large (>64 bit)"));
     }
 
     // read number of entries
@@ -65,7 +62,7 @@ pub fn read_sequence<R: BufRead>(reader: &mut R) -> io::Result<(CompactVector, t
     let mut digest = crc8.digest();
     digest.update(&history);
     if digest.finalize() != crc_code {
-        return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
+        return Err(eyre!("Invalid CRC8-CCIT checksum"));
     }
 
     // read body data
@@ -86,6 +83,7 @@ pub fn read_sequence<R: BufRead>(reader: &mut R) -> io::Result<(CompactVector, t
         }
     }
 
+    return Err(eyre!("test error ***************+"));
     let v = CompactVector::deserialize_from(full_words.as_slice())
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 

@@ -4,6 +4,7 @@ use crate::containers::read_sequence;
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
 use crate::triples::Id;
 use bytesize::ByteSize;
+use eyre::{Result, WrapErr};
 use log::error;
 use std::cmp::{min, Ordering};
 use std::fmt;
@@ -245,10 +246,7 @@ impl DictSectPFC {
         self.num_strings
     }
 
-    pub fn read<R: BufRead>(reader: &mut R) -> io::Result<(Self, JoinHandle<bool>)> {
-        use io::Error;
-        use io::ErrorKind::InvalidData;
-
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -278,11 +276,12 @@ impl DictSectPFC {
 
         // validate section CRC8
         if digest.finalize() != crc_code {
-            return Err(Error::new(InvalidData, "Invalid CRC8-CCIT checksum"));
+            return Err(eyre!("Invalid CRC8-CCIT checksum"));
         }
 
         // read sequence log array
-        let (sequence, sequence_crc) = read_sequence(reader)?;
+        let (sequence, sequence_crc) = read_sequence(reader)?; // this line causes an error
+                                                               // return Err(eyre!("test error ***************+"));
 
         // read packed data
         let mut packed_data = vec![0u8; packed_length];
