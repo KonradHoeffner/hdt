@@ -20,7 +20,7 @@ langtag = "^0.3.2"
 ntriple = "^0.1.1"
 rsdict = { version = "0.0.6", features = ["simd"] }
 sophia = { version = "0.8.0-alpha.1", optional = true }
-sucds = "0.7.0"
+sucds = "0.8.0"
 thiserror = "1.0.37"
 log = "0.4"
 mownstr = "0.2.0"
