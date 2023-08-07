@@ -163,7 +163,7 @@ impl UnvalidatedFourSectDict {
     // TODO can this be simplified?
     pub fn validate(self) -> io::Result<FourSectDict> {
         let names = ["shared", "subject", "predicate", "object"];
-        for (name, handle) in names.iter().zip(self.crc_handles.into_iter()) {
+        for (name, handle) in names.iter().zip(self.crc_handles) {
             if !handle.join().unwrap() {
                 return Err(Error::new(
                     ErrorKind::InvalidData,
