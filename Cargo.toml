@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.1.3"
+version = "0.1.4"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -18,8 +18,7 @@ crc = "3.0"
 iref = "2.2"
 langtag = "^0.3.2"
 ntriple = "^0.1.1"
-rsdict = { version = "0.0.6" }
-#rsdict = { version = "0.0.6", features = ["simd"] } # simd feature currently broken, await merge of PR https://github.com/sujayakar/rsdict/pull/8
+rsdict = { version = "0.0.7", features = ["simd"] }
 sophia = { version = "0.8.0-alpha.1", optional = true }
 sucds = "0.8.0"
 thiserror = "1.0.37"
