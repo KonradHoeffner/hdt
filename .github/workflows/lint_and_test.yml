@@ -8,7 +8,8 @@ on:
       - 'CITATION.cff'
       - 'LICENSE'
       - 'README.md'
-    pull_request:
+  pull_request:
+    paths-ignore:
       - '.gitignore'
       - 'CITATION.cff'
       - 'LICENSE'
