@@ -7,6 +7,7 @@
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 [![HDT Rust @ LD Party Video](https://img.shields.io/badge/video-8A2BE2)](https://www.youtube.com/watch?v=R-S0o_UwPMk)
 
+**WARNING**: this crate currently only supports the most recent nightly Rust toolchain.
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
@@ -28,18 +29,6 @@ It also cannot:
 * run SPARQL queries
 
 If you need any of the those features, consider using a SPARQL endpoint instead.
-
-## Setup
-Add the following to Cargo.toml:
-
-```toml
-[dependencies]
-hdt = "0.1.1"
-```
-
-Nightly is required:
-
-    rustup toolchain install nightly
 
 ## Examples
 
@@ -72,7 +61,7 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 
 ```toml
 [dependencies]
-hdt = { version = "0.1.1", default-features = false }
+hdt = { version = "...", default-features = false }
 ```
 
 There is also a runnable example are [in the examples folder](https://github.com/KonradHoeffner/hdt/tree/main/examples), which you can run with `cargo run --example query`.
