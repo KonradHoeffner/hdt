@@ -346,7 +346,7 @@ mod tests {
         assert_eq!(sequence.data.len(), data_size);
 
         let (subjects, _) = DictSectPFC::read(&mut reader).unwrap();
-        assert_eq!(subjects.num_strings, 5);
+        assert_eq!(subjects.num_strings, 6);
         for term in [
             "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
             "http://www.snik.eu/ontology/meta/homonym", "http://www.snik.eu/ontology/meta/master",

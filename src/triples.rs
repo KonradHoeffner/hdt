@@ -343,7 +343,7 @@ mod tests {
         let _dict = FourSectDict::read(&mut reader).unwrap();
         let triples = TriplesBitmap::read_sect(&mut reader).unwrap();
         let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
-        assert_eq!(v.len(), 327);
+        assert_eq!(v.len(), 328);
         assert_eq!(v[0].subject_id, 1);
         assert_eq!(v[2].subject_id, 1);
         assert_eq!(v[3].subject_id, 2);

@@ -245,7 +245,7 @@ mod tests {
         let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
         let graph = HdtGraph::new(hdt);
         let triples: Vec<Result<[HdtTerm; 3], Infallible>> = graph.triples().collect();
-        assert_eq!(triples.len(), 327);
+        assert_eq!(triples.len(), 328);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";
         assert!(graph
             .triples_matching(
@@ -273,15 +273,15 @@ mod tests {
             );
         }
         let s = HdtTerm::Iri(IriRef::new_unchecked(meta_top.into()));
-        let p = HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
+        let label = HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2000/01/rdf-schema#label".into()));
         let o = HdtTerm::LiteralLanguage("top class".into(), LanguageTag::new_unchecked("en".into()));
         assert!(graph.triples_matching(Any, Any, [o.borrow_term()]).next().is_some());
 
-        let tvec = vec![[s.clone(), p.clone(), o.clone()]];
+        let tvec = vec![[s.clone(), label.clone(), o.clone()]];
         assert_eq!(
             tvec,
             graph
-                .triples_matching([s.borrow_term()], [p.borrow_term()], Any)
+                .triples_matching([s.borrow_term()], [label.borrow_term()], Any)
                 .map(Result::unwrap)
                 .collect::<Vec<_>>()
         );
@@ -295,7 +295,7 @@ mod tests {
         assert_eq!(
             tvec,
             graph
-                .triples_matching(Any, [p.borrow_term()], [o.borrow_term()])
+                .triples_matching(Any, [label.borrow_term()], [o.borrow_term()])
                 .map(Result::unwrap)
                 .collect::<Vec<_>>()
         );
@@ -316,8 +316,17 @@ mod tests {
         let owlrestriction =
             HdtTerm::Iri(IriRef::new_unchecked("http://www.w3.org/2002/07/owl#Restriction".into()));
         assert_eq!(1, graph.triples_matching(Any, Some(rdftype), Some(owlrestriction)).count());
-        //let method = "http://www.snik.eu/ontology/meta/Method";
-        // not in snik meta but only in local test file to make sure explicit xsd:string works
+        // not in the original SNIK meta but added to cover more cases
+        let s = HdtTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/ontology/meta/хобби-N-0".into()));
+        let o = HdtTerm::LiteralLanguage("ХОББИ".into(), LanguageTag::new_unchecked("ru".into()));
+        let tvec = vec![[s.clone(), label.clone(), o.clone()]];
+        assert_eq!(
+            tvec,
+            graph
+                .triples_matching([s.borrow_term()], [label.borrow_term()], Any)
+                .map(Result::unwrap)
+                .collect::<Vec<_>>()
+        );
         /*
         let testo = &SimpleTerm::from(LiteralDatatype(
             "testo",
