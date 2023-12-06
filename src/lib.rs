@@ -58,6 +58,7 @@ fn query(hdt: Hdt)
 #![warn(clippy::str_to_string)]
 #![warn(clippy::print_stdout)]
 #![warn(clippy::print_stderr)]
+#![warn(clippy::missing_const_for_fn)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
@@ -69,7 +70,7 @@ fn query(hdt: Hdt)
 #![allow(clippy::similar_names)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::if_not_else)]
-#![warn(clippy::missing_const_for_fn)]
+#![allow(clippy::into_iter_without_iter)]
 /// Types for storing and reading data.
 pub mod containers;
 // Types for representing dictionaries.

@@ -161,15 +161,15 @@ impl Graph for HdtGraph {
         O: TermMatcher + 's,
     {
         let xso = match self.unpack_matcher(&sm, &IdKind::Subject) {
-            Err(_) => return Box::new(iter::empty()),
+            Err(()) => return Box::new(iter::empty()),
             Ok(x) => x,
         };
         let xpo = match self.unpack_matcher(&pm, &IdKind::Predicate) {
-            Err(_) => return Box::new(iter::empty()),
+            Err(()) => return Box::new(iter::empty()),
             Ok(x) => x,
         };
         let xoo = match self.unpack_matcher(&om, &IdKind::Object) {
-            Err(_) => return Box::new(iter::empty()),
+            Err(()) => return Box::new(iter::empty()),
             Ok(x) => x,
         };
         // TODO: improve error handling
