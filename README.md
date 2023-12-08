@@ -4,8 +4,8 @@
 [![Lint and Test](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml/badge.svg)](https://github.com/konradhoeffner/hdt/actions/workflows/lint_and_test.yml)
 [![Documentation](https://docs.rs/hdt/badge.svg)](https://docs.rs/hdt/)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks--x.svg?style=social)](https://github.com/KonradHoeffner/hdt_benchmark/blob/master/benchmark_results.ipynb)
-[![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 [![HDT Rust @ LD Party Video](https://img.shields.io/badge/video-8A2BE2)](https://www.youtube.com/watch?v=R-S0o_UwPMk)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 
 **WARNING**: this crate currently only supports the most recent nightly Rust toolchain.
 
