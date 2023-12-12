@@ -126,38 +126,18 @@ impl DictSectPFC {
         delta
     }
 
-    fn pos_str(&self, pos: usize, slen: usize) -> &str {
-        assert!(
-            pos + slen < self.packed_data.len(),
-            "Invalid arguments pos_str({pos},{slen}), packed data len {}).",
-            self.packed_data.len()
-        );
-        if let Ok(s) = str::from_utf8(&self.packed_data[pos..pos + slen]) {
-            s
-        } else {
-            error!(
-                "invalid UTF8, skipping a byte {}",
-                String::from_utf8_lossy(&self.packed_data[pos..pos + slen])
-            );
-            self.pos_str(pos + 1, slen)
-        }
-    }
-
     fn locate_in_block(&self, block: usize, element: &str) -> usize {
         if block >= self.sequence.entries {
             return 0;
         }
-
+        let element = element.as_bytes();
         let mut pos = self.sequence.get(block);
-        let mut temp_string = String::new();
-
-        //let mut delta: u64 = 0;
         let mut id_in_block = 0;
         let mut cshared = 0;
 
         // Read the first string in the block
         let slen = self.strlen(pos);
-        temp_string.push_str(self.pos_str(pos, slen));
+        let mut temp_string: Vec<u8> = self.packed_data[pos..pos + slen].to_vec();
         pos += slen + 1;
         id_in_block += 1;
 
@@ -168,16 +148,11 @@ impl DictSectPFC {
 
             //Copy suffix
             let slen = self.strlen(pos);
-            temp_string.truncate(temp_string.floor_char_boundary(delta));
-            temp_string.push_str(self.pos_str(pos, slen));
-
+            temp_string.truncate(delta);
+            temp_string.extend_from_slice(&self.packed_data[pos..pos + slen]);
             if delta >= cshared {
                 // Current delta value means that this string has a larger long common prefix than the previous one
-                let boundary = temp_string.floor_char_boundary(cshared);
-                cshared += Self::longest_common_prefix(
-                    temp_string[boundary..].as_bytes(),
-                    element[boundary..].as_bytes(),
-                );
+                cshared += Self::longest_common_prefix(&temp_string[cshared..], &element[cshared..]);
 
                 if (cshared == element.len()) && (temp_string.len() == element.len()) {
                     break;
