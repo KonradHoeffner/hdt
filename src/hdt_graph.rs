@@ -22,16 +22,10 @@ pub struct HdtGraph {
     pub hdt: Hdt,
 }
 
-enum MatchErr {
-    // currently can't be checked, see https://github.com/pchampin/sophia_rs/issues/150
-    //Unsupported,
-    NotFound,
-}
-
 /// HdtGraph does not support all of the Sophia TermMatcher functionality.
 enum HdtMatcher {
     Constant((HdtTerm, Id)),
-    Any,
+    Other,
 }
 
 impl HdtGraph {
@@ -50,23 +44,21 @@ impl HdtGraph {
         //IriRef::new_unchecked(MownStr::from(s)).into_term()
     }
 
-    /// Transforms a Sophia TermMatcher into a less powerfull HdtMatcher.
-    /// Matchers that aren't constant are unsupported.
-    fn unpack_matcher<T: TermMatcher>(&self, tm: &T, kind: &IdKind) -> Result<HdtMatcher, MatchErr> {
+    /// Transforms a Sophia TermMatcher to a constant HdtTerm and Id if possible.
+    /// Returns none if it matches a constant term that cannot be found.
+    fn unpack_matcher<T: TermMatcher>(&self, tm: &T, kind: &IdKind) -> Option<HdtMatcher> {
         match tm.constant() {
             Some(t) => match HdtTerm::try_from(t.borrow_term()) {
                 Some(t) => {
                     let id = self.hdt.dict.string_to_id(&term_string(&t), kind);
                     if id == 0 {
-                        return Err(MatchErr::NotFound);
+                        return None;
                     }
-                    Ok(HdtMatcher::Constant((t, id)))
+                    Some(HdtMatcher::Constant((t, id)))
                 }
-                None => Err(MatchErr::NotFound),
+                None => None,
             },
-            // currently no way to check whether the matcher is of type AnyTerm
-            //None => Err(MatchErr::Unsupported),
-            None => Ok(HdtMatcher::Any),
+            None => Some(HdtMatcher::Other),
         }
     }
 }
@@ -173,67 +165,62 @@ impl Graph for HdtGraph {
         O: TermMatcher + 's,
     {
         use HdtMatcher::*;
-        use MatchErr::*;
         let xso = match self.unpack_matcher(&sm, &IdKind::Subject) {
-            //Err(Unsupported) => panic!("Unsupported subject matcher"),
-            Err(NotFound) => return Box::new(iter::empty()),
-            Ok(x) => x,
+            None => return Box::new(iter::empty()),
+            Some(x) => x,
         };
         let xpo = match self.unpack_matcher(&pm, &IdKind::Predicate) {
-            //Err(Unsupported) => panic!("Unsupported predicate matcher"),
-            Err(NotFound) => return Box::new(iter::empty()),
-            Ok(x) => x,
+            None => return Box::new(iter::empty()),
+            Some(x) => x,
         };
         let xoo = match self.unpack_matcher(&om, &IdKind::Object) {
-            //Err(Unsupported) => panic!("Unsupported object matcher"),
-            Err(NotFound) => return Box::new(iter::empty()),
-            Ok(x) => x,
+            None => return Box::new(iter::empty()),
+            Some(x) => x,
         };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
-            (Constant(s), Constant(p), Constant(o)) => {
-                if SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
-                    Box::new(iter::once(Ok([s.0, p.0, o.0])))
-                } else {
-                    Box::new(iter::empty())
-                }
-            }
-            (Constant(s), Constant(p), Any) => {
-                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
-                    Ok([
-                        s.0.clone(),
-                        p.0.clone(),
-                        auto_term(&self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()).unwrap(),
-                    ])
-                }))
-            }
-            (Constant(s), Any, Constant(o)) => {
-                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
-                    Ok([s.0.clone(), self.id_term(t.predicate_id, &IdKind::Predicate), o.0.clone()])
-                }))
-            }
-            (Constant(s), Any, Any) => {
-                Box::new(SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
-                    Ok([
-                        s.0.clone(),
-                        self.id_term(t.predicate_id, &IdKind::Predicate),
-                        auto_term(&Arc::from(self.hdt.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()))
-                            .expect("auto term failed with object"),
-                    ])
-                }))
-            }
-            (Any, Constant(p), Constant(o)) => Box::new(
-                PredicateObjectIter::new(&self.hdt.triples, p.1, o.1)
-                    .map(move |sid| Ok([self.id_term(sid, &IdKind::Subject), p.0.clone(), o.0.clone()])),
+            //if SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() { // always true
+            (Constant(s), Constant(p), Constant(o)) => Box::new(iter::once(Ok([s.0, p.0, o.0]))),
+            (Constant(s), Constant(p), Other) => Box::new(
+                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, 0))
+                    .map(|tid| {
+                        auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap()).unwrap()
+                    })
+                    .filter(move |term| om.matches(term))
+                    .map(move |term| Ok([s.0.clone(), p.0.clone(), term])),
             ),
-            (Any, Constant(p), Any) => Box::new(PredicateIter::new(&self.hdt.triples, p.1).map(move |t| {
-                Ok([
-                    self.id_term(t.subject_id, &IdKind::Subject),
-                    p.0.clone(),
-                    self.id_term(t.object_id, &IdKind::Object),
-                ])
-            })),
-            (Any, Any, Constant(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
+            (Constant(s), Other, Constant(o)) => Box::new(
+                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, o.1))
+                    .map(|t| self.id_term(t.predicate_id, &IdKind::Predicate))
+                    .filter(move |term| pm.matches(term))
+                    .map(move |term| Ok([s.0.clone(), term, o.0.clone()])),
+            ),
+            (Constant(s), Other, Other) => Box::new(
+                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, 0))
+                    .map(move |t| {
+                        [
+                            self.id_term(t.predicate_id, &IdKind::Predicate),
+                            self.id_term(t.object_id, &IdKind::Object),
+                        ]
+                    })
+                    .filter(move |[pt, ot]| pm.matches(pt) && om.matches(ot))
+                    .map(move |[pt, ot]| Ok([s.0.clone(), pt, ot])),
+            ),
+            (Other, Constant(p), Constant(o)) => Box::new(
+                PredicateObjectIter::new(&self.hdt.triples, p.1, o.1)
+                    .map(|sid| self.id_term(sid, &IdKind::Subject))
+                    .filter(move |term| sm.matches(term))
+                    .map(move |term| Ok([term, p.0.clone(), o.0.clone()])),
+            ),
+            (Other, Constant(p), Other) => Box::new(
+                PredicateIter::new(&self.hdt.triples, p.1)
+                    .map(move |t| {
+                        [self.id_term(t.subject_id, &IdKind::Subject), self.id_term(t.object_id, &IdKind::Object)]
+                    })
+                    .filter(move |[st, ot]| sm.matches(st) && om.matches(ot))
+                    .map(move |[st, ot]| Ok([st, p.0.clone(), ot])),
+            ),
+            (Other, Other, Constant(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
                 Ok([
                     auto_term(&Arc::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
                         .unwrap(),
@@ -241,7 +228,15 @@ impl Graph for HdtGraph {
                     o.0.clone(),
                 ])
             })),
-            (Any, Any, Any) => self.triples(),
+            (Other, Other, Other) => Box::new(
+                self.hdt
+                    .triples()
+                    .map(move |(s, p, o)| {
+                        [auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()]
+                    })
+                    .filter(move |[st, pt, ot]| sm.matches(st) && pm.matches(pt) && om.matches(ot))
+                    .map(Result::Ok),
+            ),
         }
     }
 }
@@ -321,7 +316,31 @@ mod tests {
             "2022-10-20".into(),
             IriRef::new_unchecked("http://www.w3.org/2001/XMLSchema#date".into()),
         );
-        assert_eq!(1, graph.triples_matching(Any, Any, Some(date)).count());
+        assert_eq!(1, graph.triples_matching(Any, Any, Some(&date)).count());
+        // *** matchers other than constant and Any ********************************************
+        let meta = HdtTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/ontology/meta".into()));
+        let modified = HdtTerm::Iri(IriRef::new_unchecked("http://purl.org/dc/terms/modified".into()));
+        // SPO
+        assert_eq!(2, graph.triples_matching([&meta, &s], [&label, &modified], [&date, &o]).count());
+        // SP?
+        assert_eq!(3, graph.triples_matching([&meta, &s], [&label, &modified], Any).count());
+        // S?O
+        assert_eq!(2, graph.triples_matching([&meta, &s], Any, [&date, &o]).count());
+        // S??
+        assert_eq!(
+            graph.triples_matching([&meta, &s], Any, Any).count(),
+            graph.triples_matching([&meta], Any, Any).count() + graph.triples_matching([&s], Any, Any).count(),
+        );
+        // ?P?
+        assert_eq!(2, graph.triples_matching(Any, Any, [&date, &o]).count());
+        // ?PO
+        assert_eq!(2, graph.triples_matching(Any, [&label, &modified], [&date, &o]).count());
+        // ?P?
+        assert_eq!(
+            graph.triples_matching(Any, [&label, &modified], Any).count(),
+            graph.triples_matching(Any, [&label], Any).count()
+                + graph.triples_matching(Any, [&modified], Any).count()
+        );
         // test for errors involving blank nodes
         let blank = HdtTerm::BlankNode(BnodeId::new_unchecked("b1".into()));
         // blank node as input
