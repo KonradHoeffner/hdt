@@ -71,6 +71,8 @@ fn query(hdt: Hdt)
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::if_not_else)]
 #![allow(clippy::into_iter_without_iter)]
+// multiple versions of syn crate in transitive dependencies
+#![allow(clippy::multiple_crate_versions)]
 /// Types for storing and reading data.
 pub mod containers;
 // Types for representing dictionaries.

@@ -164,7 +164,7 @@ impl Graph for HdtGraph {
         P: TermMatcher + 's,
         O: TermMatcher + 's,
     {
-        use HdtMatcher::*;
+        use HdtMatcher::{Constant, Other};
         let xso = match self.unpack_matcher(&sm, &IdKind::Subject) {
             None => return Box::new(iter::empty()),
             Some(x) => x,

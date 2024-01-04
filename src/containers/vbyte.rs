@@ -108,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Tried to read a VByte that does not fit into a usize")]
     fn test_decode_too_large() {
         init();
         let mut buffer = encode_vbyte(usize::MAX);
