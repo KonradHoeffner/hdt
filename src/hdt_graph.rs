@@ -248,7 +248,6 @@ mod tests {
     use sophia::api::prelude::Triple;
     use sophia::api::term::matcher::Any;
     use std::fs::File;
-    use std::result::Result;
 
     #[test]
     fn test_graph() {

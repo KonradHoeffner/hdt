@@ -3,7 +3,6 @@ use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
 use rsdict::RsDict;
-use std::convert::TryFrom;
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;

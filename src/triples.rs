@@ -5,7 +5,6 @@ use eyre::{eyre, Result, WrapErr};
 use log::{debug, error};
 use rsdict::RsDict;
 use std::cmp::Ordering;
-use std::convert::TryFrom;
 use std::fmt;
 
 use std::io::BufRead;
@@ -317,7 +316,7 @@ mod tests {
     use super::*;
     use crate::header::Header;
     use crate::tests::init;
-    use crate::{ControlInfo, FourSectDict, IdKind};
+    use crate::{FourSectDict, IdKind};
     use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::BufReader;

@@ -1,6 +1,5 @@
 use eyre::{eyre, Result};
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::io;
 use std::io::BufRead;
 use std::str;
