@@ -50,9 +50,8 @@ impl AdjList {
             return 0;
         }
         // hdt counts from 1
-        //self.bitmap.dict.select1(x as u64).unwrap()  as usize +1
         // rsdict has nonzero value for 0, is that correct? adjust for that.
-        self.bitmap.dict.select1(x as u64 - 1).unwrap() as usize + 1
+        self.bitmap.select1(x - 1).unwrap() as usize + 1
     }
 
     /// Return the position of element within the given bounds.

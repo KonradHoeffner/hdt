@@ -2,44 +2,59 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
-use rsdict::RsDict;
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
-
-//const USIZE_BITS: usize = usize::BITS as usize;
+use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
+use sucds::Serializable;
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
 pub struct Bitmap {
-    //num_bits: usize,
-    // could also use sucds::rs_bit_vector::RsBitVector, that would be -1 dependency but that doesn't seem to have from_blocks
-    /// Currently using the rsdict crate.
-    pub dict: RsDict,
-    //pub data: Vec<u64>,
+    /// should be private but is needed by containers/bitmap.rs, use methods provided by Bitmap
+    pub dict: Rank9Sel,
 }
 
 impl fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", ByteSize(self.dict.heap_size() as u64))
+        write!(f, "{}", ByteSize(self.size_in_bytes() as u64))
     }
 }
 
 impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
     pub fn new(data: Vec<u64>) -> Self {
-        let dict = RsDict::from_blocks((data as Vec<u64>).into_iter());
+        let mut v = BitVector::new();
+        for d in data {
+            let _ = v.push_bits(d as usize, 64);
+        }
+        let dict = Rank9Sel::new(v).select1_hints();
         Bitmap { dict }
     }
 
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.dict.heap_size()
+        self.dict.size_in_bytes()
+    }
+
+    /// Number of bits in the bitmap
+    pub const fn len(&self) -> usize {
+        self.dict.len()
+    }
+
+    /// Returns the position of the k-1-th one bit or None if there aren't that many.
+    pub fn select1(&self, k: usize) -> Option<usize> {
+        self.dict.select1(k)
+    }
+
+    /// Returns the number of one bits from the 0-th bit to the k-1-th bit. Panics if self.len() < pos.
+    pub fn rank(&self, k: usize) -> usize {
+        self.dict.rank1(k).unwrap_or_else(|| panic!("Out of bounds position: {} >= {}", k, self.dict.len()))
     }
 
     /// Whether the node given position is the last child of its parent.
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
-        self.dict.get_bit(word_index as u64)
+        self.dict.access(word_index).expect("word index out of bounds")
     }
 
     /// Read bitmap from a suitable point within HDT file data and verify checksums.

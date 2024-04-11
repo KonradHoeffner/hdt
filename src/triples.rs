@@ -3,12 +3,15 @@ use crate::ControlInfo;
 use bytesize::ByteSize;
 use eyre::{eyre, Result, WrapErr};
 use log::{debug, error};
-use rsdict::RsDict;
 use std::cmp::Ordering;
 use std::fmt;
-
 use std::io::BufRead;
-use sucds::{bit_vectors::Rank9Sel, char_sequences::WaveletMatrix, int_vectors::CompactVector, Serializable};
+use sucds::{
+    bit_vectors::{BitVector, Rank9Sel},
+    char_sequences::WaveletMatrix,
+    int_vectors::CompactVector,
+    Serializable,
+};
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;
@@ -80,13 +83,13 @@ impl OpIndex {
     }
     /// Find the first position in the OP index of the given object ID.
     pub fn find(&self, o: Id) -> usize {
-        self.bitmap.dict.select1(o as u64 - 1).unwrap() as usize
+        self.bitmap.select1(o - 1).unwrap() as usize
     }
     /// Find the last position in the object index of the given object ID.
     pub fn last(&self, o: Id) -> usize {
-        match self.bitmap.dict.select1(o as u64) {
+        match self.bitmap.select1(o) {
             Some(index) => index as usize - 1,
-            None => self.bitmap.dict.len() - 1,
+            None => self.bitmap.len() - 1,
         }
     }
 }
@@ -136,7 +139,7 @@ impl TriplesBitmap {
         if subject_id == 0 {
             return 0;
         }
-        self.bitmap_y.dict.select1(subject_id as u64 - 1).unwrap() as usize + 1
+        self.bitmap_y.select1(subject_id - 1).unwrap() as usize + 1
     }
 
     /// Position in the wavelet index of the last predicate for the given subject ID.
@@ -225,11 +228,11 @@ impl TriplesBitmap {
                 error!("ERROR: There is a zero value in the Z level.");
                 continue;
             }
-            let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
+            let pos_y = bitmap_z.rank(pos_z.to_owned());
             indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
-        let mut bitmap_index_dict = RsDict::new();
+        let mut bitmap_index_bitvector = BitVector::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
             .map_err(|err| eyre!(Box::new(err)))?;
         let wavelet_y = wavelet_thread.join().unwrap();
@@ -244,12 +247,12 @@ impl TriplesBitmap {
             // sort by predicate
             indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
             for index in indices {
-                bitmap_index_dict.push(first);
+                bitmap_index_bitvector.push_bit(first);
                 first = false;
                 cv.push_int(index as usize).unwrap();
             }
         }
-        let bitmap_index = Bitmap { dict: bitmap_index_dict };
+        let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
         debug!("built OPS index");
         assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
