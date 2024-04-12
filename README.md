@@ -7,8 +7,6 @@
 [![HDT Rust @ LD Party Video](https://img.shields.io/badge/video-8A2BE2)](https://www.youtube.com/watch?v=R-S0o_UwPMk)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 
-**WARNING**: this crate currently only supports the most recent nightly Rust toolchain.
-
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
 * loading the HDT default format as created by [hdt-cpp](https://github.com/rdfhdt/hdt-cpp)
@@ -141,5 +139,5 @@ Höffner et al., (2023). hdt-rs: A Rust library for the Header Dictionary Triple
 
 ### Contribute
 We are happy to receive pull requests.
-Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the nightly toolchain both with and without the "sophia" feature active.
+Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the stable and nightly toolchain both with and without the "sophia" feature active.
 `cargo clippy` should not report any warnings.

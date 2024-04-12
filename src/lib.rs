@@ -50,8 +50,6 @@ fn query(hdt: Hdt)
 //
 // - **`sophia`** *(enabled by default)* — Implements the Graph trait from the [Sophia](https://crates.io/crates/sophia) RDF toolkit.
 // This allows you to drastically reduce the RAM usage of an existing application based on Sophia that loads a large knowledge base but requires an input file in the HDT format.
-#![feature(round_char_boundary)]
-#![feature(int_roundings)]
 #![warn(missing_docs)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
