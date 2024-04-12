@@ -8,7 +8,6 @@ use eyre::{eyre, Result};
 use log::error;
 use std::cmp::{min, Ordering};
 use std::fmt;
-
 use std::io::BufRead;
 use std::str;
 use std::sync::Arc;
@@ -37,7 +36,6 @@ impl fmt::Debug for DictSectPFC {
     }
 }
 
-///
 #[derive(Error, Debug)]
 pub enum ExtractError {
     #[error("index out of bounds: id {id} > dictionary section len {len}")]

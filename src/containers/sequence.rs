@@ -2,7 +2,6 @@ use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
 use std::fmt;
-
 use std::io::BufRead;
 use std::mem::size_of;
 use std::thread;

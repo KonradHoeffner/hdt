@@ -52,7 +52,7 @@ impl Term for HdtTerm {
         match self {
             HdtTerm::Iri(_) => TermKind::Iri,
             HdtTerm::BlankNode(_) => TermKind::BlankNode,
-            HdtTerm::LiteralDatatype(_, _) | HdtTerm::LiteralLanguage(_, _) => TermKind::Literal,
+            HdtTerm::LiteralDatatype(..) | HdtTerm::LiteralLanguage(..) => TermKind::Literal,
         }
     }
 
@@ -84,7 +84,7 @@ impl Term for HdtTerm {
     fn datatype(&self) -> Option<sophia::api::term::IriRef<mownstr::MownStr>> {
         match self {
             HdtTerm::LiteralDatatype(_, datatype) => Some(datatype.as_ref().map_unchecked(MownStr::from_str)),
-            HdtTerm::LiteralLanguage(_, _) => rdf::langString.iri(),
+            HdtTerm::LiteralLanguage(..) => rdf::langString.iri(),
             _ => None,
         }
     }

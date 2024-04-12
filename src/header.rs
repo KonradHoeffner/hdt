@@ -3,7 +3,6 @@ use crate::containers::ControlInfo;
 use eyre::{eyre, Result, WrapErr};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
-
 use std::io::BufRead;
 use std::str;
 
