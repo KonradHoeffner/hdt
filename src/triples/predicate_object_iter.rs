@@ -57,6 +57,9 @@ impl<'a> PredicateObjectIter<'a> {
                     return PredicateObjectIter { triples, pos_index: low, max_index: high };
                 }
             }
+            if high == 0 && low == 0 {
+                break;
+            }
         }
         // not found
         PredicateObjectIter { triples, pos_index: 999, max_index: 0 }
