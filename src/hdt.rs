@@ -121,7 +121,7 @@ impl Hdt {
     /// ```
     pub fn triples_with_pattern<'a>(
         &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
-    ) -> Box<dyn Iterator<Item = StringTriple> + '_> {
+    ) -> Box<dyn Iterator<Item = StringTriple> + 'a> {
         let xso: Option<(Arc<str>, usize)> =
             sp.map(|s| (Arc::from(s), self.dict.string_to_id(s, &IdKind::Subject)));
         let xpo: Option<(Arc<str>, usize)> =

@@ -289,6 +289,7 @@ impl<'a> IntoIterator for &'a TriplesBitmap {
 }
 
 /// Subject, predicate or object ID, starting at 1.
+///
 /// Subjects and predicate share IDs, starting at 1, for common values.
 /// A value of 0 indicates either not found (as a return value) or all of them (in a triple pattern).
 /// In the official documentation, u32 is used, however here, usize is used.

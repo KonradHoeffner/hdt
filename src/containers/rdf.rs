@@ -68,10 +68,10 @@ impl fmt::Debug for Term {
 
 /// RDF Literals always have a lexical 'form' as per
 /// [RDF 1.1 Concepts And Abstract Syntax](https://www.w3.org/TR/rdf11-concepts/#dfn-literal).
+///
 /// They can optionally contain a datatype describing how the literal form maps to a literal value
 /// (The default type is: [xs:string](http://www.w3.org/2001/XMLSchema#string), but we do not store
 /// this).
-///
 /// If the datatype is [rdf:langString](http://www.w3.org/1999/02/22-rdf-syntax-ns#langString),
 /// we can optionally supply a language tag ([BCP47](https://tools.ietf.org/html/bcp47)) such as
 /// `"nl"` or `"fr"`.

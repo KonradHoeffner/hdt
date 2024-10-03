@@ -95,7 +95,6 @@ use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;
 #[cfg(feature = "sophia")]
-#[cfg_attr(doc_cfg, doc(cfg(feature = "parsing")))]
 pub use hdt_graph::HdtGraph;
 
 #[cfg(test)]

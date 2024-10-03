@@ -46,7 +46,10 @@ impl HdtTerm {
 }
 
 impl Term for HdtTerm {
-    type BorrowTerm<'x> = &'x Self where Self: 'x;
+    type BorrowTerm<'x>
+        = &'x Self
+    where
+        Self: 'x;
 
     fn kind(&self) -> TermKind {
         match self {

@@ -128,8 +128,7 @@ impl Sequence {
         // read body data
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
-        let full_byte_amount =
-            (((total_bits + USIZE_BITS - 1) / USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
+        let full_byte_amount = (total_bits.div_ceil(USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words)?;
         let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / 8 + 2);
