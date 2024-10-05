@@ -1,0 +1,16 @@
+name: Bug Report
+description: File a bug report.
+labels: ["bug"]
+assignees:
+  - KonradHoeffner
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: input 
+    id: version
+    attributes:
+      label: library version
