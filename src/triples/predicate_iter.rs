@@ -24,7 +24,7 @@ impl<'a> PredicateIter<'a> {
     }
 }
 
-impl<'a> Iterator for PredicateIter<'a> {
+impl Iterator for PredicateIter<'_> {
     type Item = TripleId;
     fn next(&mut self) -> Option<Self::Item> {
         if self.i >= self.occs {

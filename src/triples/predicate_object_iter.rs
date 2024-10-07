@@ -66,7 +66,7 @@ impl<'a> PredicateObjectIter<'a> {
     }
 }
 
-impl<'a> Iterator for PredicateObjectIter<'a> {
+impl Iterator for PredicateObjectIter<'_> {
     type Item = Id;
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos_index > self.max_index {

@@ -38,7 +38,7 @@ pub struct SequenceIter<'a> {
     i: usize,
 }
 
-impl<'a> Iterator for SequenceIter<'a> {
+impl Iterator for SequenceIter<'_> {
     type Item = usize;
     fn next(&mut self) -> Option<Self::Item> {
         if self.i >= self.sequence.entries {

@@ -28,7 +28,7 @@ impl<'a> ObjectIter<'a> {
     }
 }
 
-impl<'a> Iterator for ObjectIter<'a> {
+impl Iterator for ObjectIter<'_> {
     type Item = TripleId;
     fn next(&mut self) -> Option<Self::Item> {
         if self.pos_index > self.max_index {

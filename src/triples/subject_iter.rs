@@ -106,7 +106,7 @@ impl<'a> SubjectIter<'a> {
     }
 }
 
-impl<'a> Iterator for SubjectIter<'a> {
+impl Iterator for SubjectIter<'_> {
     type Item = TripleId;
 
     fn next(&mut self) -> Option<Self::Item> {
