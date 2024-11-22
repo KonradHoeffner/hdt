@@ -65,14 +65,14 @@ impl Term for HdtTerm {
 
     fn iri(&self) -> Option<sophia::api::term::IriRef<mownstr::MownStr>> {
         match self {
-            HdtTerm::Iri(iri) => Some(iri.as_ref().map_unchecked(MownStr::from_str)),
+            HdtTerm::Iri(iri) => Some(iri.as_ref().map_unchecked(MownStr::from_ref)),
             _ => None,
         }
     }
 
     fn bnode_id(&self) -> Option<BnodeId<mownstr::MownStr>> {
         match self {
-            HdtTerm::BlankNode(bnid) => Some(bnid.as_ref().map_unchecked(MownStr::from_str)),
+            HdtTerm::BlankNode(bnid) => Some(bnid.as_ref().map_unchecked(MownStr::from_ref)),
             _ => None,
         }
     }
@@ -86,7 +86,7 @@ impl Term for HdtTerm {
 
     fn datatype(&self) -> Option<sophia::api::term::IriRef<mownstr::MownStr>> {
         match self {
-            HdtTerm::LiteralDatatype(_, datatype) => Some(datatype.as_ref().map_unchecked(MownStr::from_str)),
+            HdtTerm::LiteralDatatype(_, datatype) => Some(datatype.as_ref().map_unchecked(MownStr::from_ref)),
             HdtTerm::LiteralLanguage(..) => rdf::langString.iri(),
             _ => None,
         }
@@ -94,7 +94,7 @@ impl Term for HdtTerm {
 
     fn language_tag(&self) -> Option<LanguageTag<mownstr::MownStr>> {
         match self {
-            HdtTerm::LiteralLanguage(_, tag) => Some(tag.as_ref().map_unchecked(MownStr::from_str)),
+            HdtTerm::LiteralLanguage(_, tag) => Some(tag.as_ref().map_unchecked(MownStr::from_ref)),
             _ => None,
         }
     }

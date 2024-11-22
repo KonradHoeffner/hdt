@@ -4,7 +4,7 @@ use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
-use sophia::api::graph::{GTripleSource, Graph};
+use sophia::api::graph::Graph;
 use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, Term};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
@@ -134,11 +134,11 @@ impl Graph for HdtGraph {
     ///     println!("{:?}", graph.triples().next().expect("no triple in the graph"));
     /// }
     /// ```
-    fn triples(&self) -> GTripleSource<Self> {
+    fn triples(&self) -> impl Iterator<Item = Result<Self::Triple<'_>, Self::Error>> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
-        Box::new(self.hdt.triples().map(move |(s, p, o)| {
+        self.hdt.triples().map(move |(s, p, o)| {
             Ok([auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()])
-        }))
+        })
     }
 
     /// Only supports constant and "any" matchers.
@@ -156,7 +156,10 @@ impl Graph for HdtGraph {
     ///     let persons = dbpedia.triples_matching(Any, Some(birth_place), Some(leipzig));
     /// }
     /// ```
-    fn triples_matching<'s, S, P, O>(&'s self, sm: S, pm: P, om: O) -> GTripleSource<'s, Self>
+    #[allow(refining_impl_trait)]
+    fn triples_matching<'s, S, P, O>(
+        &'s self, sm: S, pm: P, om: O,
+    ) -> Box<dyn Iterator<Item = Result<Self::Triple<'s>, Self::Error>> + 's>
     where
         S: TermMatcher + 's,
         P: TermMatcher + 's,
