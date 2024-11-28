@@ -156,10 +156,9 @@ impl Graph for HdtGraph {
     ///     let persons = dbpedia.triples_matching(Any, Some(birth_place), Some(leipzig));
     /// }
     /// ```
-    #[allow(refining_impl_trait)]
     fn triples_matching<'s, S, P, O>(
         &'s self, sm: S, pm: P, om: O,
-    ) -> Box<dyn Iterator<Item = Result<Self::Triple<'s>, Self::Error>> + 's>
+    ) -> impl Iterator<Item = Result<Self::Triple<'s>, Self::Error>> + 's
     where
         S: TermMatcher + 's,
         P: TermMatcher + 's,
@@ -167,7 +166,7 @@ impl Graph for HdtGraph {
     {
         use HdtMatcher::{Constant, Other};
         let xso = match self.unpack_matcher(&sm, &IdKind::Subject) {
-            None => return Box::new(iter::empty()),
+            None => return Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>,
             Some(x) => x,
         };
         let xpo = match self.unpack_matcher(&pm, &IdKind::Predicate) {
