@@ -7,6 +7,10 @@ use bytesize::ByteSize;
 use eyre::WrapErr;
 use log::{debug, error};
 use std::error::Error;
+#[cfg(feature = "cache")]
+use std::fs::File;
+#[cfg(feature = "cache")]
+use std::io::{Seek, SeekFrom, Write};
 use std::iter;
 use std::sync::Arc;
 use thiserror::Error;
@@ -55,6 +59,87 @@ impl Hdt {
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
+    }
+
+    /// Creates an immutable HDT instance containing the dictionary and triples from the Path.
+    /// Will utilize a custom cached TriplesBitmap file if exists or create one if it does not exist.
+    /// The file path must point to the beginning of the data of an HDT file as produced by hdt-cpp.
+    /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
+    /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
+    /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
+    /// # Example
+    /// ```
+    /// let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+    /// ```
+    #[cfg(feature = "cache")]
+    pub fn new_from_path(f: &std::path::Path) -> Result<Self, Box<dyn Error>> {
+        use log::warn;
+
+        let source = File::open(f)?;
+        let mut reader = std::io::BufReader::new(source);
+        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
+        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
+        let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
+        let mut abs_path = std::fs::canonicalize(f)?;
+        let _ = abs_path.pop();
+        let index_file_name = format!("{}.index.v1-rust-cache", f.file_name().unwrap().to_str().unwrap());
+        let index_file_path = abs_path.join(index_file_name);
+        let triples = if index_file_path.exists() {
+            let pos = reader.stream_position()?;
+            match Self::load_with_cache(&mut reader, &index_file_path) {
+                Ok(triples) => triples,
+                Err(e) => {
+                    warn!("error loading cache, overwriting: {e}");
+                    reader.seek(SeekFrom::Start(pos))?;
+                    Self::load_without_cache(&mut reader, &index_file_path)?
+                }
+            }
+        } else {
+            Self::load_without_cache(&mut reader, &index_file_path)?
+        };
+
+        let dict = unvalidated_dict.validate()?;
+        let hdt = Hdt { dict, triples };
+        debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
+        debug!("{hdt:#?}");
+        Ok(hdt)
+    }
+
+    #[cfg(feature = "cache")]
+    fn load_without_cache<R: std::io::BufRead>(
+        mut reader: R, index_file_path: &std::path::PathBuf,
+    ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
+        use log::warn;
+
+        debug!("no cache detected, generating index");
+        let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
+        debug!("index generated, saving cache to {}", index_file_path.display());
+        if let Err(e) = Self::write_cache(index_file_path, &triples) {
+            warn!("error trying to save cache to file: {e}");
+        }
+        Ok(triples)
+    }
+    #[cfg(feature = "cache")]
+    fn load_with_cache<R: std::io::BufRead>(
+        mut reader: R, index_file_path: &std::path::PathBuf,
+    ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
+        // load cached index
+        debug!("hdt file cache detected, loading from {}", index_file_path.display());
+        let index_source = File::open(index_file_path)?;
+        let mut index_reader = std::io::BufReader::new(index_source);
+        let triples_ci = ControlInfo::read(&mut reader)?;
+        Ok(TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?)
+    }
+
+    #[cfg(feature = "cache")]
+    fn write_cache(
+        index_file_path: &std::path::PathBuf, triples: &TriplesBitmap,
+    ) -> core::result::Result<(), Box<dyn Error>> {
+        let new_index_file = File::create(index_file_path)?;
+        let mut writer = std::io::BufWriter::new(new_index_file);
+        bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
+        writer.flush()?;
+        Ok(())
     }
 
     /// Recursive size in bytes on the heap.

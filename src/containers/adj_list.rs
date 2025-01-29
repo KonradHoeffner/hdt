@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 
 /// Adjacency list including a compact integer sequence and a bitmap for efficient access of that sequence using rank and select queries.
 #[derive(Debug)]
+#[cfg_attr(feature = "cache", derive(serde::Deserialize, serde::Serialize))]
 pub struct AdjList {
     /// Compact integer sequence.
     pub sequence: Sequence,

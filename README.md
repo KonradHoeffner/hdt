@@ -62,7 +62,15 @@ If you don't want to pull in the Sophia dependency, you can exclude the adapter:
 hdt = { version = "...", default-features = false }
 ```
 
-There is also a runnable example are [in the examples folder](https://github.com/KonradHoeffner/hdt/tree/main/examples), which you can run with `cargo run --example query`.
+There is also a runnable example [in the examples folder](https://github.com/KonradHoeffner/hdt/tree/main/examples), which you can run with `cargo run --example query`.
+
+Users can also choose to use the experimental `cache` feature. If enabled, the library will utilize a custom cached TriplesBitmap file if it exists or create one if it does not exist.
+
+```rust
+let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+```
+
+The `cache` feature is experimental and may change or be removed in future releases.
 
 ## API Documentation
 
