@@ -7,8 +7,10 @@ use bytesize::ByteSize;
 use eyre::WrapErr;
 use log::{debug, error};
 use std::error::Error;
-use std::iter;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 use std::sync::Arc;
+use std::{fs, iter};
 use thiserror::Error;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
@@ -50,6 +52,43 @@ impl Hdt {
         Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
         let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
         let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
+        let dict = unvalidated_dict.validate()?;
+        let hdt = Hdt { dict, triples };
+        debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
+        debug!("{hdt:#?}");
+        Ok(hdt)
+    }
+
+    pub fn new_from_file(f: &Path) -> Result<Self, Box<dyn Error>> {
+        let source = std::fs::File::open(f)?;
+        let mut reader = std::io::BufReader::new(source);
+        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
+        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
+        let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
+        let abs_path = fs::canonicalize(f)?;
+        let index_file = format!(
+            "{}/{}.index.v1-rust-cache",
+            abs_path.parent().unwrap().display(),
+            f.file_name().unwrap().to_str().unwrap().to_string()
+        );
+        let triples = if Path::new(&index_file).exists() {
+            // load cached index
+            debug!("hdt file cache detected, loading from {index_file}");
+            let index_source = std::fs::File::open(index_file)?;
+            let mut index_reader = std::io::BufReader::new(index_source);
+            let triples_ci = ControlInfo::read(&mut reader)?;
+            TriplesBitmap::load_cache(&mut index_reader, triples_ci)?
+        } else {
+            debug!("no cache detected, generating index");
+            let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
+            debug!("index generated, saving cache to {index_file}");
+            let new_index_file = std::fs::File::create(index_file)?;
+            let mut writer = BufWriter::new(new_index_file);
+            bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
+            writer.flush()?;
+            triples
+        };
+
         let dict = unvalidated_dict.validate()?;
         let hdt = Hdt { dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));

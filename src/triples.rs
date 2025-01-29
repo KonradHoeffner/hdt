@@ -3,9 +3,13 @@ use crate::ControlInfo;
 use bytesize::ByteSize;
 use eyre::{eyre, Result, WrapErr};
 use log::{debug, error};
+use serde::de::{self, Deserializer};
+use serde::ser::{SerializeStruct, Serializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
+use std::io::BufReader;
 use sucds::{
     bit_vectors::{BitVector, Rank9Sel},
     char_sequences::WaveletMatrix,
@@ -26,7 +30,7 @@ pub use object_iter::ObjectIter;
 /// Only SPO is tested, others probably don't work correctly.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Order {
     Unknown = 0,
     SPO = 1,
@@ -61,6 +65,47 @@ pub struct OpIndex {
     pub sequence: CompactVector,
     /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
+}
+
+impl Serialize for OpIndex {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("OpIndex", 2)?;
+
+        // Serialize sequence using `sucds`
+        let mut seq_buffer = Vec::new();
+        self.sequence.serialize_into(&mut seq_buffer).map_err(serde::ser::Error::custom)?;
+        state.serialize_field("sequence", &seq_buffer)?;
+
+        state.serialize_field("bitmap", &self.bitmap)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for OpIndex {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct OpIndexData {
+            sequence: Vec<u8>,
+            bitmap: Bitmap,
+        }
+
+        let data = OpIndexData::deserialize(deserializer)?;
+
+        // Deserialize `sucds` structures
+        let mut seq_reader = BufReader::new(&data.sequence[..]);
+
+        let v = CompactVector::deserialize_from(&mut seq_reader).map_err(de::Error::custom)?;
+        let index = OpIndex { sequence: v, bitmap: data.bitmap }; // Replace with proper reconstruction
+
+        Ok(index)
+    }
 }
 
 impl fmt::Debug for OpIndex {
@@ -117,6 +162,67 @@ impl fmt::Debug for TriplesBitmap {
     }
 }
 
+impl Serialize for TriplesBitmap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("TriplesBitmap", 5)?;
+
+        // Extract the number of triples
+        state.serialize_field("order", &self.order)?;
+
+        //bitmap_y
+        state.serialize_field("bitmap_y", &self.bitmap_y)?;
+
+        // adjlist_z
+        state.serialize_field("adjlist_z", &self.adjlist_z)?;
+
+        // op_index
+        state.serialize_field("op_index", &self.op_index)?;
+
+        // wavelet_y
+        let mut wavelet_y_buffer = Vec::new();
+        self.wavelet_y.serialize_into(&mut wavelet_y_buffer).map_err(serde::ser::Error::custom)?;
+        state.serialize_field("wavelet_y", &wavelet_y_buffer)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for TriplesBitmap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct TriplesBitmapData {
+            order: Order,
+            pub bitmap_y: Bitmap,
+            pub adjlist_z: AdjList,
+            pub op_index: OpIndex,
+            pub wavelet_y: Vec<u8>,
+        }
+
+        let data = TriplesBitmapData::deserialize(deserializer)?;
+
+        // Deserialize `sucds` structures
+        let mut bitmap_reader = BufReader::new(&data.wavelet_y[..]);
+        let wavelet_y =
+            WaveletMatrix::<Rank9Sel>::deserialize_from(&mut bitmap_reader).map_err(de::Error::custom)?;
+
+        let bitmap = TriplesBitmap {
+            order: data.order,
+            bitmap_y: data.bitmap_y,
+            adjlist_z: data.adjlist_z,
+            op_index: data.op_index,
+            wavelet_y,
+        };
+
+        Ok(bitmap)
+    }
+}
+
 impl TriplesBitmap {
     /// read the whole triple section including control information
     pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
@@ -127,6 +233,18 @@ impl TriplesBitmap {
             "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
             _ => Err(eyre!("Unknown triples listing format.")),
         }
+    }
+    pub fn load_cache<R: BufRead>(reader: &mut R, info: ControlInfo) -> Result<Self> {
+        match &info.format[..] {
+            "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
+            _ => Err(eyre!("Unknown triples listing format.")),
+        }
+    }
+
+    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
+        let triples: TriplesBitmap = bincode::deserialize_from(reader).expect("msg");
+        Ok(triples)
     }
 
     /// Size in bytes on the heap.

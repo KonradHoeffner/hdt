@@ -2,8 +2,12 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
+use serde::de::{self, Deserializer};
+use serde::ser::{SerializeStruct, Serializer};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
+use std::io::BufReader;
 use std::mem::size_of;
 use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
 use sucds::Serializable;
@@ -13,6 +17,43 @@ use sucds::Serializable;
 pub struct Bitmap {
     /// should be private but is needed by containers/bitmap.rs, use methods provided by Bitmap
     pub dict: Rank9Sel,
+}
+
+impl Serialize for Bitmap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("Bitmap", 1)?;
+
+        //bitmap_y
+        let mut dict_buffer = Vec::new();
+        self.dict.serialize_into(&mut dict_buffer).map_err(serde::ser::Error::custom)?;
+        state.serialize_field("dict", &dict_buffer)?;
+
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Bitmap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct BitmapData {
+            dict: Vec<u8>,
+        }
+
+        let data = BitmapData::deserialize(deserializer)?;
+
+        // Deserialize `sucds` structures
+        let mut bitmap_reader = BufReader::new(&data.dict[..]);
+        let rank9sel = Rank9Sel::deserialize_from(&mut bitmap_reader).map_err(de::Error::custom)?;
+
+        let bitmap = Bitmap { dict: rank9sel };
+        Ok(bitmap)
+    }
 }
 
 impl fmt::Debug for Bitmap {
