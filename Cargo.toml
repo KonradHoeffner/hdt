@@ -13,7 +13,7 @@ edition = "2021"
 all-features = true
 
 [dependencies]
-bytesize = "1"
+bytesize = "2"
 crc = "3"
 iref = "3"
 langtag = "0.4"
