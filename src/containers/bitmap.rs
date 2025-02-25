@@ -2,13 +2,13 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
+#[cfg(feature = "cache")]
+use serde::ser::SerializeStruct;
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
 use sucds::Serializable;
-#[cfg(feature = "cache")]
-use serde::ser::SerializeStruct;
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]

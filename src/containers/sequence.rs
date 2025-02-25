@@ -1,12 +1,12 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
+#[cfg(feature = "cache")]
+use serde::{self, Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 use std::thread;
-#[cfg(feature = "cache")]
-use serde::{self, Deserialize, Serialize};
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
