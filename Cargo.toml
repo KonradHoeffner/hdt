@@ -25,12 +25,13 @@ log = "0.4"
 mownstr = "0.3"
 lazy_static = "1"
 eyre = "0.6"
-bincode = "1.3.3"
-serde = "1.0.217"
+bincode = { version = "1.3.3", optional = true }
+serde = { version = "1.0.217", optional = true }
 
 [features]
 default = ["sophia"]
 sophia = ["dep:sophia"]
+cache = ["dep:serde", "dep:bincode"]
 
 [[bench]]
 name = "criterion"

@@ -2,15 +2,13 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
-use serde::de::{self, Deserializer};
-use serde::ser::{SerializeStruct, Serializer};
-use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
-use std::io::BufReader;
 use std::mem::size_of;
 use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
 use sucds::Serializable;
+#[cfg(feature = "cache")]
+use serde::ser::SerializeStruct;
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
@@ -19,12 +17,14 @@ pub struct Bitmap {
     pub dict: Rank9Sel,
 }
 
-impl Serialize for Bitmap {
+#[cfg(feature = "cache")]
+impl serde::Serialize for Bitmap {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::ser::Serializer,
     {
-        let mut state = serializer.serialize_struct("Bitmap", 1)?;
+        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
+            serializer.serialize_struct("Bitmap", 1)?;
 
         //bitmap_y
         let mut dict_buffer = Vec::new();
@@ -35,12 +35,13 @@ impl Serialize for Bitmap {
     }
 }
 
-impl<'de> Deserialize<'de> for Bitmap {
+#[cfg(feature = "cache")]
+impl<'de> serde::Deserialize<'de> for Bitmap {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::de::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
+        #[derive(serde::Deserialize)]
         struct BitmapData {
             dict: Vec<u8>,
         }
@@ -48,8 +49,8 @@ impl<'de> Deserialize<'de> for Bitmap {
         let data = BitmapData::deserialize(deserializer)?;
 
         // Deserialize `sucds` structures
-        let mut bitmap_reader = BufReader::new(&data.dict[..]);
-        let rank9sel = Rank9Sel::deserialize_from(&mut bitmap_reader).map_err(de::Error::custom)?;
+        let mut bitmap_reader = std::io::BufReader::new(&data.dict[..]);
+        let rank9sel = Rank9Sel::deserialize_from(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
 
         let bitmap = Bitmap { dict: rank9sel };
         Ok(bitmap)

@@ -3,13 +3,12 @@ use crate::ControlInfo;
 use bytesize::ByteSize;
 use eyre::{eyre, Result, WrapErr};
 use log::{debug, error};
-use serde::de::{self, Deserializer};
-use serde::ser::{SerializeStruct, Serializer};
-use serde::{Deserialize, Serialize};
+// use serde::de::{self, Deserializer};
+// use serde::ser::{SerializeStruct, Serializer};
+// use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
-use std::io::BufReader;
 use sucds::{
     bit_vectors::{BitVector, Rank9Sel},
     char_sequences::WaveletMatrix,
@@ -25,12 +24,15 @@ mod predicate_object_iter;
 pub use predicate_object_iter::PredicateObjectIter;
 mod object_iter;
 pub use object_iter::ObjectIter;
+#[cfg(feature = "cache")]
+use serde::ser::SerializeStruct;
 
 /// Order of the triple sections.
 /// Only SPO is tested, others probably don't work correctly.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "cache", derive(serde::Deserialize, serde::Serialize))]
 pub enum Order {
     Unknown = 0,
     SPO = 1,
@@ -67,12 +69,14 @@ pub struct OpIndex {
     pub bitmap: Bitmap,
 }
 
-impl Serialize for OpIndex {
+#[cfg(feature = "cache")]
+impl serde::Serialize for OpIndex {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::ser::Serializer,
     {
-        let mut state = serializer.serialize_struct("OpIndex", 2)?;
+        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
+            serializer.serialize_struct("OpIndex", 2)?;
 
         // Serialize sequence using `sucds`
         let mut seq_buffer = Vec::new();
@@ -85,12 +89,13 @@ impl Serialize for OpIndex {
     }
 }
 
-impl<'de> Deserialize<'de> for OpIndex {
+#[cfg(feature = "cache")]
+impl<'de> serde::Deserialize<'de> for OpIndex {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::de::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
+        #[derive(serde::Deserialize)]
         struct OpIndexData {
             sequence: Vec<u8>,
             bitmap: Bitmap,
@@ -99,9 +104,9 @@ impl<'de> Deserialize<'de> for OpIndex {
         let data = OpIndexData::deserialize(deserializer)?;
 
         // Deserialize `sucds` structures
-        let mut seq_reader = BufReader::new(&data.sequence[..]);
+        let mut seq_reader = std::io::BufReader::new(&data.sequence[..]);
 
-        let v = CompactVector::deserialize_from(&mut seq_reader).map_err(de::Error::custom)?;
+        let v = CompactVector::deserialize_from(&mut seq_reader).map_err(serde::de::Error::custom)?;
         let index = OpIndex { sequence: v, bitmap: data.bitmap }; // Replace with proper reconstruction
 
         Ok(index)
@@ -162,12 +167,14 @@ impl fmt::Debug for TriplesBitmap {
     }
 }
 
-impl Serialize for TriplesBitmap {
+#[cfg(feature = "cache")]
+impl serde::Serialize for TriplesBitmap {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: Serializer,
+        S: serde::ser::Serializer,
     {
-        let mut state = serializer.serialize_struct("TriplesBitmap", 5)?;
+        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
+            serializer.serialize_struct("TriplesBitmap", 5)?;
 
         // Extract the number of triples
         state.serialize_field("order", &self.order)?;
@@ -190,12 +197,13 @@ impl Serialize for TriplesBitmap {
     }
 }
 
-impl<'de> Deserialize<'de> for TriplesBitmap {
+#[cfg(feature = "cache")]
+impl<'de> serde::Deserialize<'de> for TriplesBitmap {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
+        D: serde::de::Deserializer<'de>,
     {
-        #[derive(Deserialize)]
+        #[derive(serde::Deserialize)]
         struct TriplesBitmapData {
             order: Order,
             pub bitmap_y: Bitmap,
@@ -207,9 +215,9 @@ impl<'de> Deserialize<'de> for TriplesBitmap {
         let data = TriplesBitmapData::deserialize(deserializer)?;
 
         // Deserialize `sucds` structures
-        let mut bitmap_reader = BufReader::new(&data.wavelet_y[..]);
+        let mut bitmap_reader = std::io::BufReader::new(&data.wavelet_y[..]);
         let wavelet_y =
-            WaveletMatrix::<Rank9Sel>::deserialize_from(&mut bitmap_reader).map_err(de::Error::custom)?;
+            WaveletMatrix::<Rank9Sel>::deserialize_from(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
 
         let bitmap = TriplesBitmap {
             order: data.order,
@@ -234,7 +242,10 @@ impl TriplesBitmap {
             _ => Err(eyre!("Unknown triples listing format.")),
         }
     }
-    pub fn load_cache<R: BufRead>(reader: &mut R, info: ControlInfo) -> Result<Self> {
+
+    /// load the cached HDT index file, only supports TriplesBitmap
+    #[cfg(feature = "cache")]
+    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
         match &info.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
             "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
@@ -242,6 +253,8 @@ impl TriplesBitmap {
         }
     }
 
+    /// load the entire cached TriplesBitmap object
+    #[cfg(feature = "cache")]
     pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
         let triples: TriplesBitmap = bincode::deserialize_from(reader).expect("msg");
         Ok(triples)

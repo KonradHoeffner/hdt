@@ -7,10 +7,10 @@ use bytesize::ByteSize;
 use eyre::WrapErr;
 use log::{debug, error};
 use std::error::Error;
-use std::io::{BufWriter, Write};
-use std::path::Path;
+#[cfg(feature = "cache")]
+use std::io::Write;
+use std::iter;
 use std::sync::Arc;
-use std::{fs, iter};
 use thiserror::Error;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
@@ -59,31 +59,42 @@ impl Hdt {
         Ok(hdt)
     }
 
-    pub fn new_from_file(f: &Path) -> Result<Self, Box<dyn Error>> {
+    /// Creates an immutable HDT instance containing the dictionary and triples from the Path.
+    /// Will utilize a custom cached TriplesBitmap file if exists or create one if it does not exist.
+    /// The file path must point to the beginning of the data of an HDT file as produced by hdt-cpp.
+    /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
+    /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
+    /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
+    /// # Example
+    /// ```
+    /// let hdt = hdt::Hdt::new_from_file(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+    /// ```
+    #[cfg(feature = "cache")]
+    pub fn new_from_file(f: &std::path::Path) -> Result<Self, Box<dyn Error>> {
         let source = std::fs::File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
         Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
         let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
-        let abs_path = fs::canonicalize(f)?;
+        let abs_path = std::fs::canonicalize(f)?;
         let index_file = format!(
             "{}/{}.index.v1-rust-cache",
             abs_path.parent().unwrap().display(),
-            f.file_name().unwrap().to_str().unwrap().to_string()
+            f.file_name().unwrap().to_str().unwrap().to_owned()
         );
-        let triples = if Path::new(&index_file).exists() {
+        let triples = if std::path::Path::new(&index_file).exists() {
             // load cached index
             debug!("hdt file cache detected, loading from {index_file}");
             let index_source = std::fs::File::open(index_file)?;
             let mut index_reader = std::io::BufReader::new(index_source);
             let triples_ci = ControlInfo::read(&mut reader)?;
-            TriplesBitmap::load_cache(&mut index_reader, triples_ci)?
+            TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?
         } else {
             debug!("no cache detected, generating index");
             let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
             debug!("index generated, saving cache to {index_file}");
             let new_index_file = std::fs::File::create(index_file)?;
-            let mut writer = BufWriter::new(new_index_file);
+            let mut writer = std::io::BufWriter::new(new_index_file);
             bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
             writer.flush()?;
             triples

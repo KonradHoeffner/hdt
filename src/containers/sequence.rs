@@ -1,17 +1,18 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 use eyre::{eyre, Result};
-use serde::{self, Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 use std::thread;
+#[cfg(feature = "cache")]
+use serde::{self, Deserialize, Serialize};
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
 //#[derive(Clone)]
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct Sequence {
     /// Number of integers in the sequence.
     pub entries: usize,
@@ -20,7 +21,7 @@ pub struct Sequence {
     /// Data in blocks.
     pub data: Vec<usize>,
     /// whether CRC check was successful
-    #[serde(skip)]
+    #[cfg_attr(feature = "cache", serde(skip))]
     pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
