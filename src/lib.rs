@@ -25,9 +25,24 @@
 //! ```
 //!
 #![cfg_attr(
+    feature = "cache",
+    doc = r##"
+# Experimental Features
+The **cache** feature is experimental and may change or be removed in future releases.
+ 
+Creating and/or loading a HDT file leveraging a custom cache:
+
+```no_run
+let hdt = hdt::Hdt::new_from_file(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+``` 
+"##
+)]
+#![cfg_attr(
     feature = "sophia",
     doc = r##"
-Using the Sophia adapter:
+# Additional Optional Features
+
+Using the **sophia** adapter:
 
 ```
 use hdt::{Hdt,HdtGraph};
