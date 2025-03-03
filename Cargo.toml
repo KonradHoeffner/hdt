@@ -29,7 +29,7 @@ bincode = { version = "1", optional = true }
 serde = { version = "1", optional = true }
 
 [features]
-default = ["sophia"]
+default = ["sophia", "cache"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 
