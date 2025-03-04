@@ -8,7 +8,7 @@ use eyre::WrapErr;
 use log::{debug, error};
 use std::error::Error;
 #[cfg(feature = "cache")]
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use std::iter;
 use std::sync::Arc;
 use thiserror::Error;
@@ -85,10 +85,12 @@ impl Hdt {
             f.file_name().unwrap().to_str().unwrap().to_owned()
         );
         let triples = if std::path::Path::new(&index_file).exists() {
+            let pos = reader.stream_position()?;
             match Self::load_with_cache(&mut reader, &index_file) {
                 Ok(triples) => triples,
                 Err(e) => {
                     warn!("error loading cache, overwriting: {e}");
+                    reader.seek(SeekFrom::Start(pos))?;
                     Self::load_without_cache(&mut reader, &index_file)?
                 }
             }
