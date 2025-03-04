@@ -253,7 +253,7 @@ impl TriplesBitmap {
     /// load the entire cached TriplesBitmap object
     #[cfg(feature = "cache")]
     pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
-        let triples: TriplesBitmap = bincode::deserialize_from(reader).expect("msg");
+        let triples: TriplesBitmap = bincode::deserialize_from(reader)?;
         Ok(triples)
     }
 
