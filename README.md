@@ -67,7 +67,7 @@ There is also a runnable example [in the examples folder](https://github.com/Kon
 Users can also choose to use the experimental `cache` feature. If enabled, the library will utilize a custom cached TriplesBitmap file if it exists or create one if it does not exist.
 
 ```rust
-let hdt = hdt::Hdt::new_from_file(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
 ```
 
 The `cache` feature is experimental and may change or be removed in future releases.

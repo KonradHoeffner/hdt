@@ -33,7 +33,7 @@ The **cache** feature is experimental and may change or be removed in future rel
 Creating and/or loading a HDT file leveraging a custom cache:
 
 ```no_run
-let hdt = hdt::Hdt::new_from_file(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
 ``` 
 "#
 )]

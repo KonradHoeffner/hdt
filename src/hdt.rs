@@ -8,6 +8,8 @@ use eyre::WrapErr;
 use log::{debug, error};
 use std::error::Error;
 #[cfg(feature = "cache")]
+use std::fs::File;
+#[cfg(feature = "cache")]
 use std::io::{Seek, SeekFrom, Write};
 use std::iter;
 use std::sync::Arc;
@@ -67,13 +69,13 @@ impl Hdt {
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
     /// # Example
     /// ```
-    /// let hdt = hdt::Hdt::new_from_file(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+    /// let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
     /// ```
     #[cfg(feature = "cache")]
-    pub fn new_from_file(f: &std::path::Path) -> Result<Self, Box<dyn Error>> {
+    pub fn new_from_path(f: &std::path::Path) -> Result<Self, Box<dyn Error>> {
         use log::warn;
 
-        let source = std::fs::File::open(f)?;
+        let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
         Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
@@ -125,7 +127,7 @@ impl Hdt {
     ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
         // load cached index
         debug!("hdt file cache detected, loading from {index_file}");
-        let index_source = std::fs::File::open(index_file)?;
+        let index_source = File::open(index_file)?;
         let mut index_reader = std::io::BufReader::new(index_source);
         let triples_ci = ControlInfo::read(&mut reader)?;
         Ok(TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?)
@@ -133,7 +135,7 @@ impl Hdt {
 
     #[cfg(feature = "cache")]
     fn write_cache(index_file: &str, triples: &TriplesBitmap) -> core::result::Result<(), Box<dyn Error>> {
-        let new_index_file = std::fs::File::create(index_file)?;
+        let new_index_file = File::create(index_file)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
         bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
         writer.flush()?;
