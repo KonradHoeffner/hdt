@@ -32,6 +32,12 @@ jobs:
           components: rustfmt,clippy
       - name: fmt
         run: cargo fmt -- --check
+      - name: check feature combinations
+        run: |
+              cargo check --no-default-features
+              cargo check --no-default-features --features sophia
+              cargo check --no-default-features --features cache
+              cargo check --no-default-features --features "sophia cache"
       - name: clippy
         run: cargo clippy --no-deps --all-features
       - name: build
