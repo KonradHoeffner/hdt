@@ -80,24 +80,22 @@ impl Hdt {
         ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
         Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
         let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
-        let abs_path = std::fs::canonicalize(f)?;
-        let index_file = format!(
-            "{}/{}.index.v1-rust-cache",
-            abs_path.parent().unwrap().display(),
-            f.file_name().unwrap().to_str().unwrap().to_owned()
-        );
-        let triples = if std::path::Path::new(&index_file).exists() {
+        let mut abs_path = std::fs::canonicalize(f)?;
+        let _ = abs_path.pop();
+        let index_file_name = format!("{}.index.v1-rust-cache", f.file_name().unwrap().to_str().unwrap());
+        let index_file_path = abs_path.join(index_file_name);
+        let triples = if index_file_path.exists() {
             let pos = reader.stream_position()?;
-            match Self::load_with_cache(&mut reader, &index_file) {
+            match Self::load_with_cache(&mut reader, &index_file_path) {
                 Ok(triples) => triples,
                 Err(e) => {
                     warn!("error loading cache, overwriting: {e}");
                     reader.seek(SeekFrom::Start(pos))?;
-                    Self::load_without_cache(&mut reader, &index_file)?
+                    Self::load_without_cache(&mut reader, &index_file_path)?
                 }
             }
         } else {
-            Self::load_without_cache(&mut reader, &index_file)?
+            Self::load_without_cache(&mut reader, &index_file_path)?
         };
 
         let dict = unvalidated_dict.validate()?;
@@ -109,33 +107,35 @@ impl Hdt {
 
     #[cfg(feature = "cache")]
     fn load_without_cache<R: std::io::BufRead>(
-        mut reader: R, index_file: &str,
+        mut reader: R, index_file_path: &std::path::PathBuf,
     ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
         use log::warn;
 
         debug!("no cache detected, generating index");
         let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
-        debug!("index generated, saving cache to {index_file}");
-        if let Err(e) = Self::write_cache(index_file, &triples) {
+        debug!("index generated, saving cache to {}", index_file_path.display());
+        if let Err(e) = Self::write_cache(index_file_path, &triples) {
             warn!("error trying to save cache to file: {e}");
         }
         Ok(triples)
     }
     #[cfg(feature = "cache")]
     fn load_with_cache<R: std::io::BufRead>(
-        mut reader: R, index_file: &str,
+        mut reader: R, index_file_path: &std::path::PathBuf,
     ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
         // load cached index
-        debug!("hdt file cache detected, loading from {index_file}");
-        let index_source = File::open(index_file)?;
+        debug!("hdt file cache detected, loading from {}", index_file_path.display());
+        let index_source = File::open(index_file_path)?;
         let mut index_reader = std::io::BufReader::new(index_source);
         let triples_ci = ControlInfo::read(&mut reader)?;
         Ok(TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?)
     }
 
     #[cfg(feature = "cache")]
-    fn write_cache(index_file: &str, triples: &TriplesBitmap) -> core::result::Result<(), Box<dyn Error>> {
-        let new_index_file = File::create(index_file)?;
+    fn write_cache(
+        index_file_path: &std::path::PathBuf, triples: &TriplesBitmap,
+    ) -> core::result::Result<(), Box<dyn Error>> {
+        let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
         bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
         writer.flush()?;
