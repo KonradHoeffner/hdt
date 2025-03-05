@@ -26,7 +26,7 @@ mownstr = "0.3"
 lazy_static = "1"
 eyre = "0.6"
 bincode = { version = "1", optional = true }
-serde = { version = "1", optional = true }
+serde = { version = "1", optional = true, features = ["derive"] }
 
 [features]
 default = ["sophia"]
