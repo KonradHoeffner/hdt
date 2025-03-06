@@ -1,7 +1,7 @@
 //! I define [`HdtTerm`], an implementation of [`sophia::api::term::Term`].
+use sophia::api::MownStr;
 use sophia::api::ns::{rdf, xsd};
 use sophia::api::term::{BnodeId, LanguageTag, Term, TermKind};
-use sophia::api::MownStr;
 use sophia::iri::IriRef;
 use std::sync::{Arc, LazyLock};
 

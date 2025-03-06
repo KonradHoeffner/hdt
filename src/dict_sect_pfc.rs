@@ -1,17 +1,17 @@
+use crate::containers::Sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
-use crate::containers::Sequence;
 use crate::triples::Id;
 use bytesize::ByteSize;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use log::error;
-use std::cmp::{min, Ordering};
+use std::cmp::{Ordering, min};
 use std::fmt;
 use std::io::BufRead;
 use std::str;
 use std::sync::Arc;
-use std::thread::{spawn, JoinHandle};
+use std::thread::{JoinHandle, spawn};
 use thiserror::Error;
 
 /// Dictionary section with plain front coding.
@@ -274,9 +274,9 @@ impl DictSectPFC {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ControlInfo;
     use crate::header::Header;
     use crate::tests::init;
-    use crate::ControlInfo;
     use pretty_assertions::assert_eq;
     use std::fs::File;
     use std::io::BufReader;

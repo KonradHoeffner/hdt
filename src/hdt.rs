@@ -1,8 +1,8 @@
+use crate::FourSectDict;
 use crate::containers::ControlInfo;
 use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
-use crate::FourSectDict;
 use bytesize::ByteSize;
 use eyre::WrapErr;
 use log::{debug, error};

@@ -1,16 +1,16 @@
-use crate::containers::{AdjList, Bitmap, Sequence};
 use crate::ControlInfo;
+use crate::containers::{AdjList, Bitmap, Sequence};
 use bytesize::ByteSize;
-use eyre::{eyre, Result, WrapErr};
+use eyre::{Result, WrapErr, eyre};
 use log::{debug, error};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
 use sucds::{
+    Serializable,
     bit_vectors::{BitVector, Rank9Sel},
     char_sequences::WaveletMatrix,
     int_vectors::CompactVector,
-    Serializable,
 };
 
 mod subject_iter;

@@ -1,4 +1,4 @@
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 use std::collections::HashMap;
 use std::io;
 use std::io::BufRead;

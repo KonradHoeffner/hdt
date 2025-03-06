@@ -1,9 +1,9 @@
+use crate::ControlInfo;
+use crate::DictSectPFC;
 /// Four section dictionary.
 use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
-use crate::ControlInfo;
-use crate::DictSectPFC;
-use eyre::{eyre, Result, WrapErr};
+use eyre::{Result, WrapErr, eyre};
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;

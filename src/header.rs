@@ -1,6 +1,6 @@
-use crate::containers::rdf::{Id, Literal, Term, Triple};
 use crate::containers::ControlInfo;
-use eyre::{eyre, Result, WrapErr};
+use crate::containers::rdf::{Id, Literal, Term, Triple};
+use eyre::{Result, WrapErr, eyre};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
 use std::io::BufRead;

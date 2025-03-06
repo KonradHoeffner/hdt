@@ -1,6 +1,6 @@
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
-use eyre::{eyre, Result};
+use eyre::{Result, eyre};
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
 use std::fmt;

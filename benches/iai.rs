@@ -1,9 +1,9 @@
 use hdt::Hdt;
 use hdt::HdtGraph;
 use sophia::api::graph::Graph;
-use sophia::api::term::matcher::Any;
 use sophia::api::term::IriRef;
 use sophia::api::term::SimpleTerm;
+use sophia::api::term::matcher::Any;
 use std::fs::File;
 
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";

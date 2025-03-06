@@ -1,12 +1,12 @@
-use criterion::{criterion_group, criterion_main, Criterion};
-use hdt::triples::*;
+use criterion::{Criterion, criterion_group, criterion_main};
 use hdt::Hdt;
 use hdt::HdtGraph;
 use hdt::IdKind;
+use hdt::triples::*;
 use sophia::api::graph::Graph;
-use sophia::api::term::matcher::Any;
 use sophia::api::term::IriRef;
 use sophia::api::term::SimpleTerm;
+use sophia::api::term::matcher::Any;
 use std::fs::File;
 
 const VINCENT: &str = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";

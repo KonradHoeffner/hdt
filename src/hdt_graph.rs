@@ -5,7 +5,7 @@ use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
 use log::debug;
 use sophia::api::graph::Graph;
-use sophia::api::term::{matcher::TermMatcher, BnodeId, IriRef, LanguageTag, Term};
+use sophia::api::term::{BnodeId, IriRef, LanguageTag, Term, matcher::TermMatcher};
 use std::convert::Infallible;
 use std::io::{self, Error, ErrorKind};
 use std::iter;
@@ -114,11 +114,7 @@ fn term_string(t: &HdtTerm) -> String {
         HdtTerm::LiteralDatatype(l, dt) => {
             let xsd_string: &str = "http://www.w3.org/2001/XMLSchema#string";
             let dts = dt.as_str();
-            if dts == xsd_string {
-                format!("\"{l}\"")
-            } else {
-                format!("\"{l}\"^^<{dts}>")
-            }
+            if dts == xsd_string { format!("\"{l}\"") } else { format!("\"{l}\"^^<{dts}>") }
         }
     }
 }
@@ -258,14 +254,16 @@ mod tests {
         let triples: Vec<Result<[HdtTerm; 3], Infallible>> = graph.triples().collect();
         assert_eq!(triples.len(), 328);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";
-        assert!(graph
-            .triples_matching(
-                Some(HdtTerm::Iri(IriRef::new_unchecked(Arc::from("http://www.snik.eu/ontology/meta")))),
-                Any,
-                Any
-            )
-            .next()
-            .is_some());
+        assert!(
+            graph
+                .triples_matching(
+                    Some(HdtTerm::Iri(IriRef::new_unchecked(Arc::from("http://www.snik.eu/ontology/meta")))),
+                    Any,
+                    Any
+                )
+                .next()
+                .is_some()
+        );
         for uri in [meta_top, "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let term = HdtTerm::Iri(IriRef::new_unchecked(Arc::from(uri)));
             let filtered: Vec<_> = triples
