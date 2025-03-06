@@ -3,12 +3,10 @@ use sophia::api::ns::{rdf, xsd};
 use sophia::api::term::{BnodeId, LanguageTag, Term, TermKind};
 use sophia::api::MownStr;
 use sophia::iri::IriRef;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
-lazy_static::lazy_static! {
-    pub static ref XSD_STRING: IriRef<Arc<str>> = xsd::string.iri().unwrap().map_unchecked(|m| Arc::from(m.as_ref()));
-    pub static ref RDF_LANG_STRING: IriRef<Arc<str>> = rdf::langString.iri().unwrap().map_unchecked(|m| Arc::from(m.as_ref()));
-}
+pub static XSD_STRING: LazyLock<IriRef<Arc<str>>> =
+    LazyLock::new(|| xsd::string.iri().unwrap().map_unchecked(|m| Arc::from(m.as_ref())));
 
 /// An implementation of [`sophia::api::term::Term`] for [`HdtGraph`](super::HdtGraph).
 #[derive(Clone, Debug)]
