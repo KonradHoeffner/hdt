@@ -65,12 +65,12 @@ impl AdjList {
         let mut low = begin;
         let mut high = end;
         while low < high {
-            let mid = (low + high) / 2;
+            let mid = usize::midpoint(low, high);
             match self.sequence.get(mid).cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => return Some(mid),
-            };
+            }
         }
         None
     }

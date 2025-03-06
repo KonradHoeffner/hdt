@@ -70,7 +70,7 @@ impl<'a> SubjectIter<'a> {
                 match triples.search_y(pat_x - 1, pat_y) {
                     Some(y) => min_y = y,
                     None => return SubjectIter::empty(triples),
-                };
+                }
                 max_y = min_y + 1;
                 if pat_z != 0 {
                     // S P O
@@ -78,7 +78,7 @@ impl<'a> SubjectIter<'a> {
                     match triples.adjlist_z.search(min_y, pat_z) {
                         Some(pos_z) => min_z = pos_z,
                         None => return SubjectIter::empty(triples),
-                    };
+                    }
                     max_z = min_z + 1;
                 } else {
                     // S P ?

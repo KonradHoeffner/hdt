@@ -28,14 +28,14 @@ impl<'a> PredicateObjectIter<'a> {
         // Binary search with a twist:
         // Each value may occur multiple times, so we search for the left and right borders.
         while low <= high {
-            let mut mid = (low + high) / 2;
+            let mut mid = usize::midpoint(low, high);
             match get_y(mid).cmp(&p) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => {
                     let mut left_high = mid;
                     while low < left_high {
-                        mid = (low + left_high) / 2;
+                        mid = usize::midpoint(low, left_high);
                         match get_y(mid).cmp(&p) {
                             Ordering::Less => low = mid + 1,
                             Ordering::Greater => {
