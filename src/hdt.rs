@@ -137,7 +137,7 @@ impl Hdt {
     ) -> core::result::Result<(), Box<dyn Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
-        bincode::serialize_into(&mut writer, &triples).expect("Serialization failed");
+        bincode::serde::encode_into_std_write(&triples, &mut writer, bincode::config::standard())?;
         writer.flush()?;
         Ok(())
     }
