@@ -1,14 +1,20 @@
 use eyre::{Result, eyre};
 use std::collections::HashMap;
-use std::io;
+use std::error::Error;
+use std::fs::File;
 use std::io::BufRead;
+use std::io::{self, BufWriter, Write};
 use std::str;
+
+pub const TERMINATOR: [u8; 1] = [0];
+const HDT_HEADER: &[u8] = b"$HDT";
 
 /// Type of Control Information.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub enum ControlType {
+    #[default]
     Unknown = 0,
     Global = 1,
     Header = 2,
@@ -34,14 +40,14 @@ impl TryFrom<u8> for ControlType {
 }
 
 /// <https://www.rdfhdt.org/hdt-binary-format/>: "preamble that describes a chunk of information".
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ControlInfo {
     /// Type of control information.
     pub control_type: ControlType,
     /// "URI identifier of the implementation of the following section."
     pub format: String,
     /// Key-value entries, ASCII only.
-    properties: HashMap<String, String>,
+    pub properties: HashMap<String, String>,
 }
 
 impl ControlInfo {
@@ -104,6 +110,44 @@ impl ControlInfo {
         }
 
         Ok(ControlInfo { control_type, format, properties })
+    }
+
+    /// Save a ControlInfo object to file using crc
+    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn Error>> {
+        let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
+        let mut hasher = crc.digest();
+        dest_writer.write(HDT_HEADER)?;
+        hasher.update(HDT_HEADER);
+
+        // write type
+        let type_: [u8; 1] = [self.control_type as u8];
+        dest_writer.write(&type_)?;
+        hasher.update(&type_);
+
+        // write format
+        let format = self.format.as_bytes();
+        dest_writer.write(format)?;
+        hasher.update(format);
+        dest_writer.write(&TERMINATOR)?;
+        hasher.update(&TERMINATOR);
+
+        // write properties
+        let mut properties_string = String::new();
+        for (key, value) in &self.properties {
+            properties_string.push_str(key);
+            properties_string.push_str("=");
+            properties_string.push_str(value);
+            properties_string.push_str(";");
+        }
+        dest_writer.write(properties_string.as_bytes())?;
+        hasher.update(properties_string.as_bytes());
+        dest_writer.write(&TERMINATOR)?;
+        hasher.update(&TERMINATOR);
+
+        let checksum = hasher.finalize();
+        dest_writer.write(&checksum.to_le_bytes())?;
+
+        return Ok(());
     }
 
     /// Get property value for the given key, if available.

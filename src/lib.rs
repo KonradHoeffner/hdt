@@ -91,7 +91,8 @@ fn query(hdt: Hdt)
 pub mod containers;
 // Types for representing dictionaries.
 mod dict_sect_pfc;
-mod four_sect_dict;
+/// Types for representing a four section dictionary
+pub mod four_sect_dict;
 /// Types for representing triple sections.
 pub mod hdt;
 #[cfg(feature = "sophia")]
