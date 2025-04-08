@@ -3,10 +3,13 @@ use bytesize::ByteSize;
 use eyre::{Result, eyre};
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
-use std::fmt;
-use std::io::BufRead;
+use std::fs::File;
+use std::io::{BufRead, BufWriter, Write};
 use std::mem::size_of;
 use std::thread;
+use std::{error, fmt};
+
+use super::vbyte::encode_vbyte;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
@@ -177,5 +180,74 @@ impl Sequence {
         }));
 
         Ok(Sequence { entries, bits_per_entry, data, crc_handle })
+    }
+
+    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut hasher = crc.digest();
+        // libhdt/src/sequence/LogSequence2.cpp::save()
+        // Write offsets using variable-length encoding
+        let seq_type: [u8; 1] = [1];
+        let _ = dest_writer.write(&seq_type)?;
+        hasher.update(&seq_type);
+        // Write numbits
+        let bits_per_entry: [u8; 1] = [self.bits_per_entry.try_into().unwrap()];
+        let _ = dest_writer.write(&bits_per_entry)?;
+        hasher.update(&bits_per_entry);
+        // Write numentries
+        let buf = &encode_vbyte(self.entries);
+        let _ = dest_writer.write(buf)?;
+        hasher.update(buf);
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        // Write data
+        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut hasher = crc.digest();
+        let offset_data = self.pack_bits();
+        let _ = dest_writer.write(&offset_data)?;
+        hasher.update(&offset_data);
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        Ok(())
+    }
+
+    fn pack_bits(&self) -> Vec<u8> {
+        assert!(self.bits_per_entry > 0 && self.bits_per_entry <= std::mem::size_of::<usize>() * 8);
+
+        let mut output = Vec::new();
+        let mut current_byte = 0u8;
+        let mut bit_offset = 0;
+
+        for &value in &self.data {
+            let mut val = value & ((1 << self.bits_per_entry) - 1); // mask to get only relevant bits
+            let mut bits_left = self.bits_per_entry;
+
+            while bits_left > 0 {
+                let available = 8 - bit_offset;
+                let to_write = bits_left.min(available);
+
+                // Shift bits to align with current byte offset
+                current_byte |= ((val & ((1 << to_write) - 1)) as u8) << bit_offset;
+
+                bit_offset += to_write;
+                val >>= to_write;
+                bits_left -= to_write;
+
+                if bit_offset == 8 {
+                    output.push(current_byte);
+                    current_byte = 0;
+                    bit_offset = 0;
+                }
+            }
+        }
+
+        // Push final byte if there's remaining bits
+        if bit_offset > 0 {
+            output.push(current_byte);
+        }
+
+        output
     }
 }

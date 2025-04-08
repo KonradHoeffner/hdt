@@ -90,7 +90,7 @@ fn query(hdt: Hdt)
 /// Types for storing and reading data.
 pub mod containers;
 // Types for representing dictionaries.
-mod dict_sect_pfc;
+pub mod dict_sect_pfc;
 /// Types for representing a four section dictionary
 pub mod four_sect_dict;
 /// Types for representing triple sections.

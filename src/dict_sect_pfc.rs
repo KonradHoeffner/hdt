@@ -1,14 +1,16 @@
 use crate::containers::Sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
-use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
+use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
 use crate::triples::Id;
 use bytesize::ByteSize;
 use eyre::{Result, eyre};
 use log::error;
 use std::cmp::{Ordering, min};
+use std::error;
 use std::fmt;
-use std::io::BufRead;
+use std::fs::File;
+use std::io::{BufRead, BufWriter, Write};
 use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
@@ -17,10 +19,10 @@ use thiserror::Error;
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
 pub struct DictSectPFC {
-    num_strings: usize,
-    block_size: usize,
-    sequence: Sequence,
-    packed_data: Arc<[u8]>,
+    pub num_strings: usize,
+    pub block_size: usize,
+    pub sequence: Sequence,
+    pub packed_data: Arc<[u8]>,
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -268,6 +270,39 @@ impl DictSectPFC {
         });
 
         Ok((DictSectPFC { num_strings, block_size, sequence, packed_data }, crc_handle))
+    }
+
+    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut hasher = crc.digest();
+        // libhdt/src/libdcs/CSD_PFC.cpp::save()
+        // save type
+        let seq_type: [u8; 1] = [2];
+        let _ = dest_writer.write(&seq_type)?;
+        hasher.update(&seq_type);
+
+        // // Save sizes
+        let mut buf: Vec<u8> = vec![];
+        buf.extend_from_slice(&encode_vbyte(self.num_strings));
+        buf.extend_from_slice(&encode_vbyte(self.packed_data.len()));
+        buf.extend_from_slice(&encode_vbyte(self.block_size));
+        let _ = dest_writer.write(&buf)?;
+        hasher.update(&buf);
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        self.sequence.save(dest_writer)?;
+
+        // Write packed data
+        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut hasher = crc.digest();
+        let _ = dest_writer.write(&self.packed_data)?;
+        hasher.update(&self.packed_data);
+        // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        Ok(())
     }
 }
 
