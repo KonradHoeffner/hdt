@@ -1,9 +1,8 @@
 use eyre::{Result, eyre};
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::File;
 use std::io::BufRead;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, Write};
 use std::str;
 
 pub const TERMINATOR: [u8; 1] = [0];
@@ -116,38 +115,38 @@ impl ControlInfo {
     pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
-        dest_writer.write(HDT_HEADER)?;
+        dest_writer.write_all(HDT_HEADER)?;
         hasher.update(HDT_HEADER);
 
         // write type
         let type_: [u8; 1] = [self.control_type as u8];
-        dest_writer.write(&type_)?;
+        dest_writer.write_all(&type_)?;
         hasher.update(&type_);
 
         // write format
         let format = self.format.as_bytes();
-        dest_writer.write(format)?;
+        dest_writer.write_all(format)?;
         hasher.update(format);
-        dest_writer.write(&TERMINATOR)?;
+        dest_writer.write_all(&TERMINATOR)?;
         hasher.update(&TERMINATOR);
 
         // write properties
         let mut properties_string = String::new();
         for (key, value) in &self.properties {
             properties_string.push_str(key);
-            properties_string.push_str("=");
+            properties_string.push('=');
             properties_string.push_str(value);
-            properties_string.push_str(";");
+            properties_string.push(';');
         }
-        dest_writer.write(properties_string.as_bytes())?;
+        dest_writer.write_all(properties_string.as_bytes())?;
         hasher.update(properties_string.as_bytes());
-        dest_writer.write(&TERMINATOR)?;
+        dest_writer.write_all(&TERMINATOR)?;
         hasher.update(&TERMINATOR);
 
         let checksum = hasher.finalize();
-        dest_writer.write(&checksum.to_le_bytes())?;
+        dest_writer.write_all(&checksum.to_le_bytes())?;
 
-        return Ok(());
+        Ok(())
     }
 
     /// Get property value for the given key, if available.
@@ -160,7 +159,7 @@ impl ControlInfo {
 mod tests {
     use super::*;
     use crate::tests::init;
-    use std::io::{BufReader, Cursor};
+    use std::io::BufReader;
 
     #[test]
     fn read_info() {
