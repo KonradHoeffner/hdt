@@ -19,9 +19,13 @@ use thiserror::Error;
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
 pub struct DictSectPFC {
+    /// total number of strings stored
     pub num_strings: usize,
+    /// the last block may have less than "block_size" strings
     pub block_size: usize,
+    /// stores the starting position of each block
     pub sequence: Sequence,
+    /// the substrings
     pub packed_data: Arc<[u8]>,
 }
 
@@ -47,6 +51,7 @@ pub enum ExtractError {
 }
 
 impl DictSectPFC {
+    /// size in bytes of the dictionary section
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.size_in_bytes() + self.packed_data.len()
     }
@@ -72,9 +77,9 @@ impl DictSectPFC {
         str::from_utf8(&self.packed_data[position..position + length]).unwrap()
     }
 
-    // translated from Java
-    // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
-    // 0 means not found
+    /// translated from Java
+    /// https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
+    /// 0 means not found
     pub fn string_to_id(&self, element: &str) -> Id {
         if self.num_strings == 0 {
             // shared dictionary may be empty
@@ -215,10 +220,12 @@ impl DictSectPFC {
         position - offset
     }
 
+    /// deprecated: we should be able to remove this as it is public now
     pub const fn num_strings(&self) -> usize {
         self.num_strings
     }
 
+    /// Returns an unverified dictionary section together with a handle to verify the checksum.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
@@ -272,6 +279,8 @@ impl DictSectPFC {
         Ok((DictSectPFC { num_strings, block_size, sequence, packed_data }, crc_handle))
     }
 
+    /// counterpoint to the read method
+    // TODO: use Write trait and add test
     pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
