@@ -40,7 +40,7 @@ impl TryFrom<u8> for ControlType {
 }
 
 /// <https://www.rdfhdt.org/hdt-binary-format/>: "preamble that describes a chunk of information".
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct ControlInfo {
     /// Type of control information.
     pub control_type: ControlType,
@@ -113,7 +113,7 @@ impl ControlInfo {
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn Error>> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
         dest_writer.write(HDT_HEADER)?;
@@ -160,7 +160,7 @@ impl ControlInfo {
 mod tests {
     use super::*;
     use crate::tests::init;
-    use std::io::BufReader;
+    use std::io::{BufReader, Cursor};
 
     #[test]
     fn read_info() {
@@ -168,12 +168,29 @@ mod tests {
         let info = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00\x00\x76\x35";
         let mut reader = BufReader::new(&info[..]);
 
-        if let Ok(info) = ControlInfo::read(&mut reader) {
-            assert_eq!(info.control_type, ControlType::Global);
-            assert_eq!(info.format, "<http://purl.org/HDT/hdt#HDTv1>");
-            assert!(info.properties.is_empty());
-        } else {
-            panic!("Failed to read control info");
-        }
+        let info = ControlInfo::read(&mut reader).expect("Failed to read control info");
+        assert_eq!(info.control_type, ControlType::Global);
+        assert_eq!(info.format, "<http://purl.org/HDT/hdt#HDTv1>");
+        assert!(info.properties.is_empty());
+    }
+
+    #[test]
+    fn write_info() {
+        init();
+        let control_type = ControlType::Global;
+        let format = "<http://purl.org/HDT/hdt#HDTv1>".to_owned();
+        let mut properties = HashMap::<String, String>::new();
+        properties.insert("Software".to_owned(), "hdt_rs".to_owned());
+        let info = ControlInfo { control_type, format, properties };
+
+        let mut buffer = Vec::new();
+        info.save(&mut buffer);
+
+        let expected = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00Software=hdt_rs;\x00\x52\x22";
+        assert_eq!(buffer, expected);
+
+        let mut reader = BufReader::new(&expected[..]);
+        let info2 = ControlInfo::read(&mut reader).expect("Failed to read control info");
+        assert_eq!(info, info2);
     }
 }
