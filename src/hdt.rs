@@ -4,9 +4,8 @@ use crate::four_sect_dict::{DictErr, IdKind};
 use crate::header::Header;
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use bytesize::ByteSize;
-use eyre::WrapErr;
+use eyre::{Result, WrapErr};
 use log::{debug, error};
-use std::error::Error;
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
@@ -49,7 +48,7 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self, Box<dyn Error>> {
+    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
         Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
         let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
