@@ -23,10 +23,13 @@ sophia = { version = "0.9", optional = true }
 sucds = "0.8"
 thiserror = "2"
 log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = "0.3"
 eyre = "0.6"
+color-eyre = "0.6"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
+argh = "0.1.13"
 
 [features]
 default = ["sophia"]
@@ -49,8 +52,6 @@ opt-level = 1
 
 [dev-dependencies]
 pretty_assertions = "1"
-env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support", "html_reports"] }
 #iai = "0.1"
 iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
-color-eyre = "0.6"
