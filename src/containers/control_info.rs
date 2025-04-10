@@ -10,7 +10,7 @@ const HDT_HEADER: &[u8] = b"$HDT";
 /// Type of Control Information.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub enum ControlType {
     #[default]
     Unknown = 0,
@@ -38,7 +38,7 @@ impl TryFrom<u8> for ControlType {
 }
 
 /// <https://www.rdfhdt.org/hdt-binary-format/>: "preamble that describes a chunk of information".
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct ControlInfo {
     /// Type of control information.
     pub control_type: ControlType,
@@ -210,7 +210,7 @@ mod tests {
         let info = ControlInfo { control_type, format, properties };
 
         let mut buffer = Vec::new();
-        info.save(&mut buffer);
+        assert!(info.save(&mut buffer).is_ok());
 
         let expected = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00Software=hdt_rs;\x00\x52\x22";
         assert_eq!(buffer, expected);

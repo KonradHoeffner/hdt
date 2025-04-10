@@ -3,8 +3,7 @@ use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufRead, BufWriter, Write};
+use std::io::{BufRead, Write};
 use std::mem::size_of;
 use std::thread;
 use std::{error, fmt};
@@ -194,7 +193,8 @@ impl Sequence {
         Ok(Sequence { entries, bits_per_entry, data, crc_handle })
     }
 
-    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+    /// save sequence per HDT spec using CRC
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn error::Error>> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()

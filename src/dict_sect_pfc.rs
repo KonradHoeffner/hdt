@@ -7,13 +7,11 @@ use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
 use std::cmp::{Ordering, min};
-use std::error;
-use std::fmt;
-use std::fs::File;
-use std::io::{BufRead, BufWriter, Write};
+use std::io::{BufRead, Write};
 use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
+use std::{error, fmt};
 use thiserror::Error;
 
 /// Dictionary section with plain front coding.
@@ -294,8 +292,7 @@ impl DictSectPFC {
     }
 
     /// counterpoint to the read method
-    // TODO: use Write trait and add test
-    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn error::Error>> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/libdcs/CSD_PFC.cpp::save()

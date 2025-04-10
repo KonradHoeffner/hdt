@@ -1,0 +1,14 @@
+@prefix ex: <http://example.org/apple#>.
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>.
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.
+
+ex:Apple rdf:type ex:Fruit;
+  rdfs:label "Apple";
+  ex:variety "Red Delicious";
+  ex:color "Red";
+  ex:weight "150 grams";
+  ex:origin "United States";
+  ex:isOrganic true.
+
+ex:Fruit rdf:type rdfs:Class;
+  rdfs:label "Fruit".
