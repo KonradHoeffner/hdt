@@ -30,12 +30,12 @@ spareval = { version = "0.2" , optional = true }
 spargebra = { version = "0.4", optional = true, default-features = false }
 eyre = { version = "0.6", optional = true }
 color-eyre = { version = "0.6", optional = true }
-argh = { version = "0.1.13", optional = true }
+clap = { version = "4.5", optional = true, features = ["derive"] }
 
 [features]
 default = ["sophia","cli"]
 sophia = ["dep:sophia"]
-cli = ["dep:eyre", "dep:color-eyre", "dep:argh"]
+cli = ["dep:eyre", "dep:color-eyre", "dep:clap"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
 
