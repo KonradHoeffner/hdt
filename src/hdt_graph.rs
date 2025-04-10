@@ -1,4 +1,4 @@
-// //! *This module is available only if HDT is built with the `"sophia"` feature, included by default.*
+//! *This module is available only if HDT is built with the `"sophia"` feature.*
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
