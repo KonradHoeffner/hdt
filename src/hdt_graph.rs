@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // //! *This module is available only if HDT is built with the `"sophia"` feature, included by default.*
-=======
-//! *This module is available only if HDT is built with the `"sophia"` feature.*
->>>>>>> ad312da (begin CLI)
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
