@@ -22,15 +22,20 @@ sophia = { version = "0.9", optional = true }
 sucds = "0.8.3"
 thiserror = "2"
 log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.2" , optional = true }
 spargebra = { version = "0.4", optional = true, default-features = false }
+eyre = { version = "0.6", optional = true }
+color-eyre = { version = "0.6", optional = true }
+argh = { version = "0.1.13", optional = true }
 
 [features]
-default = ["sophia"]
+default = ["sophia","cli"]
 sophia = ["dep:sophia"]
+cli = ["dep:eyre", "dep:color-eyre", "dep:argh"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
 
