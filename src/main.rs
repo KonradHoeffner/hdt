@@ -3,6 +3,7 @@
 /// *This module is available only if HDT is built with the `"sophia"` feature.*
 /// Under development, parameters may change.
 use clap::Parser;
+use color_eyre::config::HookBuilder;
 use color_eyre::eyre::{Report, WrapErr};
 use hdt::Hdt;
 use log::info;
@@ -37,7 +38,7 @@ struct Args {
 }
 
 fn main() -> Result<(), Report> {
-    color_eyre::install().unwrap();
+    HookBuilder::default().display_env_section(false).install()?;
     //env_logger::init();
     //env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
