@@ -6,7 +6,7 @@ use clap::Parser;
 use color_eyre::config::HookBuilder;
 use color_eyre::eyre::{Report, WrapErr};
 use hdt::Hdt;
-use log::info;
+//use log::info;
 use sophia::api::prelude::{Stringifier, TripleSerializer};
 use sophia::turtle::serializer::nt::NtSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
@@ -25,9 +25,13 @@ use std::io::{BufReader, stdin};
 struct Args {
     // /// RDF Format of the output
     //format: Format,
-    #[arg(short, long, default_value_t = false)]
+    #[arg(short, long)]
     /// export as RDF Turtle, default is N-Triples
     turtle: bool,
+
+    #[arg(short, long)]
+    /// Count triples only, do not print them
+    count: bool,
 
     // /// verbose output
     //verbose: bool,
@@ -46,18 +50,21 @@ fn main() -> Result<(), Report> {
         Some(filename) => {
             let file =
                 File::open(filename.clone()).wrap_err_with(|| format!("Error opening input file {}", filename))?;
-            let hdt = Hdt::read(std::io::BufReader::new(file))
-                .wrap_err_with(|| format!("Error loading HDT from {}", filename))?;
+            Hdt::read(std::io::BufReader::new(file))
+                .wrap_err_with(|| format!("Error loading HDT from {}", filename))?
             //info!("Loaded from file {filename} {hdt:?}");
-            hdt
         }
         None => {
             let reader = BufReader::new(stdin());
-            let hdt = Hdt::read(reader).wrap_err("Error loading HDT from standard input")?;
-            info!("Loaded from stdin {hdt:?}");
-            hdt
+            Hdt::read(reader).wrap_err("Error loading HDT from standard input")?
+            //info!("Loaded from stdin {hdt:?}");
         }
     };
+    let count = hdt.triples.len();
+    if args.count {
+        println!("Parsing returned {} triples", count);
+        return Ok(());
+    }
     let s = match args.turtle {
         true => {
             let config = TurtleConfig::new().with_pretty(true);
