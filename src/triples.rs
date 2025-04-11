@@ -396,6 +396,11 @@ impl TriplesBitmap {
         self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
     }
 
+    /// Returns the number of triples stored.
+    pub const fn len(&self) -> usize {
+        self.adjlist_z.len()
+    }
+
     /// Position in the wavelet index of the first predicate for the given subject ID.
     pub fn find_y(&self, subject_id: Id) -> usize {
         if subject_id == 0 {
