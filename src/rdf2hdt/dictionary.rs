@@ -232,9 +232,11 @@ pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Result<DictSectPFC
             compressed_terms.extend_from_slice(term.as_bytes());
             // Every block stores a full term
         } else {
+            // need to be careful with non-ascii characters here
             let common_prefix_len = last_term.chars().zip(term.chars()).take_while(|(a, b)| a == b).count();
+            let byte_offset = term.char_indices().nth(common_prefix_len).map(|(i, _)| i).unwrap_or(term.len());
             compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-            compressed_terms.extend_from_slice(term[common_prefix_len..].as_bytes());
+            compressed_terms.extend_from_slice(term[byte_offset..].as_bytes());
         };
 
         compressed_terms.push(0); // Null separator
@@ -244,7 +246,7 @@ pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Result<DictSectPFC
     offsets.push(compressed_terms.len() as u32);
 
     // offsets are an increasing list of array indices, therefore the last one will be the largest
-    // potential off by 1 in comparison with hdt-cpp implementation
+    // TODO: potential off by 1 in comparison with hdt-cpp implementation?
     let bits_per_entry = (offsets.last().unwrap().ilog2() + 1) as usize;
 
     Ok(DictSectPFC {
