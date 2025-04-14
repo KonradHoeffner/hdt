@@ -1,5 +1,3 @@
-#[cfg(feature = "sophia")]
-#[cfg(feature = "cli")]
 /// *This module is available only if HDT is built with the `"sophia"` feature.*
 /// Under development, parameters may change.
 use clap::Parser;
