@@ -1,11 +1,9 @@
-#[cfg(feature = "sophia")]
-#[cfg(feature = "cli")]
 /// *This module is available only if HDT is built with the `"sophia"` feature.*
 /// Under development, parameters may change.
 use clap::Parser;
 use color_eyre::config::HookBuilder;
 use color_eyre::eyre::{Report, WrapErr};
-use hdt::{Hdt, HdtGraph};
+use hdt::Hdt;
 //use log::info;
 use sophia::api::prelude::{Stringifier, TripleSerializer};
 use sophia::turtle::serializer::nt::NtSerializer;
@@ -50,17 +48,16 @@ fn main() -> Result<(), Report> {
         Some(filename) => {
             let file =
                 File::open(filename.clone()).wrap_err_with(|| format!("Error opening input file {}", filename))?;
-            Hdt::new(std::io::BufReader::new(file))
+            Hdt::read(std::io::BufReader::new(file))
                 .wrap_err_with(|| format!("Error loading HDT from {}", filename))?
         }
         None => {
             let reader = BufReader::new(stdin());
-            Hdt::new(reader).wrap_err("Error loading HDT from standard input")?
+            Hdt::read(reader).wrap_err("Error loading HDT from standard input")?
             //info!("Loaded from stdin {hdt:?}");
         }
     };
     let count = hdt.triples.len();
-    let graph = HdtGraph::new(hdt);
     if args.count {
         println!("Parsing returned {} triples", count);
         return Ok(());
@@ -70,14 +67,14 @@ fn main() -> Result<(), Report> {
             let config = TurtleConfig::new().with_pretty(true);
             //.with_own_prefix_map(prefixes().clone());
             TurtleSerializer::new_stringifier_with_config(config)
-                .serialize_graph(&graph)
+                .serialize_graph(&hdt)
                 .wrap_err("error serializing graph as RDF Turtle")?
                 .to_string()
         }
         false => {
             // Default: export the complete graph as N-Triples.
             NtSerializer::new_stringifier()
-                .serialize_graph(&graph)
+                .serialize_graph(&hdt)
                 .wrap_err("error serializing graph as N-Triples")?
                 .to_string()
         }

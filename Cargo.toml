@@ -50,6 +50,10 @@ harness = false
 [lib]
 bench = false
 
+[[bin]]
+name = "hdt"
+required-features = ["cli", "sophia"]
+
 [profile.test]
 opt-level = 1
 
