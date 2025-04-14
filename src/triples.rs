@@ -28,9 +28,10 @@ use serde::ser::SerializeStruct;
 /// Only SPO is tested, others probably don't work correctly.
 #[allow(missing_docs)]
 #[repr(u8)]
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "cache", derive(serde::Deserialize, serde::Serialize))]
 pub enum Order {
+    #[default]
     Unknown = 0,
     SPO = 1,
     SOP = 2,

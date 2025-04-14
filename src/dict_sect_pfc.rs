@@ -1,14 +1,16 @@
 use crate::containers::Sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
-use crate::containers::vbyte::{decode_vbyte_delta, read_vbyte};
+use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
 use crate::triples::Id;
 use bytesize::ByteSize;
 use eyre::{Result, eyre};
 use log::error;
 use std::cmp::{Ordering, min};
+use std::error;
 use std::fmt;
-use std::io::BufRead;
+use std::fs::File;
+use std::io::{BufRead, BufWriter, Write};
 use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
@@ -17,10 +19,14 @@ use thiserror::Error;
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
 pub struct DictSectPFC {
-    num_strings: usize,
-    block_size: usize,
-    sequence: Sequence,
-    packed_data: Arc<[u8]>,
+    /// total number of strings stored
+    pub num_strings: usize,
+    /// the last block may have less than "block_size" strings
+    pub block_size: usize,
+    /// stores the starting position of each block
+    pub sequence: Sequence,
+    /// the substrings
+    pub packed_data: Arc<[u8]>,
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -45,6 +51,7 @@ pub enum ExtractError {
 }
 
 impl DictSectPFC {
+    /// size in bytes of the dictionary section
     pub fn size_in_bytes(&self) -> usize {
         self.sequence.size_in_bytes() + self.packed_data.len()
     }
@@ -70,9 +77,9 @@ impl DictSectPFC {
         str::from_utf8(&self.packed_data[position..position + length]).unwrap()
     }
 
-    // translated from Java
-    // https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
-    // 0 means not found
+    /// translated from Java
+    /// https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
+    /// 0 means not found
     pub fn string_to_id(&self, element: &str) -> Id {
         if self.num_strings == 0 {
             // shared dictionary may be empty
@@ -213,10 +220,12 @@ impl DictSectPFC {
         position - offset
     }
 
+    /// deprecated: we should be able to remove this as it is public now
     pub const fn num_strings(&self) -> usize {
         self.num_strings
     }
 
+    /// Returns an unverified dictionary section together with a handle to verify the checksum.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
@@ -268,6 +277,41 @@ impl DictSectPFC {
         });
 
         Ok((DictSectPFC { num_strings, block_size, sequence, packed_data }, crc_handle))
+    }
+
+    /// counterpoint to the read method
+    // TODO: use Write trait and add test
+    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut hasher = crc.digest();
+        // libhdt/src/libdcs/CSD_PFC.cpp::save()
+        // save type
+        let seq_type: [u8; 1] = [2];
+        let _ = dest_writer.write(&seq_type)?;
+        hasher.update(&seq_type);
+
+        // // Save sizes
+        let mut buf: Vec<u8> = vec![];
+        buf.extend_from_slice(&encode_vbyte(self.num_strings));
+        buf.extend_from_slice(&encode_vbyte(self.packed_data.len()));
+        buf.extend_from_slice(&encode_vbyte(self.block_size));
+        let _ = dest_writer.write(&buf)?;
+        hasher.update(&buf);
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        self.sequence.save(dest_writer)?;
+
+        // Write packed data
+        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut hasher = crc.digest();
+        let _ = dest_writer.write(&self.packed_data)?;
+        hasher.update(&self.packed_data);
+        // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
+        let checksum = hasher.finalize();
+        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+
+        Ok(())
     }
 }
 

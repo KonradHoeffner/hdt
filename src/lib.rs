@@ -89,9 +89,10 @@ fn query(hdt: Hdt)
 #![allow(clippy::multiple_crate_versions)]
 /// Types for storing and reading data.
 pub mod containers;
-// Types for representing dictionaries.
-mod dict_sect_pfc;
-mod four_sect_dict;
+/// Types for representing dictionaries.
+pub mod dict_sect_pfc;
+/// Types for representing a four section dictionary
+pub mod four_sect_dict;
 /// Types for representing triple sections.
 pub mod hdt;
 #[cfg(feature = "sophia")]

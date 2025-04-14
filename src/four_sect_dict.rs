@@ -39,9 +39,13 @@ pub struct FourSectDict {
 /// Designates one of the four sections.
 #[derive(Debug)]
 pub enum SectKind {
+    /// section for terms that appear as both subject and object
     Shared,
+    /// section for terms that only appear as subjects
     Subject,
+    /// section for terms that only appear as predicates
     Predicate,
+    /// sections for terms that only appear as objects
     Object,
 }
 
@@ -112,6 +116,7 @@ impl FourSectDict {
         }
     }
 
+    /// read the whole dictionary section including control information
     pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict> {
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
@@ -142,6 +147,7 @@ impl FourSectDict {
             .collect()
     }
     */
+    /// size in bytes of the in memory four section dictionary
     pub fn size_in_bytes(&self) -> usize {
         self.shared.size_in_bytes()
             + self.subjects.size_in_bytes()
