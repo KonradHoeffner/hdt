@@ -13,7 +13,10 @@ use std::{
     path::Path,
 };
 
-pub fn convert_to_nt(file_paths: Vec<String>, output_file: std::fs::File) -> Result<(), Box<dyn Error>> {
+pub fn convert_to_nt(
+    file_paths: Vec<String>,
+    output_file: std::fs::File,
+) -> Result<(), Box<dyn Error>> {
     let mut dest_writer = BufWriter::new(output_file);
     for file in file_paths {
         let source = match std::fs::File::open(&file) {
@@ -29,17 +32,18 @@ pub fn convert_to_nt(file_paths: Vec<String>, output_file: std::fs::File) -> Res
 
         let mut serializer = RdfSerializer::from_format(NTriples).for_writer(dest_writer.by_ref());
         let v = std::time::Instant::now();
-        let rdf_format =
-            if let Some(t) = RdfFormat::from_extension(Path::new(&file).extension().unwrap().to_str().unwrap()) {
-                t
-            } else {
-                error!("unrecognized file extension for {file}");
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("unrecognized file extension for {file}"),
-                )
-                .into());
-            };
+        let rdf_format = if let Some(t) =
+            RdfFormat::from_extension(Path::new(&file).extension().unwrap().to_str().unwrap())
+        {
+            t
+        } else {
+            error!("unrecognized file extension for {file}");
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("unrecognized file extension for {file}"),
+            )
+            .into());
+        };
         let quads = RdfParser::from_format(rdf_format).for_reader(source_reader);
         let mut warned = false;
         for q in quads {
@@ -93,7 +97,9 @@ mod tests {
             .is_ok()
         );
         let source_reader = BufReader::new(tmp_file.reopen().expect("error opening tmp file"));
-        let quads = RdfParser::from_format(NTriples).for_reader(source_reader).collect::<Result<Vec<_>, _>>();
+        let quads = RdfParser::from_format(NTriples)
+            .for_reader(source_reader)
+            .collect::<Result<Vec<_>, _>>();
 
         assert!(quads.is_ok());
         assert_eq!(quads.unwrap().len(), 9)
