@@ -230,17 +230,16 @@ pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Result<DictSectPFC
         if i % block_size == 0 {
             offsets.push(compressed_terms.len() as u32);
             compressed_terms.extend_from_slice(term.as_bytes());
-            // Every block stores a full term
         } else {
-            // need to be careful with non-ascii characters here
             let common_prefix_len = last_term.chars().zip(term.chars()).take_while(|(a, b)| a == b).count();
+
             let byte_offset = term.char_indices().nth(common_prefix_len).map(|(i, _)| i).unwrap_or(term.len());
+
             compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
             compressed_terms.extend_from_slice(term[byte_offset..].as_bytes());
-        };
+        }
 
         compressed_terms.push(0); // Null separator
-
         last_term = term;
     }
     offsets.push(compressed_terms.len() as u32);
