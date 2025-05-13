@@ -178,7 +178,7 @@ impl ConvertedHDT {
         header.insert(Triple::new(
             dict_id,
             HDT_DICT_BLOCK_SIZE,
-            Literal::new_simple_literal(opts.block_size.to_string()), // TODO is this always 16?
+            Literal::new_simple_literal(opts.block_size.to_string()),
         ));
 
         // TRIPLES
