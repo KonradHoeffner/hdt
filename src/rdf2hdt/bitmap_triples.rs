@@ -119,7 +119,7 @@ impl BitmapTriplesBuilder {
         // bitmapZ->save(output);
         self.save_bitmap(&self.bitmap_z, dest_writer)?;
 
-        let num_bits = self.num_triples.ilog2() + 1;
+        let num_bits = if self.num_triples == 0 { 0 } else { self.num_triples.ilog2() + 1 };
         if num_bits > u8::MAX as u32 {
             panic!("bits_per_entry too large")
         }
