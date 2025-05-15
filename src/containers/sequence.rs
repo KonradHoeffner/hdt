@@ -214,8 +214,6 @@ impl Sequence {
     }
 
     fn pack_bits(&self) -> Vec<u8> {
-        assert!(self.bits_per_entry > 0 && self.bits_per_entry <= std::mem::size_of::<usize>() * 8);
-
         let mut output = Vec::new();
         let mut current_byte = 0u8;
         let mut bit_offset = 0;

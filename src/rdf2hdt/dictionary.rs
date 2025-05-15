@@ -1,6 +1,6 @@
 // Copyright (c) 2024-2025, Decisym, LLC
 
-use log::{debug, error};
+use log::{debug, error, warn};
 use oxrdf::Term;
 use oxrdfio::RdfFormat::NTriples;
 use oxrdfio::RdfParser;
@@ -81,6 +81,9 @@ impl FourSectDictBuilder {
             subject_terms.insert(term_to_hdt_bgp_str(&q.subject.into())?);
             dict.predicate_terms.insert(term_to_hdt_bgp_str(&q.predicate.into())?);
             object_terms.insert(term_to_hdt_bgp_str(&q.object)?);
+        }
+        if dict.predicate_terms.is_empty() {
+            warn!("no triples found in provided RDF");
         }
 
         dict.shared_terms = subject_terms.intersection(&object_terms).cloned().collect();
@@ -236,7 +239,7 @@ pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Result<DictSectPFC
             let byte_offset = term.char_indices().nth(common_prefix_len).map(|(i, _)| i).unwrap_or(term.len());
 
             compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-            compressed_terms.extend_from_slice(term[byte_offset..].as_bytes());
+            compressed_terms.extend_from_slice(&term.as_bytes()[byte_offset..]);
         }
 
         compressed_terms.push(0); // Null separator
@@ -246,7 +249,7 @@ pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Result<DictSectPFC
 
     // offsets are an increasing list of array indices, therefore the last one will be the largest
     // TODO: potential off by 1 in comparison with hdt-cpp implementation?
-    let bits_per_entry = (offsets.last().unwrap().ilog2() + 1) as usize;
+    let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
 
     Ok(DictSectPFC {
         num_strings: num_terms,
