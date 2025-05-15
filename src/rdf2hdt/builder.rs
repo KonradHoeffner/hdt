@@ -229,16 +229,18 @@ pub struct ConvertedHDT {
 #[cfg(test)]
 mod tests {
 
+    use super::*;
+
+    use crate::hdt;
+    use crate::{Hdt, containers::ControlInfo, four_sect_dict, header::Header, triples};
+    use std::sync::Arc;
     use std::{
         fs::remove_file,
         io::{BufReader, Read},
         path::Path,
     };
-
-    use crate::{Hdt, containers::ControlInfo, four_sect_dict, header::Header, triples};
-
-    use super::*;
-    use std::sync::Arc;
+    use tempfile::tempdir;
+    use walkdir::WalkDir;
 
     #[test]
     fn test_build_hdt() {
@@ -284,5 +286,115 @@ mod tests {
 
         let res = h.triples_with_pattern(None, Some(p), Some(o)).collect::<Vec<_>>();
         assert_eq!(triple_vec, res)
+    }
+
+    #[test]
+    fn test_sparql10() {
+        let tmp_dir = tempdir().expect("failed to create temp dir");
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql10");
+        for f in &input_files {
+            let new_hdt = format!(
+                "{}/{}",
+                tmp_dir.path().to_str().unwrap(),
+                Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".hdt")
+            );
+
+            let res = build_hdt(vec![f.clone()], new_hdt.as_str(), Options::default());
+            assert!(res.is_ok());
+
+            let source = std::fs::File::open(new_hdt).expect("failed to open hdt file");
+            let hdt_reader = BufReader::new(source);
+            let res = Hdt::new(hdt_reader);
+
+            match &res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("{f} failed to load constructed hdt: {e}")
+                }
+            }
+
+            assert!(res.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_sparql11() {
+        let tmp_dir = tempdir().expect("failed to create temp dir");
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql11");
+        for f in &input_files {
+            let new_hdt = format!(
+                "{}/{}",
+                tmp_dir.path().to_str().unwrap(),
+                Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".hdt")
+            );
+
+            let res = build_hdt(vec![f.clone()], new_hdt.as_str(), Options::default());
+            match &res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("{f} failed to convert: {e}")
+                }
+            }
+
+            assert!(res.is_ok());
+
+            let source = std::fs::File::open(new_hdt).expect("failed to open hdt file");
+            let hdt_reader = BufReader::new(source);
+            let res = Hdt::new(hdt_reader);
+
+            match &res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("{f} failed to load constructed hdt: {e}")
+                }
+            }
+
+            assert!(res.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_sparql12() {
+        let tmp_dir = tempdir().expect("failed to create temp dir");
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql12");
+        for f in &input_files {
+            let new_hdt = format!(
+                "{}/{}",
+                tmp_dir.path().to_str().unwrap(),
+                Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".hdt")
+            );
+
+            let res = build_hdt(vec![f.clone()], new_hdt.as_str(), Options::default());
+            match &res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("{f} failed to convert: {e}")
+                }
+            }
+
+            assert!(res.is_ok());
+
+            let source = std::fs::File::open(new_hdt).expect("failed to open hdt file");
+            let hdt_reader = BufReader::new(source);
+            let res = Hdt::new(hdt_reader);
+
+            match &res {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("{f} failed to load constructed hdt: {e}")
+                }
+            }
+
+            assert!(res.is_ok());
+        }
+    }
+
+    fn find_ttl_files<P: AsRef<Path>>(dir: P) -> Vec<String> {
+        WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ttl"))
+            .map(|e| e.path().display().to_string())
+            .collect()
     }
 }
