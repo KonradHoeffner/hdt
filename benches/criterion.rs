@@ -14,7 +14,9 @@ const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
 
 fn load() -> HdtGraph {
-    let file = File::open("tests/resources/persondata_en.hdt").expect("error opening file");
+    let filename = "tests/resources/persondata_en.hdt";
+    let file = File::open(filename)
+        .expect(&format!("Error opening file {filename}, did you forget to download it? See README.md."));
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");
     //let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
