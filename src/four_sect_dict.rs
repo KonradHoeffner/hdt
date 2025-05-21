@@ -155,6 +155,16 @@ impl FourSectDict {
             crc_handles: [shared_crc, subjects_crc, predicates_crc, objects_crc],
         })
     }
+
+    pub fn save(&self, write: &mut impl std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+        todo!("save control info");
+        self.shared.save(write)?;
+        self.subjects.save(write)?;
+        self.predicates.save(write)?;
+        self.objects.save(write)?;
+        Ok(())
+    }
+
     /*
     pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
         triple_ids

@@ -161,6 +161,13 @@ impl Hdt {
         Ok(())
     }
 
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+        todo!("control info");
+        self.dict.save(write)?;
+        //self.triples.save(write)?;
+        Ok(())
+    }
+
     /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
