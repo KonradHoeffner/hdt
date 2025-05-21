@@ -142,6 +142,12 @@ impl Hdt {
         Ok(())
     }
 
+    pub fn save(&self, dest_writer: &mut impl std::io::Write) -> Result<(), Box<dyn Error>> {
+        self.dict.save()?;
+        self.triples.save()?;
+        OK(())
+    }
+
     /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
