@@ -142,6 +142,13 @@ impl Hdt {
         Ok(())
     }
 
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+        todo!("control info");
+        self.dict.save(write)?;
+        //self.triples.save(write)?;
+        Ok(())
+    }
+
     /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
@@ -329,8 +336,21 @@ impl<'a> TripleCache<'a> {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use color_eyre::eyre::Result;
     use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
+
+    #[test]
+    fn write() -> Result<()> {
+        init();
+        let filename = "tests/resources/snikmeta.hdt";
+        let file = File::open(filename).wrap_err("error opening file {filename}")?;
+        let hdt = Hdt::new(std::io::BufReader::new(file))?;
+        let tmp_filename = "tests/resources/snikmeta.hdt";
+        let tmp = File::create(tmp_filename).expect(&format!("error creating file {filename}"));
+        hdt.write(&mut std::io::BufWriter::new(tmp))?;
+        Ok(())
+    }
 
     #[test]
     fn triples() {
