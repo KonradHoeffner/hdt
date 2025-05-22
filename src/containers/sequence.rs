@@ -1,6 +1,6 @@
+use super::vbyte::encode_vbyte;
 use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
-use eyre::{Result, eyre};
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
 use std::fs::File;
@@ -8,8 +8,6 @@ use std::io::{BufRead, BufWriter, Write};
 use std::mem::size_of;
 use std::thread;
 use std::{error, fmt};
-
-use super::vbyte::encode_vbyte;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
@@ -26,6 +24,21 @@ pub struct Sequence {
     /// whether CRC check was successful
     #[cfg_attr(feature = "cache", serde(skip))]
     pub crc_handle: Option<thread::JoinHandle<bool>>,
+}
+
+/// The error type for the sequence read function.
+#[derive(thiserror::Error, Debug)]
+pub enum SequenceReadError {
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+    #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
+    InvalidCrc8Checksum(u8, u8),
+    #[error("Failed to turn raw bytes into usize")]
+    TryFromSliceError(#[from] std::array::TryFromSliceError),
+    #[error("invalid LogArray type {0} != 1")]
+    InvalidLogArrayType(u8),
+    #[error("entry size of {0} bit too large (>64 bit)")]
+    EntrySizeTooLarge(usize),
 }
 
 impl fmt::Debug for Sequence {
@@ -93,7 +106,8 @@ impl Sequence {
     }
 
     /// Read sequence including metadata from HDT data.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, SequenceReadError> {
+        use SequenceReadError::*;
         // read entry metadata
         // keep track of history for CRC8
         let mut history: Vec<u8> = Vec::new();
@@ -103,7 +117,7 @@ impl Sequence {
         reader.read_exact(&mut buffer)?;
         history.extend_from_slice(&buffer);
         if buffer[0] != 1 {
-            return Err(eyre!("Invalid LogArray type {} != 1", buffer[0]));
+            return Err(InvalidLogArrayType(buffer[0]));
         }
 
         // read number of bits per entry
@@ -112,7 +126,7 @@ impl Sequence {
         history.extend_from_slice(&buffer);
         let bits_per_entry = buffer[0] as usize;
         if bits_per_entry > USIZE_BITS {
-            return Err(eyre!("entry size of {bits_per_entry} bit too large (>64 bit)"));
+            return Err(EntrySizeTooLarge(bits_per_entry));
         }
 
         // read number of entries
@@ -128,8 +142,10 @@ impl Sequence {
         let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut digest = crc8.digest();
         digest.update(&history);
-        if digest.finalize() != crc_code {
-            return Err(eyre!("Invalid CRC8-CCIT checksum"));
+
+        let crc_calculated = digest.finalize();
+        if crc_calculated != crc_code {
+            return Err(InvalidCrc8Checksum(crc_calculated, crc_code));
         }
 
         // read body data
@@ -143,11 +159,7 @@ impl Sequence {
 
         // turn the raw bytes into usize values
         for word in full_words.chunks_exact(size_of::<usize>()) {
-            if let Ok(word_data) = <[u8; 8]>::try_from(word) {
-                data.push(usize::from_le_bytes(word_data));
-            } else {
-                return Err(eyre!("failed to read usize"));
-            }
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word)?));
         }
 
         // keep track of history for CRC32

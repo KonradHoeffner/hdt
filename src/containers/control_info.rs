@@ -1,6 +1,5 @@
-use eyre::{Result, eyre};
+use io::ErrorKind::UnexpectedEof;
 use std::collections::HashMap;
-use std::error::Error;
 use std::io::BufRead;
 use std::io::{self, Write};
 use std::str;
@@ -23,7 +22,7 @@ pub enum ControlType {
 }
 
 impl TryFrom<u8> for ControlType {
-    type Error = std::io::Error;
+    type Error = ControlInfoReadErrorKind;
 
     fn try_from(original: u8) -> Result<Self, Self::Error> {
         match original {
@@ -33,7 +32,7 @@ impl TryFrom<u8> for ControlType {
             3 => Ok(ControlType::Dictionary),
             4 => Ok(ControlType::Triples),
             5 => Ok(ControlType::Index),
-            _ => Err(Self::Error::new(io::ErrorKind::InvalidData, "Unrecognized control type")),
+            _ => Err(ControlInfoReadErrorKind::InvalidControlType(original)),
         }
     }
 }
@@ -49,11 +48,38 @@ pub struct ControlInfo {
     pub properties: HashMap<String, String>,
 }
 
+/// The error type for the `read` method.
+#[derive(thiserror::Error, Debug)]
+#[error("failed to read HDT control info")]
+pub struct ControlInfoReadError(#[from] ControlInfoReadErrorKind);
+
+/// The kind of the ControlInfoReadError error.
+#[derive(thiserror::Error, Debug)]
+pub enum ControlInfoReadErrorKind {
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+    #[error("chunk {0:?} does not equal the HDT cookie '$HDT'")]
+    HdtCookie([u8; 4]),
+    #[error("invalid separator while reading format")]
+    InvalidSeparator,
+    #[error("invalid CRC16-ANSI checksum")]
+    InvalidChecksum,
+    #[error("invalid UTF8")]
+    Utf8(#[from] std::string::FromUtf8Error),
+    #[error("invalid control type '{0}'")]
+    InvalidControlType(u8),
+}
+
 impl ControlInfo {
     /// Read and verify control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
-        use io::Error;
-        use io::ErrorKind::{InvalidData, UnexpectedEof};
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadError> {
+        Ok(Self::read_kind(reader)?)
+    }
+
+    // Helper function returning a ControlInfoReadErrorKind that is wrapped by Self::read.
+    fn read_kind<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadErrorKind> {
+        use ControlInfoReadErrorKind::*;
+        //use std::io::Error;
 
         // Keep track of what we are reading for computing the CRC afterwards.
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
@@ -63,7 +89,7 @@ impl ControlInfo {
         let mut hdt_cookie: [u8; 4] = [0; 4];
         reader.read_exact(&mut hdt_cookie)?;
         if &hdt_cookie != b"$HDT" {
-            return Err(eyre!("Chunk {hdt_cookie:?} does not equal the HDT cookie '$HDT'"));
+            return Err(HdtCookie(hdt_cookie));
         }
         digest.update(&hdt_cookie);
 
@@ -78,18 +104,18 @@ impl ControlInfo {
         reader.read_until(0x00, &mut format)?;
         digest.update(&format);
         if format.pop() != Some(0x00) {
-            return Err(eyre!("invalid separator"));
+            return Err(InvalidSeparator);
         }
-        let format = String::from_utf8(format).map_err(|e| Error::new(InvalidData, e))?;
+        let format = String::from_utf8(format)?;
 
         // 4. Read the Properties
         let mut prop_str = Vec::new();
         reader.read_until(0x00, &mut prop_str)?;
         digest.update(&prop_str);
         if prop_str.pop() != Some(0x00) {
-            return Err(Error::from(UnexpectedEof).into());
+            return Err(std::io::Error::new(UnexpectedEof, "reading the properties").into());
         }
-        let prop_str = String::from_utf8(prop_str).map_err(|e| Error::new(InvalidData, e))?;
+        let prop_str = String::from_utf8(prop_str)?;
         let mut properties = HashMap::new();
         for item in prop_str.split(';') {
             if let Some(index) = item.find('=') {
@@ -105,14 +131,14 @@ impl ControlInfo {
 
         // 6. Check the CRC
         if digest.finalize() != crc_code {
-            return Err(eyre!("Invalid CRC16-ANSI checksum"));
+            return Err(InvalidChecksum);
         }
 
         Ok(ControlInfo { control_type, format, properties })
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
         dest_writer.write_all(HDT_HEADER)?;

@@ -1,12 +1,12 @@
 use crate::FourSectDict;
-use crate::containers::ControlInfo;
-use crate::four_sect_dict::{DictErr, IdKind};
-use crate::header::Header;
-use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
+use crate::containers::{ControlInfo, ControlInfoReadError};
+use crate::four_sect_dict::{DictError, DictReadError, IdKind};
+use crate::header::{Header, HeaderReadError};
+use crate::triples::{
+    ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap, TriplesReadError,
+};
 use bytesize::ByteSize;
-use eyre::WrapErr;
 use log::{debug, error};
-use std::error::Error;
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
@@ -31,14 +31,31 @@ type StringTriple = (Arc<str>, Arc<str>, Arc<str>);
 
 /// The error type for the `translate_id` method.
 #[derive(Error, Debug)]
-#[error("Cannot translate triple ID {t:?} to string triple: {e}")]
-pub struct TranslateErr {
+#[error("cannot translate triple ID {t:?} to string triple: {e}")]
+pub struct TranslateError {
     #[source]
-    e: DictErr,
+    e: DictError,
     t: TripleId,
 }
 
+/// The error type for the `new` method.
+#[derive(Error, Debug)]
+#[error("failed to read HDT")]
+pub enum HdtReadError {
+    ControlInfo(#[from] ControlInfoReadError),
+    Header(#[from] HeaderReadError),
+    /// Failed to read HDT dictionary
+    FourSectDict(#[from] DictReadError),
+    Triples(#[from] TriplesReadError),
+    DictionaryValidationErrorTodo(#[from] std::io::Error),
+}
+
 impl Hdt {
+    #[deprecated(since = "0.4.0", note = "please use `read` instead")]
+    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self, HdtReadError> {
+        Self::read(reader)
+    }
+
     /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
     /// The reader must point to the beginning of the data of an HDT file as produced by hdt-cpp.
     /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
@@ -49,11 +66,11 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self, Box<dyn Error>> {
-        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
-        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
-        let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
-        let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
+    pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self, HdtReadError> {
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
+        let unvalidated_dict = FourSectDict::read(&mut reader)?;
+        let triples = TriplesBitmap::read_sect(&mut reader)?;
         let dict = unvalidated_dict.validate()?;
         let hdt = Hdt { dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
@@ -289,30 +306,30 @@ impl<'a> TripleCache<'a> {
     }
 
     /// Get the string representation of the subject `sid`.
-    pub fn get_s_string(&mut self, sid: usize) -> Result<Arc<str>, DictErr> {
+    pub fn get_s_string(&mut self, sid: usize) -> Result<Arc<str>, DictError> {
         self.get_x_string(sid, 0, &IdKind::Subject)
     }
 
     /// Get the string representation of the predicate `pid`.
-    pub fn get_p_string(&mut self, pid: usize) -> Result<Arc<str>, DictErr> {
+    pub fn get_p_string(&mut self, pid: usize) -> Result<Arc<str>, DictError> {
         self.get_x_string(pid, 1, &IdKind::Predicate)
     }
 
     /// Get the string representation of the object `oid`.
-    pub fn get_o_string(&mut self, oid: usize) -> Result<Arc<str>, DictErr> {
+    pub fn get_o_string(&mut self, oid: usize) -> Result<Arc<str>, DictError> {
         self.get_x_string(oid, 2, &IdKind::Object)
     }
 
     /// Translate a triple of indexes into a triple of strings.
-    pub fn translate(&mut self, t: TripleId) -> Result<StringTriple, TranslateErr> {
+    pub fn translate(&mut self, t: TripleId) -> Result<StringTriple, TranslateError> {
         Ok((
-            self.get_s_string(t.subject_id).map_err(|e| TranslateErr { e, t })?,
-            self.get_p_string(t.predicate_id).map_err(|e| TranslateErr { e, t })?,
-            self.get_o_string(t.object_id).map_err(|e| TranslateErr { e, t })?,
+            self.get_s_string(t.subject_id).map_err(|e| TranslateError { e, t })?,
+            self.get_p_string(t.predicate_id).map_err(|e| TranslateError { e, t })?,
+            self.get_o_string(t.object_id).map_err(|e| TranslateError { e, t })?,
         ))
     }
 
-    fn get_x_string(&mut self, i: usize, pos: usize, kind: &'static IdKind) -> Result<Arc<str>, DictErr> {
+    fn get_x_string(&mut self, i: usize, pos: usize, kind: &'static IdKind) -> Result<Arc<str>, DictError> {
         debug_assert!(i != 0);
         if self.idx[pos] == i {
             Ok(self.arc[pos].as_ref().unwrap().clone())
