@@ -38,7 +38,22 @@ pub struct TranslateErr {
     t: TripleId,
 }
 
+/// The error type for the `new` method.
+#[derive(Error, Debug)]
+#[error("Failed to read HDT")]
+pub enum HdtReadErr
+{
+    ControlInfo(#[from] crate::containers::ControlInfoReadErr),
+    Header(#[from] crate::header::HeaderReadErr)
+    FourSectDict(#[from] crate::header::HeaderReadErr)
+}
+
 impl Hdt {
+    #[deprecated(since = "0.4.0", note = "please use `read` instead")]
+    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self, HdtReadErr> {
+        Self::read(reader)
+    }
+
     /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
     /// The reader must point to the beginning of the data of an HDT file as produced by hdt-cpp.
     /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
@@ -49,9 +64,9 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn new<R: std::io::BufRead>(mut reader: R) -> Result<Self, Box<dyn Error>> {
-        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
-        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
+    pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self, HdtReadErr> {
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
         let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
         let dict = unvalidated_dict.validate()?;

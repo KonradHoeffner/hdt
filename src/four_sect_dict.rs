@@ -1,9 +1,10 @@
+#![allow(missing_docs)] // temporariy while we figure out what should be public in the end
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
 use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
-use eyre::{Result, WrapErr, eyre};
+//use eyre::{Result, WrapErr, eyre};
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;
@@ -58,6 +59,13 @@ pub struct DictErr {
     id: Id,
     id_kind: &'static IdKind,
     sect_kind: SectKind,
+}
+
+#[derive(Error, Debug)]
+#[error("error reading four section dictionary: ")]
+pub struct DictReadErr {
+    #[from]
+    message: String,
 }
 
 impl FourSectDict {
@@ -117,7 +125,7 @@ impl FourSectDict {
     }
 
     /// read the whole dictionary section including control information
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict, DictReadErr> {
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
             return Err(eyre!("Implementation only supports four section dictionaries"));
