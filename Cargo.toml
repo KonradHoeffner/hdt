@@ -24,7 +24,6 @@ sucds = "0.8"
 thiserror = "2"
 log = "0.4"
 mownstr = "0.3"
-eyre = "0.6"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 

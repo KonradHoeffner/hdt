@@ -106,7 +106,7 @@ pub mod header;
 pub mod triples;
 
 pub use crate::hdt::Hdt;
-use containers::ControlInfo;
+use containers::{ControlInfo, ControlInfoReadError};
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;

@@ -13,6 +13,6 @@ mod sequence;
 mod control_info;
 
 pub use adj_list::AdjList;
-pub use bitmap::Bitmap;
-pub use control_info::{ControlInfo, ControlType};
-pub use sequence::Sequence;
+pub use bitmap::{Bitmap, BitmapReadError};
+pub use control_info::{ControlInfo, ControlInfoReadError, ControlType};
+pub use sequence::{Sequence, SequenceReadError};

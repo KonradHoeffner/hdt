@@ -1,7 +1,6 @@
-use crate::ControlInfo;
-use crate::containers::{AdjList, Bitmap, Sequence};
+use crate::containers::{AdjList, Bitmap, BitmapReadError, Sequence, SequenceReadError};
+use crate::{ControlInfo, ControlInfoReadError};
 use bytesize::ByteSize;
-use eyre::{Result, WrapErr, eyre};
 use log::{debug, error};
 use std::cmp::Ordering;
 use std::fmt;
@@ -42,9 +41,9 @@ pub enum Order {
 }
 
 impl TryFrom<u32> for Order {
-    type Error = eyre::Error;
+    type Error = TriplesReadError;
 
-    fn try_from(original: u32) -> Result<Self> {
+    fn try_from(original: u32) -> Result<Self, TriplesReadError> {
         match original {
             0 => Ok(Order::Unknown),
             1 => Ok(Order::SPO),
@@ -53,7 +52,7 @@ impl TryFrom<u32> for Order {
             4 => Ok(Order::POS),
             5 => Ok(Order::OSP),
             6 => Ok(Order::OPS),
-            _ => Err(eyre!("Unrecognized order")),
+            n => Err(TriplesReadError::UnrecognizedTriplesOrder(n)),
         }
     }
 }
@@ -156,6 +155,31 @@ pub struct TriplesBitmap {
     pub wavelet_y: WaveletMatrix<Rank9Sel>,
 }
 
+/// The error type for the triples bitmap read function.
+#[derive(thiserror::Error, Debug)]
+pub enum TriplesReadError {
+    #[error("failed to read control info")]
+    ControlInfoReadError(#[from] ControlInfoReadError),
+    #[error("bitmap read error")]
+    BitmapReadError(#[from] BitmapReadError),
+    #[error("sequence read error")]
+    SequenceReadError(#[from] SequenceReadError),
+    #[error("unspecified triples order")]
+    UnspecifiedTriplesOrder,
+    #[error("unknown triples order")]
+    UnknownTriplesOrder,
+    #[error("unrecognized triples order {0}")]
+    UnrecognizedTriplesOrder(u32),
+    #[error("unknown triples format {0}")]
+    UnknownTriplesFormat(String),
+    #[error("triple lists are not supported yet")]
+    TriplesList,
+    #[error("({0},{1},{2}) none of the components of a triple may be 0.")]
+    TripleComponentZero(usize, usize, usize),
+    #[error("unspecified external library error")]
+    ExternalError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+}
+
 impl fmt::Debug for TriplesBitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64))?;
@@ -231,23 +255,25 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 
 impl TriplesBitmap {
     /// read the whole triple section including control information
-    pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
+    pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self, TriplesReadError> {
+        use TriplesReadError::*;
         let triples_ci = ControlInfo::read(reader)?;
 
         match &triples_ci.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::read(reader, &triples_ci),
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
-            _ => Err(eyre!("Unknown triples listing format.")),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
+            f => Err(UnknownTriplesFormat(f.to_owned())),
         }
     }
 
     /// load the cached HDT index file, only supports TriplesBitmap
     #[cfg(feature = "cache")]
     pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
+        use TriplesReadError::*;
         match &info.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(eyre!("Triples Lists are not supported yet.")),
-            _ => Err(eyre!("Unknown triples listing format.")),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
+            f => Err(UnknownTriplesFormat(f)),
         }
     }
 
@@ -320,18 +346,21 @@ impl TriplesBitmap {
     }
     */
 
-    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
+    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self, TriplesReadError> {
+        use TriplesReadError::*;
         // read order
+        //let order: Order = Order::try_from(triples_ci.get("order").unwrap().parse::<u32>());
         let order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
             order = Order::try_from(n)?;
         } else {
-            return Err(eyre!("Unrecognized order"));
+            return Err(UnspecifiedTriplesOrder);
         }
 
         // read bitmaps
-        let bitmap_y = Bitmap::read(reader).wrap_err("Failed to read Y level bitmap")?;
-        let bitmap_z = Bitmap::read(reader).wrap_err("Failed to read Z level bitmap")?;
+        // TODO: note level in the error
+        let bitmap_y = Bitmap::read(reader)?; //.wrap_err("Failed to read Y level bitmap")?;
+        let bitmap_z = Bitmap::read(reader)?; //.wrap_err("Failed to read Z level bitmap")?;
 
         // read sequences
         let sequence_y = Sequence::read(reader)?;
@@ -363,7 +392,7 @@ impl TriplesBitmap {
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_bitvector = BitVector::new();
         let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-            .map_err(|err| eyre!(Box::new(err)))?;
+            .map_err(|e| e.into_boxed_dyn_error())?;
         let wavelet_y = wavelet_thread.join().unwrap();
         /*
         let get_p = |pos_z: u32| {
@@ -392,9 +421,10 @@ impl TriplesBitmap {
     /// Transform the given IDs of the layers in triple section order to a triple ID.
     /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
     /// Other orders may lead to undefined behaviour.
-    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
+    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId, TriplesReadError> {
+        use TriplesReadError::*;
         if x == 0 || y == 0 || z == 0 {
-            return Err(eyre!(format!("({x},{y},{z}) none of the components of a triple may be 0."),));
+            return Err(TripleComponentZero(x, y, z));
         }
         match self.order {
             Order::SPO => Ok(TripleId::new(x, y, z)),
@@ -403,7 +433,7 @@ impl TriplesBitmap {
             Order::POS => Ok(TripleId::new(y, z, x)),
             Order::OSP => Ok(TripleId::new(z, x, y)),
             Order::OPS => Ok(TripleId::new(z, y, x)),
-            Order::Unknown => Err(eyre!("unknown triples order")),
+            Order::Unknown => Err(UnknownTriplesOrder),
         }
     }
 }

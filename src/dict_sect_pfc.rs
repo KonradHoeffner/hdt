@@ -1,10 +1,10 @@
-use crate::containers::Sequence;
+#![allow(missing_docs)] // temporariy while we figure out what should be public in the end
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
+use crate::containers::{Sequence, SequenceReadError};
 use crate::triples::Id;
 use bytesize::ByteSize;
-use eyre::{Result, eyre};
 use log::error;
 use std::cmp::{Ordering, min};
 use std::error;
@@ -29,6 +29,19 @@ pub struct DictSectPFC {
     pub packed_data: Arc<[u8]>,
 }
 
+/// The error type for the DictSectPFC read function.
+#[derive(thiserror::Error, Debug)]
+pub enum DictSectReadError {
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+    #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
+    InvalidCrc8Checksum(u8, u8),
+    #[error("Implementation only supports plain front coded dictionary sections")]
+    DictSectNotPfc,
+    #[error("sequence read error")]
+    SequenceReadError(#[from] SequenceReadError),
+}
+
 impl fmt::Debug for DictSectPFC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -46,7 +59,7 @@ impl fmt::Debug for DictSectPFC {
 pub enum ExtractError {
     #[error("index out of bounds: id {id} > dictionary section len {len}")]
     IdOutOfBounds { id: Id, len: usize },
-    #[error("Read invalid UTF-8 sequence in {data:?}, recovered: '{recovered}'")]
+    #[error("read invalid UTF-8 sequence in {data:?}, recovered: '{recovered}'")]
     InvalidUtf8 { source: std::str::Utf8Error, data: Vec<u8>, recovered: String },
 }
 
@@ -226,11 +239,12 @@ impl DictSectPFC {
     }
 
     /// Returns an unverified dictionary section together with a handle to verify the checksum.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>), DictSectReadError> {
+        use DictSectReadError::*;
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
-            return Err(eyre!("Implementation only supports plain front coded dictionary sections.",));
+            return Err(DictSectNotPfc);
         }
 
         // read section meta data
@@ -252,9 +266,9 @@ impl DictSectPFC {
         reader.read_exact(&mut crc_code)?;
         let crc_code = crc_code[0];
 
-        // validate section CRC8
-        if digest.finalize() != crc_code {
-            return Err(eyre!("Invalid CRC8-CCIT checksum"));
+        let crc_calculated = digest.finalize();
+        if crc_calculated != crc_code {
+            return Err(InvalidCrc8Checksum(crc_calculated, crc_code));
         }
 
         // read sequence log array

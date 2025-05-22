@@ -1,9 +1,10 @@
+#![allow(missing_docs)] // temporariy while we figure out what should be public in the end
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
-use crate::dict_sect_pfc::ExtractError;
+use crate::dict_sect_pfc::{DictSectReadError, ExtractError};
 use crate::triples::Id;
-use eyre::{Result, WrapErr, eyre};
+//use eyre::{Result, WrapErr, eyre};
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;
@@ -52,7 +53,7 @@ pub enum SectKind {
 /// Wraps an extraction error with additional information on which dictionary section it occurred in.
 #[derive(Error, Debug)]
 #[error("four sect dict error id_to_string({id},IdKind::{id_kind:?}) in the {sect_kind:?} section, caused by {e}")]
-pub struct DictErr {
+pub struct DictError {
     #[source]
     e: ExtractError,
     id: Id,
@@ -60,28 +61,45 @@ pub struct DictErr {
     sect_kind: SectKind,
 }
 
+#[derive(Error, Debug)]
+#[error("four sect dict section error in the {sect_kind:?} section, caused by {e}")]
+pub struct DictSectError {
+    #[source]
+    e: DictSectReadError,
+    sect_kind: SectKind,
+}
+
+#[derive(Error, Debug)]
+#[error("error reading four section dictionary")]
+pub enum DictReadError {
+    ControlInfo(#[from] crate::containers::ControlInfoReadError),
+    DictSect(#[from] DictSectError),
+    Other(String),
+}
+
 impl FourSectDict {
     /// Get the string value of a given ID of a given type.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
-    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> Result<String, DictErr> {
+    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> Result<String, DictError> {
+        use SectKind::*;
         let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);
         match id_kind {
             IdKind::Subject => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Shared })
+                    self.shared.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Shared })
                 } else {
-                    self.subjects.extract(d).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Subject })
+                    self.subjects.extract(d).map_err(|e| DictError { e, id, id_kind, sect_kind: Subject })
                 }
             }
             IdKind::Predicate => {
-                self.predicates.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Predicate })
+                self.predicates.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Predicate })
             }
             IdKind::Object => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Shared })
+                    self.shared.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Shared })
                 } else {
-                    self.objects.extract(d).map_err(|e| DictErr { e, id, id_kind, sect_kind: SectKind::Object })
+                    self.objects.extract(d).map_err(|e| DictError { e, id, id_kind, sect_kind: Object })
                 }
             }
         }
@@ -117,17 +135,20 @@ impl FourSectDict {
     }
 
     /// read the whole dictionary section including control information
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict, DictReadError> {
+        use SectKind::*;
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-            return Err(eyre!("Implementation only supports four section dictionaries"));
+            return Err(DictReadError::Other("Implementation only supports four section dictionaries".to_owned()));
         }
-
-        let (shared, shared_crc) = DictSectPFC::read(reader).wrap_err("Failed to read shared section")?;
-        let (subjects, subjects_crc) = DictSectPFC::read(reader).wrap_err("Failed to read subject section")?;
+        let (shared, shared_crc) =
+            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        let (subjects, subjects_crc) =
+            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Subject })?;
         let (predicates, predicates_crc) =
-            DictSectPFC::read(reader).wrap_err("Failed to read predicate section")?;
-        let (objects, objects_crc) = DictSectPFC::read(reader).wrap_err("Failed to read object section")?;
+            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        let (objects, objects_crc) =
+            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Object })?;
 
         Ok(UnvalidatedFourSectDict {
             four_sect_dict: FourSectDict { shared, subjects, predicates, objects },

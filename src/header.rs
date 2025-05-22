@@ -1,6 +1,5 @@
 use crate::containers::ControlInfo;
 use crate::containers::rdf::{Id, Literal, Term, Triple};
-use eyre::{Result, WrapErr, eyre};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
 use std::io::BufRead;
@@ -17,23 +16,38 @@ pub struct Header {
     pub body: BTreeSet<Triple>,
 }
 
+/// The error type for the `read` method.
+#[derive(thiserror::Error, Debug)]
+#[error("failed to read HDT header")]
+pub enum HeaderReadError {
+    #[error("{0}")]
+    Other(String),
+    Io(#[from] std::io::Error),
+    ControlInfoError(#[from] crate::containers::ControlInfoReadError),
+    #[error("invalid header format {0}, only 'ntriples' is supported")]
+    InvalidHeaderFormat(String),
+}
+
 impl Header {
     /// Reader needs to be positioned directly after the global control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, HeaderReadError> {
+        use HeaderReadError::*;
         let header_ci = ControlInfo::read(reader)?;
         if header_ci.format != "ntriples" {
-            return Err(eyre!("Invalid header format {}, only 'ntriples' is supported", header_ci.format));
+            return Err(InvalidHeaderFormat(header_ci.format));
         }
 
-        let ls = header_ci.get("length").ok_or_else(|| eyre!("missing header length"))?;
-        let length = ls.parse::<usize>().wrap_err_with(|| format!("invalid header length '{ls}'"))?;
+        //let ls = header_ci.get("length").ok_or_else(|| "missing header length".to_owned().into())?;
+        let ls = header_ci.get("length").unwrap();
+        let length = ls.parse::<usize>().unwrap();
+        //ls.parse::<usize>().map_err(|_| format!("invalid header length '{ls}'").into())?;
 
         let mut body_buffer: Vec<u8> = vec![0; length];
         reader.read_exact(&mut body_buffer)?;
         let mut body = BTreeSet::new();
 
         for line_slice in body_buffer.split(|b| b == &b'\n') {
-            let line = str::from_utf8(line_slice).wrap_err("Header is not UTF-8")?;
+            let line = str::from_utf8(line_slice).map_err(|_| Other("Header is not UTF-8".to_owned()))?;
             if let Ok(Some(triple)) = triple_line(line) {
                 let subject = match triple.subject {
                     ntriple::Subject::IriRef(iri) => Id::Named(iri),
@@ -72,18 +86,16 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_header() {
+    fn read_header() -> eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/yago_header.hdt").expect("error opening file");
+        let file = File::open("tests/resources/yago_header.hdt")?;
         let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).expect("error reading control info");
+        ControlInfo::read(&mut reader)?;
 
-        if let Ok(header) = Header::read(&mut reader) {
-            assert_eq!(header.format, "ntriples");
-            assert_eq!(header.length, 1891);
-            assert_eq!(header.body.len(), 22);
-        } else {
-            panic!("Failed to read header");
-        }
+        let header = Header::read(&mut reader)?;
+        assert_eq!(header.format, "ntriples");
+        assert_eq!(header.length, 1891);
+        assert_eq!(header.body.len(), 22);
+        Ok(())
     }
 }
