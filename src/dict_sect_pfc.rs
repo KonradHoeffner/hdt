@@ -1,3 +1,4 @@
+#![allow(missing_docs)] // temporariy while we figure out what should be public in the end
 use crate::containers::Sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.

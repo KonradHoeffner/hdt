@@ -1,6 +1,5 @@
 use crate::containers::ControlInfo;
 use crate::containers::rdf::{Id, Literal, Term, Triple};
-use eyre::{Result, WrapErr, eyre};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
 use std::io::BufRead;
@@ -17,16 +16,27 @@ pub struct Header {
     pub body: BTreeSet<Triple>,
 }
 
+/// The error type for the `read` method.
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to read HDT header")]
+pub enum HeaderReadErr {
+    //#[error("Invalid header format, only 'ntriples' is supported")]
+    #[error("{0}")]
+    Other(#[from] String),
+    Io(#[from] std::io::Error)
+}
+
 impl Header {
     /// Reader needs to be positioned directly after the global control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, HeaderReadErr> {
         let header_ci = ControlInfo::read(reader)?;
         if header_ci.format != "ntriples" {
-            return Err(eyre!("Invalid header format {}, only 'ntriples' is supported", header_ci.format));
+            return Err(format!("Invalid header format {}, only 'ntriples' is supported", header_ci.format).into());
+            //return Err(HeaderReadErr::InvalidHeaderFormat!("Invalid header format {}, only 'ntriples' is supported", header_ci.format));
         }
 
-        let ls = header_ci.get("length").ok_or_else(|| eyre!("missing header length"))?;
-        let length = ls.parse::<usize>().wrap_err_with(|| format!("invalid header length '{ls}'"))?;
+        let ls = header_ci.get("length").ok_or_else(|| return Err("missing header length".into()))?;
+        let length = ls.parse::<usize>().wrap_err_with(|| Err(format!("invalid header length '{ls}'")?))?;
 
         let mut body_buffer: Vec<u8> = vec![0; length];
         reader.read_exact(&mut body_buffer)?;

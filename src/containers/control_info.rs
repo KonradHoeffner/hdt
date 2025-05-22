@@ -1,6 +1,5 @@
-use eyre::{Result, eyre};
+use io::ErrorKind::{InvalidData, UnexpectedEof};
 use std::collections::HashMap;
-use std::error::Error;
 use std::io::BufRead;
 use std::io::{self, Write};
 use std::str;
@@ -33,7 +32,7 @@ impl TryFrom<u8> for ControlType {
             3 => Ok(ControlType::Dictionary),
             4 => Ok(ControlType::Triples),
             5 => Ok(ControlType::Index),
-            _ => Err(Self::Error::new(io::ErrorKind::InvalidData, "Unrecognized control type")),
+            _ => Err(Self::Error::new(InvalidData, "Unrecognized control type")),
         }
     }
 }
@@ -49,11 +48,17 @@ pub struct ControlInfo {
     pub properties: HashMap<String, String>,
 }
 
+/// The error type for the `read` method.
+#[derive(thiserror::Error, Debug)]
+#[error("Failed to read HDT control info")]
+pub enum ControlInfoReadErr {
+    Io(#[from] std::io::Error)
+}
+
 impl ControlInfo {
     /// Read and verify control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
-        use io::Error;
-        use io::ErrorKind::{InvalidData, UnexpectedEof};
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadErr> {
+        use std::io::Error;
 
         // Keep track of what we are reading for computing the CRC afterwards.
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
@@ -63,7 +68,11 @@ impl ControlInfo {
         let mut hdt_cookie: [u8; 4] = [0; 4];
         reader.read_exact(&mut hdt_cookie)?;
         if &hdt_cookie != b"$HDT" {
-            return Err(eyre!("Chunk {hdt_cookie:?} does not equal the HDT cookie '$HDT'"));
+            return Err(std::io::Error::new(
+                InvalidData,
+                format!("Chunk {hdt_cookie:?} does not equal the HDT cookie '$HDT'"),
+            )
+            .into());
         }
         digest.update(&hdt_cookie);
 
@@ -78,7 +87,7 @@ impl ControlInfo {
         reader.read_until(0x00, &mut format)?;
         digest.update(&format);
         if format.pop() != Some(0x00) {
-            return Err(eyre!("invalid separator"));
+            return Err(Error::new(InvalidData, "invalid separator while reading format").into());
         }
         let format = String::from_utf8(format).map_err(|e| Error::new(InvalidData, e))?;
 
@@ -87,7 +96,7 @@ impl ControlInfo {
         reader.read_until(0x00, &mut prop_str)?;
         digest.update(&prop_str);
         if prop_str.pop() != Some(0x00) {
-            return Err(Error::from(UnexpectedEof).into());
+            return Err(Error::new(UnexpectedEof, "reading the properties").into());
         }
         let prop_str = String::from_utf8(prop_str).map_err(|e| Error::new(InvalidData, e))?;
         let mut properties = HashMap::new();
@@ -105,14 +114,14 @@ impl ControlInfo {
 
         // 6. Check the CRC
         if digest.finalize() != crc_code {
-            return Err(eyre!("Invalid CRC16-ANSI checksum"));
+            return Err(Error::new(InvalidData, "Invalid CRC16-ANSI checksum").into());
         }
 
         Ok(ControlInfo { control_type, format, properties })
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
         dest_writer.write_all(HDT_HEADER)?;

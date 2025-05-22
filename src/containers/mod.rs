@@ -14,5 +14,5 @@ mod control_info;
 
 pub use adj_list::AdjList;
 pub use bitmap::Bitmap;
-pub use control_info::{ControlInfo, ControlType};
+pub use control_info::{ControlInfo, ControlType, ControlInfoReadErr};
 pub use sequence::Sequence;
