@@ -12,6 +12,7 @@ pub const VOID_DISTINCT_OBJECTS: NamedNodeRef<'_> =
 pub const VOID_DATASET: NamedNodeRef<'_> = NamedNodeRef::new_unchecked("http://rdfs.org/ns/void#Dataset");
 pub const HDT_STATISTICAL_INFORMATION: NamedNodeRef<'_> =
     NamedNodeRef::new_unchecked("http://purl.org/HDT/hdt#statisticalInformation");
+#[allow(deprecated)]
 pub const HDT_PUBLICATION_INFORMATION: NamedNodeRef<'_> =
     NamedNodeRef::new_unchecked("http://purl.org/HDT/hdt#publicationInformation");
 pub const HDT_FORMAT_INFORMATION: NamedNodeRef<'_> =

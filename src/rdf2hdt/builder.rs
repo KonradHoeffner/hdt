@@ -1,5 +1,7 @@
 // Copyright (c) 2024-2025, Decisym, LLC
-
+#![allow(missing_docs)]
+#![allow(unused_imports)]
+#![allow(deprecated)]
 use super::{bitmap_triples::BitmapTriplesBuilder, dictionary::FourSectDictBuilder};
 use crate::{
     containers::{self, ControlType},
