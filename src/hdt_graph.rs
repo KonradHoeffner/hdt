@@ -246,10 +246,10 @@ mod tests {
     use std::fs::File;
 
     #[test]
-    fn test_graph() {
+    fn test_graph() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
+        let file = File::open("tests/resources/snikmeta.hdt")?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let graph = HdtGraph::new(hdt);
         let triples: Vec<Result<[HdtTerm; 3], Infallible>> = graph.triples().collect();
         assert_eq!(triples.len(), 328);
@@ -360,12 +360,6 @@ mod tests {
                 .map(Result::unwrap)
                 .collect::<Vec<_>>()
         );
-        /*
-        let testo = &SimpleTerm::from(LiteralDatatype(
-            "testo",
-            Iri::<&str>::new_unchecked("http://www.w3.org/2001/XMLSchema#string"),
-        ));
-        assert!(graph.triples_matching(testo).count() == 1);
-        */
+        Ok(())
     }
 }

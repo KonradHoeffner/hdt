@@ -86,7 +86,7 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_header() -> eyre::Result<()> {
+    fn read_header() -> color_eyre::Result<()> {
         init();
         let file = File::open("tests/resources/yago_header.hdt")?;
         let mut reader = BufReader::new(file);

@@ -212,31 +212,28 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_dict() {
+    fn read_dict() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt")?;
         let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).unwrap();
-        Header::read(&mut reader).unwrap();
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
 
-        let dict = FourSectDict::read(&mut reader).unwrap().validate().unwrap();
+        let dict = FourSectDict::read(&mut reader)?.validate()?;
         assert_eq!(dict.shared.num_strings(), 43, "wrong number of strings in the shared section");
         assert_eq!(dict.subjects.num_strings(), 6, "wrong number of strings in the subject section");
         assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");
         assert_eq!(dict.objects.num_strings(), 133, "wrong number of strings in the objects section");
         assert_eq!(dict.string_to_id("_:b1", &IdKind::Subject), 1);
-        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, &IdKind::Subject).unwrap());
-        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, &IdKind::Subject).unwrap());
-        assert_eq!(
-            "http://www.snik.eu/ontology/meta/DataSetType",
-            dict.id_to_string(5, &IdKind::Subject).unwrap()
-        );
+        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, &IdKind::Subject)?);
+        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, &IdKind::Subject)?);
+        assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, &IdKind::Subject)?);
         for id in 1..dict.shared.num_strings() {
-            let s = dict.id_to_string(id, &IdKind::Subject).unwrap();
+            let s = dict.id_to_string(id, &IdKind::Subject)?;
             let back = dict.string_to_id(&s, &IdKind::Subject);
             assert_eq!(id, back, "shared id {} -> subject {} -> id {}", id, s, back);
 
-            let s = dict.id_to_string(id, &IdKind::Object).unwrap();
+            let s = dict.id_to_string(id, &IdKind::Object)?;
             let back = dict.string_to_id(&s, &IdKind::Object);
             assert_eq!(id, back, "shared id {} -> object {} -> id {}", id, s, back);
         }
@@ -246,10 +243,11 @@ mod tests {
             (&dict.predicates, &IdKind::Predicate, "predicate", 0),
         ] {
             for id in offset + 1..offset + sect.num_strings() {
-                let s = dict.id_to_string(id, kind).unwrap();
+                let s = dict.id_to_string(id, kind)?;
                 let back = dict.string_to_id(&s, kind);
                 assert_eq!(id, back, "{} id {} -> {} {} -> id {}", name, id, name, s, back);
             }
         }
+        Ok(())
     }
 }
