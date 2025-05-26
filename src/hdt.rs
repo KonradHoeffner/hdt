@@ -7,13 +7,13 @@ use crate::triples::{
 };
 use bytesize::ByteSize;
 use log::{debug, error};
+use std::error::Error;
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
 use std::io::{Seek, SeekFrom, Write};
 use std::iter;
 use std::sync::Arc;
-use thiserror::Error;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
 /// Allows queries by triple patterns.
@@ -30,7 +30,7 @@ pub struct Hdt {
 type StringTriple = (Arc<str>, Arc<str>, Arc<str>);
 
 /// The error type for the `translate_id` method.
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 #[error("cannot translate triple ID {t:?} to string triple: {e}")]
 pub struct TranslateError {
     #[source]
@@ -39,7 +39,7 @@ pub struct TranslateError {
 }
 
 /// The error type for the `new` method.
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 #[error("failed to read HDT")]
 pub enum HdtReadError {
     ControlInfo(#[from] ControlInfoReadError),
@@ -89,14 +89,14 @@ impl Hdt {
     /// let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
     /// ```
     #[cfg(feature = "cache")]
-    pub fn new_from_path(f: &std::path::Path) -> Result<Self, Box<dyn Error>> {
+    pub fn new_from_path(f: &std::path::Path) -> Result<Self, HdtReadError> {
         use log::warn;
 
         let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
-        ControlInfo::read(&mut reader).wrap_err("Failed to read HDT control info")?;
-        Header::read(&mut reader).wrap_err("Failed to read HDT header")?;
-        let unvalidated_dict = FourSectDict::read(&mut reader).wrap_err("Failed to read HDT dictionary")?;
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
+        let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let mut abs_path = std::fs::canonicalize(f)?;
         let _ = abs_path.pop();
         let index_file_name = format!("{}.index.v1-rust-cache", f.file_name().unwrap().to_str().unwrap());
@@ -125,17 +125,18 @@ impl Hdt {
     #[cfg(feature = "cache")]
     fn load_without_cache<R: std::io::BufRead>(
         mut reader: R, index_file_path: &std::path::PathBuf,
-    ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
+    ) -> core::result::Result<TriplesBitmap, HdtReadError> {
         use log::warn;
 
         debug!("no cache detected, generating index");
-        let triples = TriplesBitmap::read_sect(&mut reader).wrap_err("Failed to read HDT triples section")?;
+        let triples = TriplesBitmap::read_sect(&mut reader)?;
         debug!("index generated, saving cache to {}", index_file_path.display());
         if let Err(e) = Self::write_cache(index_file_path, &triples) {
             warn!("error trying to save cache to file: {e}");
         }
         Ok(triples)
     }
+
     #[cfg(feature = "cache")]
     fn load_with_cache<R: std::io::BufRead>(
         mut reader: R, index_file_path: &std::path::PathBuf,

@@ -178,6 +178,9 @@ pub enum TriplesReadError {
     TripleComponentZero(usize, usize, usize),
     #[error("unspecified external library error")]
     ExternalError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error("cache decode error")]
+    #[cfg(feature = "cache")]
+    DecodeError(#[from] bincode::error::DecodeError),
 }
 
 impl fmt::Debug for TriplesBitmap {
@@ -268,18 +271,18 @@ impl TriplesBitmap {
 
     /// load the cached HDT index file, only supports TriplesBitmap
     #[cfg(feature = "cache")]
-    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
+    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self, TriplesReadError> {
         use TriplesReadError::*;
         match &info.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
             "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
-            f => Err(UnknownTriplesFormat(f)),
+            f => Err(UnknownTriplesFormat(f.to_owned())),
         }
     }
 
     /// load the entire cached TriplesBitmap object
     #[cfg(feature = "cache")]
-    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
+    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self, TriplesReadError> {
         let triples: TriplesBitmap = bincode::serde::decode_from_std_read(reader, bincode::config::standard())?;
         Ok(triples)
     }
