@@ -350,11 +350,11 @@ mod tests {
     use std::fs::File;
 
     #[test]
-    fn triples() {
+    fn triples() -> color_eyre::Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
-        let file = File::open(filename).expect("error opening file");
-        let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
+        let file = File::open(filename)?;
+        let hdt = Hdt::new(std::io::BufReader::new(file))?;
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 328);
@@ -405,5 +405,6 @@ mod tests {
         let o = "\"ХОББИ\"@ru";
         let triple_vec = vec![(Arc::from(s), Arc::from(p), Arc::from(o))];
         assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(),);
+        Ok(())
     }
 }

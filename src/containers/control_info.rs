@@ -188,19 +188,20 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_info() {
+    fn read_info() -> color_eyre::Result<()> {
         init();
         let info = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00\x00\x76\x35";
         let mut reader = BufReader::new(&info[..]);
 
-        let info = ControlInfo::read(&mut reader).expect("Failed to read control info");
+        let info = ControlInfo::read(&mut reader)?;
         assert_eq!(info.control_type, ControlType::Global);
         assert_eq!(info.format, "<http://purl.org/HDT/hdt#HDTv1>");
         assert!(info.properties.is_empty());
+        Ok(())
     }
 
     #[test]
-    fn write_info() {
+    fn write_info() -> color_eyre::Result<()> {
         init();
         let control_type = ControlType::Global;
         let format = "<http://purl.org/HDT/hdt#HDTv1>".to_owned();
@@ -215,7 +216,8 @@ mod tests {
         assert_eq!(buffer, expected);
 
         let mut reader = BufReader::new(&expected[..]);
-        let info2 = ControlInfo::read(&mut reader).expect("Failed to read control info");
+        let info2 = ControlInfo::read(&mut reader)?;
         assert_eq!(info, info2);
+        Ok(())
     }
 }

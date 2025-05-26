@@ -496,14 +496,14 @@ mod tests {
     }
 
     #[test]
-    fn read_triples() {
+    fn read_triples() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt")?;
         let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).unwrap();
-        Header::read(&mut reader).unwrap();
-        let _dict = FourSectDict::read(&mut reader).unwrap();
-        let triples = TriplesBitmap::read_sect(&mut reader).unwrap();
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
+        let _dict = FourSectDict::read(&mut reader)?;
+        let triples = TriplesBitmap::read_sect(&mut reader)?;
         let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 328);
         assert_eq!(v[0].subject_id, 1);
@@ -549,5 +549,6 @@ mod tests {
         assert_eq!(v, SubjectIter::with_pattern(&triples, &TripleId::new(0, 0, 0)).collect::<Vec<_>>());
         // SP? where S and P are in the graph, but not together
         assert_eq!(0, SubjectIter::with_pattern(&triples, &TripleId::new(12, 14, 154)).count());
+        Ok(())
     }
 }

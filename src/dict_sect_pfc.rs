@@ -347,36 +347,36 @@ mod tests {
     }
     */
     #[test]
-    fn test_section_read() {
+    fn read_section_read() -> color_eyre::Result<()> {
         init();
         let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
         let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader).unwrap();
-        Header::read(&mut reader).unwrap();
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
 
         // read dictionary control information
-        let dict_ci = ControlInfo::read(&mut reader).unwrap();
+        let dict_ci = ControlInfo::read(&mut reader)?;
         assert!(
             dict_ci.format == "<http://purl.org/HDT/hdt#dictionaryFour>",
             "invalid dictionary type: {:?}",
             dict_ci.format
         );
 
-        let (shared, _) = DictSectPFC::read(&mut reader).unwrap();
+        let (shared, _) = DictSectPFC::read(&mut reader)?;
         // the file contains IRIs that are used both as subject and object 23128
         assert_eq!(shared.num_strings, 43);
         assert_eq!(shared.packed_data.len(), 614);
         assert_eq!(shared.block_size, 16);
         for term in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta/Function", "_:b1"] {
             let id = shared.string_to_id(term);
-            let back = shared.extract(id).unwrap();
+            let back = shared.extract(id)?;
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
         assert_eq!(sequence.data.len(), data_size);
 
-        let (subjects, _) = DictSectPFC::read(&mut reader).unwrap();
+        let (subjects, _) = DictSectPFC::read(&mut reader)?;
         assert_eq!(subjects.num_strings, 6);
         for term in [
             "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
@@ -384,11 +384,12 @@ mod tests {
             "http://www.snik.eu/ontology/meta/typicalFeature",
         ] {
             let id = subjects.string_to_id(term);
-            let back = subjects.extract(id).unwrap();
+            let back = subjects.extract(id)?;
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
         assert_eq!(sequence.data.len(), data_size);
+        Ok(())
     }
 }
