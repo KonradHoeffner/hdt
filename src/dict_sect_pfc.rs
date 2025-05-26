@@ -292,7 +292,7 @@ impl DictSectPFC {
     }
 
     /// counterpoint to the read method
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn error::Error>> {
+    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), DictSectReadError> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/libdcs/CSD_PFC.cpp::save()
