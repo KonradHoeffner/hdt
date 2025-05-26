@@ -161,7 +161,7 @@ impl Hdt {
         Ok(())
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HdtReadError> {
         todo!("control info");
         self.dict.save(write)?;
         //self.triples.save(write)?;
@@ -357,7 +357,7 @@ impl<'a> TripleCache<'a> {
 mod tests {
     use super::*;
     use crate::tests::init;
-    use color_eyre::eyre::Result;
+    use color_eyre::Result;
     use pretty_assertions::{assert_eq, assert_ne};
     use std::fs::File;
 
@@ -366,7 +366,7 @@ mod tests {
         init();
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename).wrap_err("error opening file {filename}")?;
-        let hdt = Hdt::new(std::io::BufReader::new(file))?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let tmp_filename = "tests/resources/snikmeta.hdt";
         let tmp = File::create(tmp_filename).expect(&format!("error creating file {filename}"));
         hdt.write(&mut std::io::BufWriter::new(tmp))?;
@@ -374,11 +374,11 @@ mod tests {
     }
 
     #[test]
-    fn triples() -> color_eyre::Result<()> {
+    fn triples() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename)?;
-        let hdt = Hdt::new(std::io::BufReader::new(file))?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 328);
