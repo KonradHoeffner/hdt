@@ -158,7 +158,7 @@ impl FourSectDict {
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
         use SectKind::*;
-        todo!("write control info");
+        ControlInfo::four_sect_dict().write(write)?;
         self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
         self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
         self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;

@@ -62,7 +62,10 @@ impl Header {
                     ntriple::Object::Lit(lit) => Term::Literal(match lit.data_type {
                         ntriple::TypeLang::Lang(lan) => Literal::new_lang(lit.data, lan),
                         ntriple::TypeLang::Type(data_type) => {
-                            if data_type == "http://www.w3.org/2001/XMLSchema#string" {
+                            // workaround incorrect https in xsd prefix in ntriples dependency
+                            if data_type == "http://www.w3.org/2001/XMLSchema#string"
+                                || data_type == "https://www.w3.org/2001/XMLSchema#string"
+                            {
                                 Literal::new(lit.data)
                             } else {
                                 Literal::new_typed(lit.data, data_type)
@@ -75,6 +78,14 @@ impl Header {
             }
         }
         Ok(Header { format: header_ci.format, length, body })
+    }
+
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HeaderReadError> {
+        ControlInfo::header().write(write)?;
+        for mut triple in &self.body {
+            writeln!(write, "{}", triple);
+        }
+        Ok(())
     }
 }
 
