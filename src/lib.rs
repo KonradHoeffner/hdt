@@ -105,7 +105,7 @@ pub mod header;
 /// Types for representing and querying triples.
 pub mod triples;
 
-pub mod rdf2hdt;
+//pub mod rdf2hdt;
 
 pub use crate::hdt::Hdt;
 use containers::{ControlInfo, ControlInfoReadError};

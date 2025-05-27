@@ -71,6 +71,17 @@ pub enum ControlInfoReadErrorKind {
 }
 
 impl ControlInfo {
+    /// Create global control information for the start of the HDT file
+    pub fn global() -> ControlInfo {
+        let mut properties = HashMap::<String, String>::new();
+        properties.insert("Software".to_owned(), "hdt_rs".to_owned());
+        ControlInfo {
+            control_type: ControlType::Global,
+            format: "<http://purl.org/HDT/hdt#HDTv1>".to_owned(),
+            properties,
+        }
+    }
+
     /// Read and verify control information.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadError> {
         Ok(Self::read_kind(reader)?)
@@ -138,7 +149,12 @@ impl ControlInfo {
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write(&self, write: &mut impl Write) -> Result<(), ControlInfoReadError> {
+        Ok(self.write_kind(write)?)
+    }
+
+    // Helper function for Self::write
+    fn write_kind(&self, dest_writer: &mut impl Write) -> Result<(), ControlInfoReadErrorKind> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
         dest_writer.write_all(HDT_HEADER)?;
@@ -203,20 +219,25 @@ mod tests {
     #[test]
     fn write_info() -> color_eyre::Result<()> {
         init();
-        let control_type = ControlType::Global;
-        let format = "<http://purl.org/HDT/hdt#HDTv1>".to_owned();
-        let mut properties = HashMap::<String, String>::new();
-        properties.insert("Software".to_owned(), "hdt_rs".to_owned());
-        let info = ControlInfo { control_type, format, properties };
+        let info = ControlInfo::global();
 
         let mut buffer = Vec::new();
-        assert!(info.save(&mut buffer).is_ok());
+        assert!(info.write(&mut buffer).is_ok());
 
         let expected = b"$HDT\x01<http://purl.org/HDT/hdt#HDTv1>\x00Software=hdt_rs;\x00\x52\x22";
-        assert_eq!(buffer, expected);
+        assert_eq!(
+            buffer,
+            expected,
+            "buffer {} expected {}",
+            String::from_utf8_lossy(&buffer),
+            String::from_utf8_lossy(expected)
+        );
 
         let mut reader = BufReader::new(&expected[..]);
         let info2 = ControlInfo::read(&mut reader)?;
+        assert_eq!(info2.control_type, ControlType::Global);
+        assert_eq!(info2.format, "<http://purl.org/HDT/hdt#HDTv1>");
+        assert_eq!(info2.properties.get("Software").unwrap(), "hdt_rs");
         assert_eq!(info, info2);
         Ok(())
     }

@@ -156,12 +156,13 @@ impl FourSectDict {
         })
     }
 
-    pub fn save(&self, write: &mut impl std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
-        todo!("save control info");
-        self.shared.save(write)?;
-        self.subjects.save(write)?;
-        self.predicates.save(write)?;
-        self.objects.save(write)?;
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
+        use SectKind::*;
+        todo!("write control info");
+        self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
+        self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        self.objects.write(write).map_err(|e| DictSectError { e, sect_kind: Object })?;
         Ok(())
     }
 

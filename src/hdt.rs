@@ -162,8 +162,8 @@ impl Hdt {
     }
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HdtReadError> {
-        todo!("control info");
-        self.dict.save(write)?;
+        ControlInfo::global().write(write)?;
+        self.dict.write(write)?;
         //self.triples.save(write)?;
         Ok(())
     }
@@ -365,7 +365,7 @@ mod tests {
     fn write() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
-        let file = File::open(filename).wrap_err("error opening file {filename}")?;
+        let file = File::open(filename)?;
         let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let tmp_filename = "tests/resources/snikmeta.hdt";
         let tmp = File::create(tmp_filename).expect(&format!("error creating file {filename}"));

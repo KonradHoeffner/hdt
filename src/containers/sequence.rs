@@ -194,7 +194,7 @@ impl Sequence {
     }
 
     /// save sequence per HDT spec using CRC
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), Box<dyn error::Error>> {
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), SequenceReadError> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()
