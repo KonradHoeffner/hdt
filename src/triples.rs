@@ -258,6 +258,7 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 
 impl TriplesBitmap {
     /// read the whole triple section including control information
+    // TODO: rename to "read" for consistency with the other components and rename existing read function accordingly
     pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self, TriplesReadError> {
         use TriplesReadError::*;
         let triples_ci = ControlInfo::read(reader)?;
@@ -419,6 +420,12 @@ impl TriplesBitmap {
         assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
+    }
+
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), TriplesReadError> {
+        ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
+        todo!("write triples");
+        Ok(())
     }
 
     /// Transform the given IDs of the layers in triple section order to a triple ID.

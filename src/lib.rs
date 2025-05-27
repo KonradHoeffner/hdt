@@ -65,7 +65,7 @@ fn query(hdt: Hdt)
 //
 // - **`sophia`** *(enabled by default)* — Implements the Graph trait from the [Sophia](https://crates.io/crates/sophia) RDF toolkit.
 // This allows you to drastically reduce the RAM usage of an existing application based on Sophia that loads a large knowledge base but requires an input file in the HDT format.
-#![warn(missing_docs)]
+//#![warn(missing_docs)] //TODO: comment again after refactoring
 #![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
 #![warn(clippy::str_to_string)]
@@ -104,6 +104,8 @@ pub mod hdt_graph;
 pub mod header;
 /// Types for representing and querying triples.
 pub mod triples;
+
+//pub mod rdf2hdt;
 
 pub use crate::hdt::Hdt;
 use containers::{ControlInfo, ControlInfoReadError};
