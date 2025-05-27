@@ -70,15 +70,28 @@ pub enum ControlInfoReadErrorKind {
     InvalidControlType(u8),
 }
 
+const HDT_CONTAINER: &str = "<http://purl.org/HDT/hdt#HDTv1>";
+const DICTIONARY_FOUR: &str = "<http://purl.org/HDT/hdt#dictionaryFour>";
+
 impl ControlInfo {
     /// Create global control information for the start of the HDT file
     pub fn global() -> ControlInfo {
         let mut properties = HashMap::<String, String>::new();
         properties.insert("Software".to_owned(), "hdt_rs".to_owned());
+        ControlInfo { control_type: ControlType::Global, format: HDT_CONTAINER.to_owned(), properties }
+    }
+
+    /// Create control information for the header
+    pub fn header() -> ControlInfo {
+        ControlInfo { control_type: ControlType::Header, format: "ntriples".to_owned(), ..Default::default() }
+    }
+
+    /// Create control information for the four section dictionary
+    pub fn four_sect_dict() -> ControlInfo {
         ControlInfo {
-            control_type: ControlType::Global,
-            format: "<http://purl.org/HDT/hdt#HDTv1>".to_owned(),
-            properties,
+            control_type: ControlType::Dictionary,
+            format: DICTIONARY_FOUR.to_owned(),
+            ..Default::default()
         }
     }
 
