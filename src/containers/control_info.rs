@@ -72,6 +72,7 @@ pub enum ControlInfoReadErrorKind {
 
 const HDT_CONTAINER: &str = "<http://purl.org/HDT/hdt#HDTv1>";
 const DICTIONARY_FOUR: &str = "<http://purl.org/HDT/hdt#dictionaryFour>";
+const TRIPLES_BITMAP: &str = "<http://purl.org/HDT/hdt#triplesBitmap>";
 
 impl ControlInfo {
     /// Create global control information for the start of the HDT file
@@ -93,6 +94,14 @@ impl ControlInfo {
             format: DICTIONARY_FOUR.to_owned(),
             ..Default::default()
         }
+    }
+
+    /// Create control information for BitmapTriples
+    pub fn bitmap_triples(order: u32, num_triples: u32) -> ControlInfo {
+        let mut properties = HashMap::<String, String>::new();
+        properties.insert("order".to_owned(), order.to_string());
+        properties.insert("numTriples".to_owned(), num_triples.to_string());
+        ControlInfo { control_type: ControlType::Triples, format: TRIPLES_BITMAP.to_owned(), properties }
     }
 
     /// Read and verify control information.

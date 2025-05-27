@@ -97,7 +97,7 @@ impl Hdt {
         let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let mut abs_path = std::fs::canonicalize(f)?;
         let _ = abs_path.pop();
@@ -118,7 +118,7 @@ impl Hdt {
         };
 
         let dict = unvalidated_dict.validate()?;
-        let hdt = Hdt { dict, triples };
+        let hdt = Hdt { header, dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -162,13 +162,11 @@ impl Hdt {
         Ok(())
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HdtReadError> {
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::global().write(write)?;
-        // we don't need the header for querying so we just discard it on loading
         self.header.write(write)?;
-        //ControlInfo::header().write(write)?;
         self.dict.write(write)?;
-        //self.triples.write(write)?;
+        self.triples.write(write)?;
         write.flush()?;
         Ok(())
     }

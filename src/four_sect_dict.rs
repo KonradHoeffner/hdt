@@ -156,6 +156,7 @@ impl FourSectDict {
         })
     }
 
+    /// write the whole Dictionary including control info and all sections
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
         use SectKind::*;
         ControlInfo::four_sect_dict().write(write)?;
