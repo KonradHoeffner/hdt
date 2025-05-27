@@ -292,7 +292,7 @@ impl DictSectPFC {
     }
 
     /// counterpoint to the read method
-    pub fn save(&self, dest_writer: &mut impl Write) -> Result<(), DictSectReadError> {
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), DictSectReadError> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/libdcs/CSD_PFC.cpp::save()
@@ -311,7 +311,7 @@ impl DictSectPFC {
         let checksum = hasher.finalize();
         let _ = dest_writer.write(&checksum.to_le_bytes())?;
 
-        self.sequence.save(dest_writer)?;
+        self.sequence.write(dest_writer)?;
 
         // Write packed data
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);

@@ -1,5 +1,6 @@
 // Copyright (c) 2024-2025, Decisym, LLC
-
+fn main() {}
+/*
 //! # rdf2hdt Converter
 //!
 //! This is a Rust-based tool that converts RDF data into HDT format. It uses the `oxrdfio` crate
@@ -88,3 +89,4 @@ fn main() {
         None => {}
     }
 }
+*/
