@@ -361,8 +361,8 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
+    use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
-    use std::fs::File;
 
     #[test]
     fn write() -> Result<()> {
@@ -371,8 +371,12 @@ mod tests {
         let file = File::open(filename)?;
         let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let tmp_filename = "/tmp/hdt_rs_test.hdt";
-        let tmp = File::create(tmp_filename).expect(&format!("error creating file {filename}"));
-        hdt.write(&mut std::io::BufWriter::new(tmp))?;
+        let file2 = File::create(tmp_filename)?;
+        hdt.write(&mut std::io::BufWriter::new(file2))?;
+        // read back the file we just created
+        let file2 = File::open(tmp_filename)?;
+        let hdt2 = Hdt::read(std::io::BufReader::new(file2))?;
+
         Ok(())
     }
 

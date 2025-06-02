@@ -204,14 +204,15 @@ impl Sequence {
         hasher.update(&seq_type);
         // Write numbits
         let bits_per_entry: [u8; 1] = [self.bits_per_entry.try_into().unwrap()];
+        //println!("bits_per_entry {bits_per_entry}");
         let _ = dest_writer.write(&bits_per_entry)?;
         hasher.update(&bits_per_entry);
         // Write numentries
         let buf = &encode_vbyte(self.entries);
         let _ = dest_writer.write(buf)?;
         hasher.update(buf);
-        let checksum = hasher.finalize();
-        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+        let checksum: u8 = hasher.finalize();
+        let _ = dest_writer.write(&[checksum])?;
 
         // Write data
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);

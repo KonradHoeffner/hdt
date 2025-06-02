@@ -83,8 +83,10 @@ impl ControlInfo {
     }
 
     /// Create control information for the header
-    pub fn header() -> ControlInfo {
-        ControlInfo { control_type: ControlType::Header, format: "ntriples".to_owned(), ..Default::default() }
+    pub fn header(length: usize) -> ControlInfo {
+        let mut properties = HashMap::<String, String>::new();
+        properties.insert("length".to_owned(), length.to_string());
+        ControlInfo { control_type: ControlType::Header, format: "ntriples".to_owned(), properties }
     }
 
     /// Create control information for the four section dictionary

@@ -67,3 +67,4 @@ criterion = { version = "0.6", default-features = false, features = ["cargo_benc
 iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
 color-eyre = "0.6"
 walkdir = "2.5"
+fs-err = "3.1.0"
