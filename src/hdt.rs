@@ -7,13 +7,14 @@ use crate::triples::{
 };
 use bytesize::ByteSize;
 use log::{debug, error};
-use std::error::Error;
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
 use std::io::{Seek, SeekFrom, Write};
 use std::iter;
 use std::sync::Arc;
+
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
 /// Allows queries by triple patterns.
@@ -41,7 +42,7 @@ pub struct TranslateError {
 /// The error type for the `new` method.
 #[derive(thiserror::Error, Debug)]
 #[error("failed to read HDT")]
-pub enum HdtReadError {
+pub enum Error {
     ControlInfo(#[from] ControlInfoReadError),
     Header(#[from] HeaderReadError),
     /// Failed to read HDT dictionary
@@ -52,7 +53,7 @@ pub enum HdtReadError {
 
 impl Hdt {
     #[deprecated(since = "0.4.0", note = "please use `read` instead")]
-    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self, HdtReadError> {
+    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> {
         Self::read(reader)
     }
 
@@ -66,7 +67,7 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self, HdtReadError> {
+    pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
@@ -89,7 +90,7 @@ impl Hdt {
     /// let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
     /// ```
     #[cfg(feature = "cache")]
-    pub fn new_from_path(f: &std::path::Path) -> Result<Self, HdtReadError> {
+    pub fn new_from_path(f: &std::path::Path) -> Result<Self> {
         use log::warn;
 
         let source = File::open(f)?;
@@ -125,7 +126,7 @@ impl Hdt {
     #[cfg(feature = "cache")]
     fn load_without_cache<R: std::io::BufRead>(
         mut reader: R, index_file_path: &std::path::PathBuf,
-    ) -> core::result::Result<TriplesBitmap, HdtReadError> {
+    ) -> Result<TriplesBitmap> {
         use log::warn;
 
         debug!("no cache detected, generating index");
@@ -140,7 +141,7 @@ impl Hdt {
     #[cfg(feature = "cache")]
     fn load_with_cache<R: std::io::BufRead>(
         mut reader: R, index_file_path: &std::path::PathBuf,
-    ) -> core::result::Result<TriplesBitmap, Box<dyn Error>> {
+    ) -> core::result::Result<TriplesBitmap, Box<dyn std::error::Error>> {
         // load cached index
         debug!("hdt file cache detected, loading from {}", index_file_path.display());
         let index_source = File::open(index_file_path)?;
@@ -152,7 +153,7 @@ impl Hdt {
     #[cfg(feature = "cache")]
     fn write_cache(
         index_file_path: &std::path::PathBuf, triples: &TriplesBitmap,
-    ) -> core::result::Result<(), Box<dyn Error>> {
+    ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
         bincode::serde::encode_into_std_write(&triples, &mut writer, bincode::config::standard())?;
@@ -307,22 +308,22 @@ impl<'a> TripleCache<'a> {
     }
 
     /// Get the string representation of the subject `sid`.
-    pub fn get_s_string(&mut self, sid: usize) -> Result<Arc<str>, DictError> {
+    pub fn get_s_string(&mut self, sid: usize) -> core::result::Result<Arc<str>, DictError> {
         self.get_x_string(sid, 0, &IdKind::Subject)
     }
 
     /// Get the string representation of the predicate `pid`.
-    pub fn get_p_string(&mut self, pid: usize) -> Result<Arc<str>, DictError> {
+    pub fn get_p_string(&mut self, pid: usize) -> core::result::Result<Arc<str>, DictError> {
         self.get_x_string(pid, 1, &IdKind::Predicate)
     }
 
     /// Get the string representation of the object `oid`.
-    pub fn get_o_string(&mut self, oid: usize) -> Result<Arc<str>, DictError> {
+    pub fn get_o_string(&mut self, oid: usize) -> core::result::Result<Arc<str>, DictError> {
         self.get_x_string(oid, 2, &IdKind::Object)
     }
 
     /// Translate a triple of indexes into a triple of strings.
-    pub fn translate(&mut self, t: TripleId) -> Result<StringTriple, TranslateError> {
+    pub fn translate(&mut self, t: TripleId) -> core::result::Result<StringTriple, TranslateError> {
         Ok((
             self.get_s_string(t.subject_id).map_err(|e| TranslateError { e, t })?,
             self.get_p_string(t.predicate_id).map_err(|e| TranslateError { e, t })?,
@@ -330,7 +331,9 @@ impl<'a> TripleCache<'a> {
         ))
     }
 
-    fn get_x_string(&mut self, i: usize, pos: usize, kind: &'static IdKind) -> Result<Arc<str>, DictError> {
+    fn get_x_string(
+        &mut self, i: usize, pos: usize, kind: &'static IdKind,
+    ) -> core::result::Result<Arc<str>, DictError> {
         debug_assert!(i != 0);
         if self.idx[pos] == i {
             Ok(self.arc[pos].as_ref().unwrap().clone())
