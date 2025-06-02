@@ -1,5 +1,5 @@
 //! Bitmap with rank and select support read from an HDT file.
-use crate::containers::vbyte::read_vbyte;
+use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
@@ -185,5 +185,34 @@ impl Bitmap {
         }
 
         Ok(Self::new(data))
+    }
+
+    pub fn write(&self, w: &mut impl std::io::Write) -> Result<(), BitmapReadError> {
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut hasher = crc.digest();
+        // type
+        let bitmap_type: [u8; 1] = [1];
+        let _ = w.write(&bitmap_type)?;
+        hasher.update(&bitmap_type);
+        // number of bits
+        let t = encode_vbyte(self.dict.len());
+        let _ = w.write(&t)?;
+        hasher.update(&t);
+        // crc8 checksum
+        let checksum = hasher.finalize();
+        let _ = w.write(&checksum.to_le_bytes())?;
+
+        // write data
+        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut hasher = crc.digest();
+
+        let mut buf = Vec::<u8>::new();
+        // todo: make sure this works cross-platform with different endianness
+        self.dict.bit_vector().serialize_into(&mut buf);
+        let _ = w.write(&buf)?;
+        hasher.update(&buf);
+        let checksum = hasher.finalize();
+        let _ = w.write(&checksum.to_le_bytes())?;
+        Ok(())
     }
 }
