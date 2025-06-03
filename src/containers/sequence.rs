@@ -262,3 +262,31 @@ impl Sequence {
         output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::init;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn write_read() -> color_eyre::Result<()> {
+        init();
+        let mut data = Vec::<usize>::new();
+        // little endian
+        data.push((4 << 12) + (3 << 8) + (2 << 4) + 1);
+        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        let numbers: Vec<usize> = s.into_iter().collect();
+        let expected = vec![1, 2, 3, 4];
+        assert_eq!(numbers, expected);
+        // we don't have iter() or clone() so create it again
+        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        let mut buf = Vec::<u8>::new();
+        s.write(&mut buf);
+        let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
+        assert_eq!(s2.entries, 4);
+        assert_eq!(s2.bits_per_entry, 4);
+        assert_eq!(s2.data, data);
+        Ok(())
+    }
+}
