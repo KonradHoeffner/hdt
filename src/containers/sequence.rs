@@ -3,8 +3,7 @@ use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
-use std::fs::File;
-use std::io::{BufRead, BufWriter, Write};
+use std::io::{BufRead, Write};
 use std::mem::size_of;
 use std::thread;
 use std::{error, fmt};
@@ -194,7 +193,8 @@ impl Sequence {
         Ok(Sequence { entries, bits_per_entry, data, crc_handle })
     }
 
-    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
+    /// save sequence per HDT spec using CRC
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), SequenceReadError> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()
@@ -204,14 +204,15 @@ impl Sequence {
         hasher.update(&seq_type);
         // Write numbits
         let bits_per_entry: [u8; 1] = [self.bits_per_entry.try_into().unwrap()];
+        //println!("bits_per_entry {bits_per_entry}");
         let _ = dest_writer.write(&bits_per_entry)?;
         hasher.update(&bits_per_entry);
         // Write numentries
         let buf = &encode_vbyte(self.entries);
         let _ = dest_writer.write(buf)?;
         hasher.update(buf);
-        let checksum = hasher.finalize();
-        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+        let checksum: u8 = hasher.finalize();
+        let _ = dest_writer.write(&[checksum])?;
 
         // Write data
         let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
@@ -259,5 +260,33 @@ impl Sequence {
         }
 
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::init;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn write_read() -> color_eyre::Result<()> {
+        init();
+        let mut data = Vec::<usize>::new();
+        // little endian
+        data.push((4 << 12) + (3 << 8) + (2 << 4) + 1);
+        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        let numbers: Vec<usize> = s.into_iter().collect();
+        let expected = vec![1, 2, 3, 4];
+        assert_eq!(numbers, expected);
+        // we don't have iter() or clone() so create it again
+        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        let mut buf = Vec::<u8>::new();
+        s.write(&mut buf);
+        let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
+        assert_eq!(s2.entries, 4);
+        assert_eq!(s2.bits_per_entry, 4);
+        assert_eq!(s2.data, data);
+        Ok(())
     }
 }

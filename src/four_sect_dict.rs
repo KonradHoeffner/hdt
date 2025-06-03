@@ -62,7 +62,7 @@ pub struct DictError {
 }
 
 #[derive(Error, Debug)]
-#[error("four sect dict section error in the {sect_kind:?} section, caused by {e}")]
+#[error("four sect dict section error in the {sect_kind:?} section")]
 pub struct DictSectError {
     #[source]
     e: DictSectReadError,
@@ -155,6 +155,19 @@ impl FourSectDict {
             crc_handles: [shared_crc, subjects_crc, predicates_crc, objects_crc],
         })
     }
+
+    /// write the whole Dictionary including control info and all sections
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
+        use SectKind::*;
+        ControlInfo::four_sect_dict().write(write)?;
+        self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        //self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
+        //self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        //self.objects.write(write).map_err(|e| DictSectError { e, sect_kind: Object })?;
+        Ok(())
+    }
+
     /*
     pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
         triple_ids
