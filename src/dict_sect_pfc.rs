@@ -16,6 +16,7 @@ use thiserror::Error;
 
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct DictSectPFC {
     /// total number of strings stored
     pub num_strings: usize,
@@ -44,11 +45,11 @@ impl fmt::Debug for DictSectPFC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "total size {}, {} strings, sequence {:?}, packed data {}",
+            "total size {}, {} strings, sequence {:?}, packed data {:?}",
             ByteSize(self.size_in_bytes() as u64),
             self.num_strings,
             self.sequence,
-            ByteSize(self.packed_data.len() as u64)
+            self.packed_data //ByteSize(self.packed_data.len() as u64)
         )
     }
 }
@@ -254,18 +255,18 @@ impl DictSectPFC {
         // https://www.rdfhdt.org/hdt-binary-format was inaccurate, it's 3 vbytes, not 2.
         let (num_strings, bytes_read) = read_vbyte(reader)?;
         digest8.update(&bytes_read);
-        println!("num strings {num_strings}");
+        //println!("num strings {num_strings}");
         let (packed_length, bytes_read) = read_vbyte(reader)?;
         digest8.update(&bytes_read);
-        println!("packed_length {packed_length}");
+        //println!("packed_length {packed_length}");
         let (block_size, bytes_read) = read_vbyte(reader)?;
         digest8.update(&bytes_read);
-        println!("block_size {block_size}");
+        //println!("block_size {block_size}");
         // read section CRC8
         let mut crc_code8 = [0_u8];
         reader.read_exact(&mut crc_code8)?;
         let crc_code8 = crc_code8[0];
-        println!("crc_code {crc_code8}");
+        //println!("crc_code {crc_code8}");
 
         let crc_calculated8 = digest8.finalize();
         if crc_calculated8 != crc_code8 {
@@ -280,7 +281,7 @@ impl DictSectPFC {
         let mut packed_data = vec![0u8; packed_length];
         reader.read_exact(&mut packed_data)?;
         let packed_data = Arc::<[u8]>::from(packed_data);
-        println!("read packed data of length {} {:?}", packed_data.len(), packed_data);
+        //println!("read packed data of length {} {:?}", packed_data.len(), packed_data);
 
         // read packed data CRC32
         let mut crc_code = [0u8; 4];
@@ -304,7 +305,7 @@ impl DictSectPFC {
         // libhdt/src/libdcs/CSD_PFC.cpp::save()
         // save type
         let seq_type: [u8; 1] = [2];
-        let _ = dest_writer.write(&seq_type)?;
+        dest_writer.write_all(&seq_type)?;
         digest8.update(&seq_type);
 
         // // Save sizes
@@ -312,22 +313,22 @@ impl DictSectPFC {
         buf.extend_from_slice(&encode_vbyte(self.num_strings));
         buf.extend_from_slice(&encode_vbyte(self.packed_data.len()));
         buf.extend_from_slice(&encode_vbyte(self.block_size));
-        let _ = dest_writer.write(&buf)?;
+        dest_writer.write_all(&buf)?;
         digest8.update(&buf);
         let checksum8: u8 = digest8.finalize();
-        let _ = dest_writer.write(&[checksum8])?;
+        dest_writer.write_all(&[checksum8])?;
 
         self.sequence.write(dest_writer)?;
 
         // Write packed data
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
-        let _ = dest_writer.write(&self.packed_data)?;
+        dest_writer.write_all(&self.packed_data)?;
         digest32.update(&self.packed_data);
         // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
         let checksum32 = digest32.finalize();
         let checksum_bytes: [u8; 4] = checksum32.to_le_bytes();
-        let _ = dest_writer.write(&checksum_bytes)?;
+        dest_writer.write_all(&checksum_bytes)?;
         dest_writer.flush();
         Ok(())
     }
@@ -409,10 +410,29 @@ mod tests {
         assert_eq!(shared.num_strings, 43);
         assert_eq!(shared.packed_data.len(), 614);
         assert_eq!(shared.block_size, 16);
-        let mut buf = Vec::<u8>::new();
-        shared.write(&mut buf)?;
-        let mut cursor = std::io::Cursor::new(buf);
-        let shared2 = DictSectPFC::read(&mut cursor)?;
+
+        let (subjects, _) = DictSectPFC::read(&mut reader)?;
+        let (predicates, _) = DictSectPFC::read(&mut reader)?;
+        let (objects, _) = DictSectPFC::read(&mut reader)?;
+
+        //for sect in [shared, subjects, predicates, objects]
+        for sect in [predicates] {
+            println!("write section ****************************");
+            let mut buf = Vec::<u8>::new();
+            sect.write(&mut buf)?;
+            let mut cursor = std::io::Cursor::new(buf);
+            let (sect2, crc_handle) = DictSectPFC::read(&mut cursor)?;
+            assert_eq!(sect.num_strings, sect2.num_strings);
+            assert_eq!(sect.sequence, sect2.sequence);
+            assert_eq!(sect.packed_data.len(), sect2.packed_data.len());
+            assert_eq!(sect.block_size, sect2.block_size);
+            assert_eq!(sect.packed_data, sect2.packed_data);
+            //assert_eq!(sect,sect2);
+        }
+
+        //crc_handle.join().unwrap();
+        //assert_eq!(shared, shared2);
+        //assert_eq!(subjects, subjects2);
         Ok(())
     }
 }

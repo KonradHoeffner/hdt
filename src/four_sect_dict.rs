@@ -25,6 +25,7 @@ pub enum IdKind {
 /// Dictionary with shared, subject, predicate and object sections.
 /// Types specified as <http://purl.org/HDT/hdt#dictionaryFour>.
 /// See <https://www.rdfhdt.org/hdt-internals/#dictionary>.
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
 pub struct FourSectDict {
     /// The shared section contains URIs that occur both in subject and object position. Its IDs start at one.
@@ -161,10 +162,9 @@ impl FourSectDict {
         use SectKind::*;
         ControlInfo::four_sect_dict().write(write)?;
         self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
-        self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
-        //self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
-        //self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
-        //self.objects.write(write).map_err(|e| DictSectError { e, sect_kind: Object })?;
+        self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
+        self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        self.objects.write(write).map_err(|e| DictSectError { e, sect_kind: Object })?;
         Ok(())
     }
 
@@ -225,7 +225,7 @@ mod tests {
     use std::io::BufReader;
 
     #[test]
-    fn read_dict() -> color_eyre::Result<()> {
+    fn read_write_dict() -> color_eyre::Result<()> {
         init();
         let file = File::open("tests/resources/snikmeta.hdt")?;
         let mut reader = BufReader::new(file);
@@ -261,6 +261,10 @@ mod tests {
                 assert_eq!(id, back, "{} id {} -> {} {} -> id {}", name, id, name, s, back);
             }
         }
+        let mut buf = Vec::new();
+        dict.write(&mut buf)?;
+        let dict2 = FourSectDict::read(&mut std::io::Cursor::new(buf))?.validate()?;
+        assert_eq!(dict, dict2);
         Ok(())
     }
 }

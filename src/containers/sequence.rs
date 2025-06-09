@@ -248,7 +248,7 @@ impl Sequence {
         digest.update(&offset_data);
         let checksum = digest.finalize();
         dest_writer.write_all(&checksum.to_le_bytes())?;
-
+        dest_writer.flush();
         Ok(())
     }
 
@@ -299,6 +299,12 @@ mod tests {
     use crate::tests::init;
     use pretty_assertions::assert_eq;
 
+    impl PartialEq for Sequence {
+        fn eq(&self, other: &Self) -> bool {
+            self.entries == other.entries && self.bits_per_entry == other.bits_per_entry && self.data == other.data
+        }
+    }
+
     #[test]
     fn write_read() -> color_eyre::Result<()> {
         init();
@@ -313,9 +319,7 @@ mod tests {
         let mut buf = Vec::<u8>::new();
         s.write(&mut buf);
         let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
-        assert_eq!(s2.entries, 5);
-        assert_eq!(s2.bits_per_entry, 4);
-        assert_eq!(s2.data, data);
+        assert_eq!(s, s2);
         let numbers2: Vec<usize> = s2.into_iter().collect();
         assert_eq!(numbers, numbers2);
         Ok(())
