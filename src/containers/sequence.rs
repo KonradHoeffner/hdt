@@ -11,6 +11,7 @@ use std::{error, fmt};
 const USIZE_BITS: usize = usize::BITS as usize;
 
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
+/// Also called "array" in the HDT spec, only Log64 is supported.
 //#[derive(Clone)]
 #[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct Sequence {
@@ -25,6 +26,23 @@ pub struct Sequence {
     pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
+enum SequenceType {
+    Log64 = 1,
+    UInt32 = 2,
+    UInt64 = 3,
+}
+
+impl TryFrom<u8> for SequenceType {
+    type Error = SequenceReadError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(SequenceType::Log64),
+            _ => Err(SequenceReadError::UnsupportedSequenceType(value)),
+        }
+    }
+}
+
 /// The error type for the sequence read function.
 #[derive(thiserror::Error, Debug)]
 pub enum SequenceReadError {
@@ -35,7 +53,7 @@ pub enum SequenceReadError {
     #[error("Failed to turn raw bytes into usize")]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("invalid LogArray type {0} != 1")]
-    InvalidLogArrayType(u8),
+    UnsupportedSequenceType(u8),
     #[error("entry size of {0} bit too large (>64 bit)")]
     EntrySizeTooLarge(usize),
 }
@@ -109,15 +127,13 @@ impl Sequence {
         use SequenceReadError::*;
         // read entry metadata
         // keep track of history for CRC8
-        let mut history: Vec<u8> = Vec::new();
+        let mut history = Vec::<u8>::new();
 
         // read and validate type
         let mut buffer = [0_u8];
         reader.read_exact(&mut buffer)?;
         history.extend_from_slice(&buffer);
-        if buffer[0] != 1 {
-            return Err(InvalidLogArrayType(buffer[0]));
-        }
+        SequenceType::try_from(buffer[0])?;
 
         // read number of bits per entry
         let mut buffer = [0_u8];
@@ -127,10 +143,12 @@ impl Sequence {
         if bits_per_entry > USIZE_BITS {
             return Err(EntrySizeTooLarge(bits_per_entry));
         }
+        //println!("bits per entry {bits_per_entry}");
 
         // read number of entries
         let (entries, bytes_read) = read_vbyte(reader)?;
         history.extend_from_slice(&bytes_read);
+        //println!("entries {entries} bytes read {bytes_read:?}");
 
         // read entry metadata CRC8
         let mut crc_code = [0_u8];
@@ -150,10 +168,13 @@ impl Sequence {
         // read body data
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
+        //println!("total_bits {total_bits}");
         let full_byte_amount = (total_bits.div_ceil(USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
+        //println!("full_byte_amount {full_byte_amount}");
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words)?;
-        let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / 8 + 2);
+        //println!("full_words {full_words:?}");
+        let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / size_of::<usize>() + 2);
         // read entry body
 
         // turn the raw bytes into usize values
@@ -163,20 +184,23 @@ impl Sequence {
 
         // keep track of history for CRC32
         let mut history = full_words;
-
         // read the last few bits, byte aligned
         let mut bits_read = 0;
         let mut last_value: usize = 0;
         let last_entry_bits = if total_bits == 0 { 0 } else { ((total_bits - 1) % USIZE_BITS) + 1 };
 
+        //println!("last_entry_bits {last_entry_bits}");
         while bits_read < last_entry_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
             last_value |= (buffer[0] as usize) << bits_read;
+            //println!("last_value {last_value} {last_value:#b}");
             bits_read += size_of::<usize>();
         }
         data.push(last_value);
+        // temporarily for bug fixing
+        // return Ok(Sequence { entries, bits_per_entry, data, crc_handle: None});
         // read entry body CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
@@ -196,43 +220,49 @@ impl Sequence {
     /// save sequence per HDT spec using CRC
     pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), SequenceReadError> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
-        let mut hasher = crc.digest();
+        let mut digest = crc.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()
         // Write offsets using variable-length encoding
         let seq_type: [u8; 1] = [1];
-        let _ = dest_writer.write(&seq_type)?;
-        hasher.update(&seq_type);
+        dest_writer.write_all(&seq_type)?;
+        digest.update(&seq_type);
         // Write numbits
         let bits_per_entry: [u8; 1] = [self.bits_per_entry.try_into().unwrap()];
         //println!("bits_per_entry {bits_per_entry}");
-        let _ = dest_writer.write(&bits_per_entry)?;
-        hasher.update(&bits_per_entry);
+        dest_writer.write_all(&bits_per_entry)?;
+        digest.update(&bits_per_entry);
         // Write numentries
         let buf = &encode_vbyte(self.entries);
-        let _ = dest_writer.write(buf)?;
-        hasher.update(buf);
-        let checksum: u8 = hasher.finalize();
-        let _ = dest_writer.write(&[checksum])?;
+        dest_writer.write_all(buf)?;
+        digest.update(buf);
+        let checksum: u8 = digest.finalize();
+        dest_writer.write_all(&[checksum])?;
 
         // Write data
-        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-        let mut hasher = crc.digest();
-        let offset_data = self.pack_bits();
-        let _ = dest_writer.write(&offset_data)?;
-        hasher.update(&offset_data);
-        let checksum = hasher.finalize();
-        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+        let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut digest = crc.digest();
+        //let offset_data = self.pack_bits();
+        let offset_data: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
+        //let offset_data  = self.data;
+        dest_writer.write_all(&offset_data)?;
+        digest.update(&offset_data);
+        let checksum = digest.finalize();
+        dest_writer.write_all(&checksum.to_le_bytes())?;
 
         Ok(())
     }
 
     fn pack_bits(&self) -> Vec<u8> {
+        println!("pack_bits");
         let mut output = Vec::new();
         let mut current_byte = 0u8;
         let mut bit_offset = 0;
 
         for &value in &self.data {
+            println!("pack value {value} bits_per_entry {}", self.bits_per_entry);
             let mut val = value & ((1 << self.bits_per_entry) - 1); // mask to get only relevant bits
+            println!("mask {:#b}", (1 << self.bits_per_entry) - 1);
+            println!("val {val}");
             let mut bits_left = self.bits_per_entry;
 
             while bits_left > 0 {
@@ -274,19 +304,20 @@ mod tests {
         init();
         let mut data = Vec::<usize>::new();
         // little endian
-        data.push((4 << 12) + (3 << 8) + (2 << 4) + 1);
-        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        data.push((5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1);
+        let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone(), crc_handle: None };
         let numbers: Vec<usize> = s.into_iter().collect();
-        let expected = vec![1, 2, 3, 4];
+        //let expected = vec![1];
+        let expected = vec![1, 2, 3, 4, 5];
         assert_eq!(numbers, expected);
-        // we don't have iter() or clone() so create it again
-        let s = Sequence { entries: 4, bits_per_entry: 4, data: data.clone(), crc_handle: None };
         let mut buf = Vec::<u8>::new();
         s.write(&mut buf);
         let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
-        assert_eq!(s2.entries, 4);
+        assert_eq!(s2.entries, 5);
         assert_eq!(s2.bits_per_entry, 4);
         assert_eq!(s2.data, data);
+        let numbers2: Vec<usize> = s2.into_iter().collect();
+        assert_eq!(numbers, numbers2);
         Ok(())
     }
 }
