@@ -7,11 +7,11 @@ use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
 use std::cmp::{Ordering, min};
+use std::fmt;
 use std::io::{BufRead, Write};
 use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
-use std::{error, fmt};
 use thiserror::Error;
 
 /// Dictionary section with plain front coding.
@@ -329,7 +329,7 @@ impl DictSectPFC {
         let checksum32 = digest32.finalize();
         let checksum_bytes: [u8; 4] = checksum32.to_le_bytes();
         dest_writer.write_all(&checksum_bytes)?;
-        dest_writer.flush();
+        dest_writer.flush()?;
         Ok(())
     }
 }

@@ -208,7 +208,10 @@ impl Bitmap {
 
         let mut buf = Vec::<u8>::new();
         // todo: make sure this works cross-platform with different endianness
-        self.dict.bit_vector().serialize_into(&mut buf);
+        self.dict
+            .bit_vector()
+            .serialize_into(&mut buf)
+            .map_err(|e| BitmapReadError::Io(std::io::Error::other(e)))?;
         let _ = w.write(&buf)?;
         hasher.update(&buf);
         let checksum = hasher.finalize();

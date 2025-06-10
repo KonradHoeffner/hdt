@@ -3,10 +3,10 @@ use crate::containers::vbyte::read_vbyte;
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
+use std::fmt;
 use std::io::{BufRead, Write};
 use std::mem::size_of;
 use std::thread;
-use std::{error, fmt};
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
@@ -28,7 +28,9 @@ pub struct Sequence {
 
 enum SequenceType {
     Log64 = 1,
+    #[allow(dead_code)]
     UInt32 = 2,
+    #[allow(dead_code)]
     UInt64 = 3,
 }
 
@@ -219,8 +221,8 @@ impl Sequence {
 
     /// save sequence per HDT spec using CRC
     pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), SequenceReadError> {
-        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
-        let mut digest = crc.digest();
+        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest = crc8.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()
         // Write offsets using variable-length encoding
         let seq_type: [u8; 1] = [1];
@@ -240,7 +242,7 @@ impl Sequence {
 
         // Write data
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-        let mut digest = crc.digest();
+        let mut digest = crc32.digest();
         //let offset_data = self.pack_bits();
         let offset_data: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
         //let offset_data  = self.data;
@@ -248,7 +250,7 @@ impl Sequence {
         digest.update(&offset_data);
         let checksum = digest.finalize();
         dest_writer.write_all(&checksum.to_le_bytes())?;
-        dest_writer.flush();
+        dest_writer.flush()?;
         Ok(())
     }
 
@@ -317,7 +319,7 @@ mod tests {
         let expected = vec![1, 2, 3, 4, 5];
         assert_eq!(numbers, expected);
         let mut buf = Vec::<u8>::new();
-        s.write(&mut buf);
+        s.write(&mut buf)?;
         let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
         assert_eq!(s, s2);
         let numbers2: Vec<usize> = s2.into_iter().collect();

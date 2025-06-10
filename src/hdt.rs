@@ -375,8 +375,8 @@ mod tests {
         hdt.write(&mut std::io::BufWriter::new(file2))?;
         // read back the file we just created
         let file2 = File::open(tmp_filename)?;
-        let hdt2 = Hdt::read(std::io::BufReader::new(file2))?;
-
+        let _hdt2 = Hdt::read(std::io::BufReader::new(file2))?;
+        //assert_eq!(hdt,hdt2);
         Ok(())
     }
 
