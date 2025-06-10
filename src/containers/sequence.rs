@@ -242,14 +242,18 @@ impl Sequence {
 
         // Write data
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-        let mut digest = crc32.digest();
+        let mut digest32 = crc32.digest();
         //let offset_data = self.pack_bits();
-        let offset_data: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
-        //let offset_data  = self.data;
-        dest_writer.write_all(&offset_data)?;
-        digest.update(&offset_data);
-        let checksum = digest.finalize();
-        dest_writer.write_all(&checksum.to_le_bytes())?;
+        //println!("data {:?}",self.data);
+        let bytes: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
+        //  unused zero bytes in the last usize are not written
+        let num_bytes = (self.bits_per_entry * self.entries).div_ceil(8);
+        let bytes = &bytes[..num_bytes];
+        //println!("data as bytes {bytes:?}");
+        dest_writer.write_all(&bytes)?;
+        digest32.update(&bytes);
+        let checksum32 = digest32.finalize();
+        dest_writer.write_all(&checksum32.to_le_bytes())?;
         dest_writer.flush()?;
         Ok(())
     }
@@ -320,10 +324,19 @@ mod tests {
         assert_eq!(numbers, expected);
         let mut buf = Vec::<u8>::new();
         s.write(&mut buf)?;
-        let s2 = Sequence::read(&mut std::io::Cursor::new(buf))?;
+        // 1 - type, 4 - bits per entry, 133 - 5 entries as vbyte, 173 crc8 -> 4 bytes
+        // total_bits = bits_per_entry * entries = 20 -> 3 more bytes: 67, 5, 145
+        // 4 more bytes for crc32, 11 in total
+        let expected = vec![1u8, 4, 133, 173, 33, 67, 5, 145, 176, 96, 218];
+        assert_eq!(buf, expected);
+        assert_eq!(encode_vbyte(5), [133]);
+        let mut cursor = std::io::Cursor::new(&buf);
+        //println!("buf {buf:?}");
+        let s2 = Sequence::read(&mut cursor)?;
         assert_eq!(s, s2);
         let numbers2: Vec<usize> = s2.into_iter().collect();
         assert_eq!(numbers, numbers2);
+        assert_eq!(cursor.position(), buf.len() as u64);
         Ok(())
     }
 }

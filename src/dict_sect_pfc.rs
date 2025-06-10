@@ -286,11 +286,11 @@ impl DictSectPFC {
         // read packed data CRC32
         let mut crc_code = [0u8; 4];
         reader.read_exact(&mut crc_code)?;
-        println!("read crc code {:?}", crc_code);
+        println!("read crc32 {:?}", crc_code);
         let cloned_data = Arc::clone(&packed_data);
         let crc_handle = spawn(move || {
-            let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-            let mut digest = crc.digest();
+            let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+            let mut digest = crc32.digest();
             digest.update(&cloned_data[..]);
             digest.finalize() == u32::from_le_bytes(crc_code)
         });
@@ -328,6 +328,7 @@ impl DictSectPFC {
         // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
         let checksum32 = digest32.finalize();
         let checksum_bytes: [u8; 4] = checksum32.to_le_bytes();
+        println!("write crc32 {checksum_bytes:?}");
         dest_writer.write_all(&checksum_bytes)?;
         dest_writer.flush()?;
         Ok(())
@@ -406,28 +407,31 @@ mod tests {
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
         let dict_ci = ControlInfo::read(&mut reader)?;
-        let (shared, _) = DictSectPFC::read(&mut reader)?;
-        assert_eq!(shared.num_strings, 43);
-        assert_eq!(shared.packed_data.len(), 614);
-        assert_eq!(shared.block_size, 16);
+        let shared = DictSectPFC::read(&mut reader)?;
+        assert_eq!(shared.0.num_strings, 43);
+        assert_eq!(shared.0.packed_data.len(), 614);
+        assert_eq!(shared.0.block_size, 16);
 
-        let (subjects, _) = DictSectPFC::read(&mut reader)?;
-        let (predicates, _) = DictSectPFC::read(&mut reader)?;
-        let (objects, _) = DictSectPFC::read(&mut reader)?;
+        let subjects = DictSectPFC::read(&mut reader)?;
+        let predicates = DictSectPFC::read(&mut reader)?;
+        let objects = DictSectPFC::read(&mut reader)?;
 
         //for sect in [shared, subjects, predicates, objects]
-        for sect in [predicates] {
+        for (sect, crc_handle) in [shared] {
+            //for (sect, crc_handle) in [shared, subjects, predicates, objects] {
+            assert!(crc_handle.join().unwrap());
             println!("write section ****************************");
             let mut buf = Vec::<u8>::new();
             sect.write(&mut buf)?;
             let mut cursor = std::io::Cursor::new(buf);
-            let (sect2, crc_handle) = DictSectPFC::read(&mut cursor)?;
+            let (sect2, crc_handle2) = DictSectPFC::read(&mut cursor)?;
+            assert!(crc_handle2.join().unwrap());
             assert_eq!(sect.num_strings, sect2.num_strings);
             assert_eq!(sect.sequence, sect2.sequence);
             assert_eq!(sect.packed_data.len(), sect2.packed_data.len());
             assert_eq!(sect.block_size, sect2.block_size);
             assert_eq!(sect.packed_data, sect2.packed_data);
-            //assert_eq!(sect,sect2);
+            //assert_eq!(sect, sect2);
         }
 
         //crc_handle.join().unwrap();
