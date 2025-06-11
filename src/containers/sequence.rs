@@ -259,35 +259,45 @@ impl Sequence {
     }
 
     // could also determine bits per entry using max of numbers but that would take time
-    pub fn new(numbers: &[u32], bits_per_entry: usize) -> Sequence {
+    pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
         let numbers8 = Self::pack_bits(numbers, bits_per_entry);
+        //println!("numbers8 {numbers8:?}");
+        // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
+        // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
         let entries = numbers.len();
-        let rest_byte_amount = entries % size_of::<usize>();
-        let full_byte_amount = entries - rest_byte_amount;
+        let bytes = numbers8.len();
+        let rest_byte_amount = bytes % size_of::<usize>();
+        let full_byte_amount = bytes - rest_byte_amount;
         let mut data = Vec::<usize>::new();
         let full_words = &numbers8[..full_byte_amount];
         for word in full_words.chunks_exact(size_of::<usize>()) {
             data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
         }
+        //println!("full bytes {full_byte_amount} rest bytes {rest_byte_amount}");
+        //println!("data {data:?}");
         if rest_byte_amount > 0 {
             let mut last = [0u8; size_of::<usize>()];
-            last[0..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
+            last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
+            //println!("last {last:?}");
             data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(last).unwrap()));
         }
+        //println!("data {data:?}");
+        //println!("last data as bytes {:?}",data[0].to_le_bytes());
         Sequence { entries, bits_per_entry, data, crc_handle: None }
     }
 
-    fn pack_bits(numbers: &[u32], bits_per_entry: usize) -> Vec<u8> {
-        println!("pack_bits");
+    // manual compact integer sequence, as sucds lib does not allow export of internal storage
+    fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
+        //println!("pack_bits");
         let mut output = Vec::new();
         let mut current_byte = 0u8;
         let mut bit_offset = 0;
 
-        for &value in numbers {
-            println!("pack value {value} bits_per_entry {}", bits_per_entry);
+        for value in numbers {
+            //println!("pack value {value} bits_per_entry {}", bits_per_entry);
             let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
-            println!("mask {:#b}", (1 << bits_per_entry) - 1);
-            println!("val {val}");
+            //println!("mask {:#b}", (1 << bits_per_entry) - 1);
+            //println!("val {val}");
             let mut bits_left = bits_per_entry;
 
             while bits_left > 0 {
@@ -313,7 +323,6 @@ impl Sequence {
         if bit_offset > 0 {
             output.push(current_byte);
         }
-
         output
     }
 }
@@ -337,6 +346,7 @@ mod tests {
         // little endian
         data.push((5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1);
         let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        //println!("{s:?}");
         let numbers: Vec<usize> = s.into_iter().collect();
         //let expected = vec![1];
         let expected = vec![1, 2, 3, 4, 5];
@@ -346,6 +356,7 @@ mod tests {
         // 1 - type, 4 - bits per entry, 133 - 5 entries as vbyte, 173 crc8 -> 4 bytes
         // total_bits = bits_per_entry * entries = 20 -> 3 more bytes: 67, 5, 145
         // 4 more bytes for crc32, 11 in total
+        // Sequence struct doesn't save crc
         let expected = vec![1u8, 4, 133, 173, 33, 67, 5, 145, 176, 96, 218];
         assert_eq!(buf, expected);
         assert_eq!(encode_vbyte(5), [133]);
@@ -356,6 +367,13 @@ mod tests {
         let numbers2: Vec<usize> = s2.into_iter().collect();
         assert_eq!(numbers, numbers2);
         assert_eq!(cursor.position(), buf.len() as u64);
+        // new and pack_bits
+        let s3 = Sequence::new(&numbers, 4);
+        //println!("{s3:?}: {:?}",s3.into_iter().collect::<Vec<_>>());
+        let mut buf3 = Vec::<u8>::new();
+        s3.write(&mut buf3)?;
+        //println!("buf3 {buf3:?}");
+        assert_eq!(s, s3);
         Ok(())
     }
 }

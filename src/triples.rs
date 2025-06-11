@@ -426,7 +426,8 @@ impl TriplesBitmap {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
         self.bitmap_y.write(write)?;
         self.adjlist_z.bitmap.write(write)?;
-        Sequence::new(self.wavelet_y.iter(), self.wavelet_y.alph_width()).write(write)?;
+        let y = self.wavelet_y.iter().collect::<Vec<_>>();
+        Sequence::new(&y, self.wavelet_y.alph_width()).write(write)?;
         self.adjlist_z.sequence.write(write)?;
         Ok(())
     }
