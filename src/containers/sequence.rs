@@ -258,18 +258,37 @@ impl Sequence {
         Ok(())
     }
 
-    fn pack_bits(&self) -> Vec<u8> {
+    // could also determine bits per entry using max of numbers but that would take time
+    pub fn new(numbers: &[u32], bits_per_entry: usize) -> Sequence {
+        let numbers8 = Self::pack_bits(numbers, bits_per_entry);
+        let entries = numbers.len();
+        let rest_byte_amount = entries % size_of::<usize>();
+        let full_byte_amount = entries - rest_byte_amount;
+        let mut data = Vec::<usize>::new();
+        let full_words = &numbers8[..full_byte_amount];
+        for word in full_words.chunks_exact(size_of::<usize>()) {
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        }
+        if rest_byte_amount > 0 {
+            let mut last = [0u8; size_of::<usize>()];
+            last[0..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(last).unwrap()));
+        }
+        Sequence { entries, bits_per_entry, data, crc_handle: None }
+    }
+
+    fn pack_bits(numbers: &[u32], bits_per_entry: usize) -> Vec<u8> {
         println!("pack_bits");
         let mut output = Vec::new();
         let mut current_byte = 0u8;
         let mut bit_offset = 0;
 
-        for &value in &self.data {
-            println!("pack value {value} bits_per_entry {}", self.bits_per_entry);
-            let mut val = value & ((1 << self.bits_per_entry) - 1); // mask to get only relevant bits
-            println!("mask {:#b}", (1 << self.bits_per_entry) - 1);
+        for &value in numbers {
+            println!("pack value {value} bits_per_entry {}", bits_per_entry);
+            let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
+            println!("mask {:#b}", (1 << bits_per_entry) - 1);
             println!("val {val}");
-            let mut bits_left = self.bits_per_entry;
+            let mut bits_left = bits_per_entry;
 
             while bits_left > 0 {
                 let available = 8 - bit_offset;

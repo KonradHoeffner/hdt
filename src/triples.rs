@@ -425,9 +425,9 @@ impl TriplesBitmap {
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), TriplesReadError> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
         self.bitmap_y.write(write)?;
-        todo!("write bitmap z");
-        todo!("write array y");
-        todo!("write array z");
+        self.adjlist_z.bitmap.write(write)?;
+        Sequence::new(self.wavelet_y.iter(), self.wavelet_y.alph_width()).write(write)?;
+        self.adjlist_z.sequence.write(write)?;
         Ok(())
     }
 
