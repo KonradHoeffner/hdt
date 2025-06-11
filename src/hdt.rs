@@ -21,7 +21,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Hdt {
     //global_ci: ControlInfo,
-    //header: Header,
+    // header is not necessary for querying but shouldn't waste too much space and we need it for writing in the future, may also make it optional
+    header: Header,
     /// in-memory representation of dictionary
     pub dict: FourSectDict,
     /// in-memory representation of triples
@@ -69,11 +70,11 @@ impl Hdt {
     /// ```
     pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         let dict = unvalidated_dict.validate()?;
-        let hdt = Hdt { dict, triples };
+        let hdt = Hdt { header, dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -96,7 +97,7 @@ impl Hdt {
         let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let mut abs_path = std::fs::canonicalize(f)?;
         let _ = abs_path.pop();
@@ -117,7 +118,7 @@ impl Hdt {
         };
 
         let dict = unvalidated_dict.validate()?;
-        let hdt = Hdt { dict, triples };
+        let hdt = Hdt { header, dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -158,6 +159,15 @@ impl Hdt {
         let mut writer = std::io::BufWriter::new(new_index_file);
         bincode::serde::encode_into_std_write(&triples, &mut writer, bincode::config::standard())?;
         writer.flush()?;
+        Ok(())
+    }
+
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
+        ControlInfo::global().write(write)?;
+        self.header.write(write)?;
+        self.dict.write(write)?;
+        self.triples.write(write)?;
+        write.flush()?;
         Ok(())
     }
 
@@ -350,15 +360,32 @@ impl<'a> TripleCache<'a> {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use color_eyre::Result;
+    use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
-    use std::fs::File;
 
     #[test]
-    fn triples() -> color_eyre::Result<()> {
+    fn write() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename)?;
-        let hdt = Hdt::new(std::io::BufReader::new(file))?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
+        let tmp_filename = "/tmp/hdt_rs_test.hdt";
+        let file2 = File::create(tmp_filename)?;
+        hdt.write(&mut std::io::BufWriter::new(file2))?;
+        // read back the file we just created
+        let file2 = File::open(tmp_filename)?;
+        let _hdt2 = Hdt::read(std::io::BufReader::new(file2))?;
+        //assert_eq!(hdt,hdt2);
+        Ok(())
+    }
+
+    #[test]
+    fn triples() -> Result<()> {
+        init();
+        let filename = "tests/resources/snikmeta.hdt";
+        let file = File::open(filename)?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 328);
