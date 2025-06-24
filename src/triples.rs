@@ -1,4 +1,4 @@
-use crate::containers::{AdjList, Bitmap, BitmapReadError, Sequence, SequenceReadError};
+use crate::containers::{AdjList, Bitmap, Sequence, SequenceReadError, bitmap};
 use crate::{ControlInfo, ControlInfoReadError};
 use bytesize::ByteSize;
 use log::{debug, error};
@@ -161,7 +161,7 @@ pub enum TriplesReadError {
     #[error("failed to read control info")]
     ControlInfoReadError(#[from] ControlInfoReadError),
     #[error("bitmap read error")]
-    BitmapReadError(#[from] BitmapReadError),
+    BitmapError(#[from] bitmap::Error),
     #[error("sequence read error")]
     SequenceReadError(#[from] SequenceReadError),
     #[error("unspecified triples order")]

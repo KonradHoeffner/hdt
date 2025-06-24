@@ -16,9 +16,11 @@ pub struct Bitmap {
     pub dict: Rank9Sel,
 }
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// The error type for the bitmap read function.
 #[derive(thiserror::Error, Debug)]
-pub enum BitmapReadError {
+pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
@@ -33,7 +35,7 @@ pub enum BitmapReadError {
 
 #[cfg(feature = "cache")]
 impl serde::Serialize for Bitmap {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
@@ -51,7 +53,7 @@ impl serde::Serialize for Bitmap {
 
 #[cfg(feature = "cache")]
 impl<'de> serde::Deserialize<'de> for Bitmap {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
@@ -114,8 +116,8 @@ impl Bitmap {
     }
 
     /// Read bitmap from a suitable point within HDT file data and verify checksums.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, BitmapReadError> {
-        use BitmapReadError::*;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+        use Error::*;
         let mut history: Vec<u8> = Vec::with_capacity(5);
 
         // read the type
@@ -187,7 +189,7 @@ impl Bitmap {
         Ok(Self::new(data))
     }
 
-    pub fn write(&self, w: &mut impl std::io::Write) -> Result<(), BitmapReadError> {
+    pub fn write(&self, w: &mut impl std::io::Write) -> Result<()> {
         let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // type
@@ -208,10 +210,7 @@ impl Bitmap {
 
         let mut buf = Vec::<u8>::new();
         // todo: make sure this works cross-platform with different endianness
-        self.dict
-            .bit_vector()
-            .serialize_into(&mut buf)
-            .map_err(|e| BitmapReadError::Io(std::io::Error::other(e)))?;
+        self.dict.bit_vector().serialize_into(&mut buf).map_err(|e| Error::Io(std::io::Error::other(e)))?;
         let _ = w.write(&buf)?;
         hasher.update(&buf);
         let checksum = hasher.finalize();
