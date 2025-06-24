@@ -169,9 +169,9 @@ pub enum Error {
     #[error("failed to read control info")]
     ControlInfoReadError(#[from] ControlInfoReadError),
     #[error("bitmap error in the {0:?} level")]
-    BitmapError(Level, #[source] bitmap::Error),
+    Bitmap(Level, #[source] bitmap::Error),
     #[error("sequence read error")]
-    SequenceReadError(#[from] SequenceReadError),
+    Sequence(Level, #[source] SequenceReadError),
     #[error("unspecified triples order")]
     UnspecifiedTriplesOrder,
     #[error("unknown triples order")]
@@ -359,24 +359,23 @@ impl TriplesBitmap {
     */
 
     fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
-        use Error::*;
         // read order
         //let order: Order = Order::try_from(triples_ci.get("order").unwrap().parse::<u32>());
         let order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
             order = Order::try_from(n)?;
         } else {
-            return Err(UnspecifiedTriplesOrder);
+            return Err(Error::UnspecifiedTriplesOrder);
         }
 
         // read bitmaps
-        let bitmap_y = Bitmap::read(reader).map_err(|e| Error::BitmapError(Level::Y, e))?;
-        let bitmap_z = Bitmap::read(reader).map_err(|e| Error::BitmapError(Level::Z, e))?;
+        let bitmap_y = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Y, e))?;
+        let bitmap_z = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Z, e))?;
 
         // read sequences
-        let sequence_y = Sequence::read(reader)?;
+        let sequence_y = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Y, e))?;
         let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let mut sequence_z = Sequence::read(reader)?;
+        let mut sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
 
         // construct adjacency lists
         // construct object-based index to traverse from the leaves and support ??O and ?PO queries
@@ -431,11 +430,11 @@ impl TriplesBitmap {
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        self.bitmap_y.write(write).map_err(|e| Error::BitmapError(Level::Y, e))?;
-        self.adjlist_z.bitmap.write(write).map_err(|e| Error::BitmapError(Level::Z, e))?;
+        self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
+        self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
-        Sequence::new(&y, self.wavelet_y.alph_width()).write(write)?;
-        self.adjlist_z.sequence.write(write)?;
+        Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+        self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
         Ok(())
     }
 
