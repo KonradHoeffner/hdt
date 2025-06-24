@@ -2,9 +2,7 @@ use crate::FourSectDict;
 use crate::containers::{ControlInfo, ControlInfoReadError};
 use crate::four_sect_dict::{DictError, DictReadError, IdKind};
 use crate::header::{Header, HeaderReadError};
-use crate::triples::{
-    ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap, TriplesReadError,
-};
+use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
@@ -42,13 +40,16 @@ pub struct TranslateError {
 
 /// The error type for the `new` method.
 #[derive(thiserror::Error, Debug)]
-#[error("failed to read HDT")]
 pub enum Error {
+    #[error("failed to read HDT control info")]
     ControlInfo(#[from] ControlInfoReadError),
+    #[error("failed to read HDT header")]
     Header(#[from] HeaderReadError),
-    /// Failed to read HDT dictionary
+    #[error("failed to read HDT four section dictionary")]
     FourSectDict(#[from] DictReadError),
-    Triples(#[from] TriplesReadError),
+    #[error("failed to read HDT triples section")]
+    Triples(#[from] crate::triples::Error),
+    #[error("failed to validate HDT dictionary")]
     DictionaryValidationErrorTodo(#[from] std::io::Error),
 }
 

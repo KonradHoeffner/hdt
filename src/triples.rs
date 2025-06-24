@@ -23,6 +23,8 @@ pub use object_iter::ObjectIter;
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// Order of the triple sections.
 /// Only SPO is tested, others probably don't work correctly.
 #[allow(missing_docs)]
@@ -41,9 +43,9 @@ pub enum Order {
 }
 
 impl TryFrom<u32> for Order {
-    type Error = TriplesReadError;
+    type Error = Error;
 
-    fn try_from(original: u32) -> Result<Self, TriplesReadError> {
+    fn try_from(original: u32) -> Result<Self> {
         match original {
             0 => Ok(Order::Unknown),
             1 => Ok(Order::SPO),
@@ -52,7 +54,7 @@ impl TryFrom<u32> for Order {
             4 => Ok(Order::POS),
             5 => Ok(Order::OSP),
             6 => Ok(Order::OPS),
-            n => Err(TriplesReadError::UnrecognizedTriplesOrder(n)),
+            n => Err(Error::UnrecognizedTriplesOrder(n)),
         }
     }
 }
@@ -68,7 +70,7 @@ pub struct OpIndex {
 
 #[cfg(feature = "cache")]
 impl serde::Serialize for OpIndex {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
@@ -88,7 +90,7 @@ impl serde::Serialize for OpIndex {
 
 #[cfg(feature = "cache")]
 impl<'de> serde::Deserialize<'de> for OpIndex {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
@@ -155,13 +157,19 @@ pub struct TriplesBitmap {
     pub wavelet_y: WaveletMatrix<Rank9Sel>,
 }
 
-/// The error type for the triples bitmap read function.
+#[derive(Debug)]
+pub enum Level {
+    Y,
+    Z,
+}
+
+/// The error type for the triples bitmap read and write function.
 #[derive(thiserror::Error, Debug)]
-pub enum TriplesReadError {
+pub enum Error {
     #[error("failed to read control info")]
     ControlInfoReadError(#[from] ControlInfoReadError),
-    #[error("bitmap read error")]
-    BitmapError(#[from] bitmap::Error),
+    #[error("bitmap error in the {0:?} level")]
+    BitmapError(Level, #[source] bitmap::Error),
     #[error("sequence read error")]
     SequenceReadError(#[from] SequenceReadError),
     #[error("unspecified triples order")]
@@ -194,7 +202,7 @@ impl fmt::Debug for TriplesBitmap {
 
 #[cfg(feature = "cache")]
 impl serde::Serialize for TriplesBitmap {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
@@ -224,7 +232,7 @@ impl serde::Serialize for TriplesBitmap {
 
 #[cfg(feature = "cache")]
 impl<'de> serde::Deserialize<'de> for TriplesBitmap {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
@@ -259,8 +267,8 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 impl TriplesBitmap {
     /// read the whole triple section including control information
     // TODO: rename to "read" for consistency with the other components and rename existing read function accordingly
-    pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self, TriplesReadError> {
-        use TriplesReadError::*;
+    pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
+        use Error::*;
         let triples_ci = ControlInfo::read(reader)?;
 
         match &triples_ci.format[..] {
@@ -272,8 +280,8 @@ impl TriplesBitmap {
 
     /// load the cached HDT index file, only supports TriplesBitmap
     #[cfg(feature = "cache")]
-    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self, TriplesReadError> {
-        use TriplesReadError::*;
+    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
+        use Error::*;
         match &info.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
             "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
@@ -283,7 +291,7 @@ impl TriplesBitmap {
 
     /// load the entire cached TriplesBitmap object
     #[cfg(feature = "cache")]
-    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self, TriplesReadError> {
+    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
         let triples: TriplesBitmap = bincode::serde::decode_from_std_read(reader, bincode::config::standard())?;
         Ok(triples)
     }
@@ -350,8 +358,8 @@ impl TriplesBitmap {
     }
     */
 
-    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self, TriplesReadError> {
-        use TriplesReadError::*;
+    fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
+        use Error::*;
         // read order
         //let order: Order = Order::try_from(triples_ci.get("order").unwrap().parse::<u32>());
         let order: Order;
@@ -362,9 +370,8 @@ impl TriplesBitmap {
         }
 
         // read bitmaps
-        // TODO: note level in the error
-        let bitmap_y = Bitmap::read(reader)?; //.wrap_err("Failed to read Y level bitmap")?;
-        let bitmap_z = Bitmap::read(reader)?; //.wrap_err("Failed to read Z level bitmap")?;
+        let bitmap_y = Bitmap::read(reader).map_err(|e| Error::BitmapError(Level::Y, e))?;
+        let bitmap_z = Bitmap::read(reader).map_err(|e| Error::BitmapError(Level::Z, e))?;
 
         // read sequences
         let sequence_y = Sequence::read(reader)?;
@@ -422,10 +429,10 @@ impl TriplesBitmap {
         Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), TriplesReadError> {
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        self.bitmap_y.write(write)?;
-        self.adjlist_z.bitmap.write(write)?;
+        self.bitmap_y.write(write).map_err(|e| Error::BitmapError(Level::Y, e))?;
+        self.adjlist_z.bitmap.write(write).map_err(|e| Error::BitmapError(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
         Sequence::new(&y, self.wavelet_y.alph_width()).write(write)?;
         self.adjlist_z.sequence.write(write)?;
@@ -435,8 +442,8 @@ impl TriplesBitmap {
     /// Transform the given IDs of the layers in triple section order to a triple ID.
     /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
     /// Other orders may lead to undefined behaviour.
-    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId, TriplesReadError> {
-        use TriplesReadError::*;
+    pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
+        use Error::*;
         if x == 0 || y == 0 || z == 0 {
             return Err(TripleComponentZero(x, y, z));
         }
