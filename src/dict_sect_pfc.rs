@@ -275,7 +275,7 @@ impl DictSectPFC {
 
         // read sequence log array
         let sequence = Sequence::read(reader)?;
-        println!("read sequence of length {} {:?}", sequence.data.len(), sequence.data);
+        //println!("read sequence of length {} {:?}", sequence.data.len(), sequence.data);
 
         // read packed data
         let mut packed_data = vec![0u8; packed_length];
@@ -286,7 +286,7 @@ impl DictSectPFC {
         // read packed data CRC32
         let mut crc_code = [0u8; 4];
         reader.read_exact(&mut crc_code)?;
-        println!("read crc32 {:?}", crc_code);
+        //println!("read crc32 {:?}", crc_code);
         let cloned_data = Arc::clone(&packed_data);
         let crc_handle = spawn(move || {
             let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
@@ -328,7 +328,7 @@ impl DictSectPFC {
         // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
         let checksum32 = digest32.finalize();
         let checksum_bytes: [u8; 4] = checksum32.to_le_bytes();
-        println!("write crc32 {checksum_bytes:?}");
+        //println!("write crc32 {checksum_bytes:?}");
         dest_writer.write_all(&checksum_bytes)?;
         dest_writer.flush()?;
         Ok(())

@@ -370,6 +370,7 @@ impl TriplesBitmap {
 
         // read bitmaps
         let bitmap_y = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Y, e))?;
+        println!("bitmap_y: {bitmap_y:?}");
         let bitmap_z = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Z, e))?;
 
         // read sequences
