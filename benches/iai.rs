@@ -1,17 +1,17 @@
+use fs_err::File;
 use hdt::Hdt;
 use hdt::HdtGraph;
 use sophia::api::graph::Graph;
 use sophia::api::term::IriRef;
 use sophia::api::term::SimpleTerm;
 use sophia::api::term::matcher::Any;
-use std::fs::File;
 
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
 
 fn load() -> HdtGraph {
     let file = File::open("tests/resources/persondata_en_10k.hdt").expect("error opening file");
-    let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
+    let hdt = Hdt::read(std::io::BufReader::new(file)).unwrap();
     HdtGraph::new(hdt)
 }
 

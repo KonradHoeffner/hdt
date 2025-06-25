@@ -26,6 +26,10 @@ pub enum HeaderReadError {
     ControlInfoError(#[from] crate::containers::ControlInfoReadError),
     #[error("invalid header format {0}, only 'ntriples' is supported")]
     InvalidHeaderFormat(String),
+    #[error("invalid header length '{0}'")]
+    InvalidHeaderLength(String),
+    #[error("missing header length")]
+    MissingHeaderLength,
 }
 
 impl Header {
@@ -37,10 +41,8 @@ impl Header {
             return Err(InvalidHeaderFormat(header_ci.format));
         }
 
-        //let ls = header_ci.get("length").ok_or_else(|| "missing header length".to_owned().into())?;
-        let ls = header_ci.get("length").unwrap();
-        let length = ls.parse::<usize>().unwrap();
-        //ls.parse::<usize>().map_err(|_| format!("invalid header length '{ls}'").into())?;
+        let ls = header_ci.get("length").ok_or(HeaderReadError::MissingHeaderLength)?;
+        let length = ls.parse::<usize>().map_err(|_| InvalidHeaderLength(ls))?;
 
         let mut body_buffer: Vec<u8> = vec![0; length];
         reader.read_exact(&mut body_buffer)?;
@@ -62,7 +64,10 @@ impl Header {
                     ntriple::Object::Lit(lit) => Term::Literal(match lit.data_type {
                         ntriple::TypeLang::Lang(lan) => Literal::new_lang(lit.data, lan),
                         ntriple::TypeLang::Type(data_type) => {
-                            if data_type == "http://www.w3.org/2001/XMLSchema#string" {
+                            // workaround incorrect https in xsd prefix in ntriples dependency
+                            if data_type == "http://www.w3.org/2001/XMLSchema#string"
+                                || data_type == "https://www.w3.org/2001/XMLSchema#string"
+                            {
                                 Literal::new(lit.data)
                             } else {
                                 Literal::new_typed(lit.data, data_type)
@@ -76,13 +81,21 @@ impl Header {
         }
         Ok(Header { format: header_ci.format, length, body })
     }
+
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HeaderReadError> {
+        ControlInfo::header(self.length).write(write)?;
+        for triple in &self.body {
+            writeln!(write, "{triple}")?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tests::init;
-    use std::fs::File;
+    use fs_err::File;
     use std::io::BufReader;
 
     #[test]

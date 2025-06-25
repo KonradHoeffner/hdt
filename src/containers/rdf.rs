@@ -18,9 +18,17 @@ impl Triple {
     }
 }
 
+/// ntriples format
+impl fmt::Display for Triple {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} <{}> {:?} .", self.subject, self.predicate, self.object)
+    }
+}
+
+/// delegate to display
 impl fmt::Debug for Triple {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} {:?} {:?} .", self.subject, self.predicate, self.object)
+        fmt::Display::fmt(self, f)
     }
 }
 
@@ -40,8 +48,8 @@ pub enum Id {
 impl fmt::Debug for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Id::Named(iri) => write!(f, "\"{iri}\""),
-            Id::Blank(id) => write!(f, "\"{id}\""),
+            Id::Named(iri) => write!(f, "<{iri}>"),
+            Id::Blank(id) => write!(f, "_:{id}"),
         }
     }
 }
@@ -88,7 +96,7 @@ impl fmt::Debug for Term {
 /// use hdt::containers::rdf::Literal;
 /// let type_iri = String::from("http://www.w3.org/2001/XMLSchema#integer");
 /// let typed_literal = Literal::new_typed(String::from("42"), type_iri);
-/// assert_eq!("\"42\"^^http://www.w3.org/2001/XMLSchema#integer", format!("{:?}", typed_literal));
+/// assert_eq!("\"42\"^^<http://www.w3.org/2001/XMLSchema#integer>", format!("{:?}", typed_literal));
 /// ```
 /// ```
 /// // language tagged string
@@ -111,7 +119,7 @@ impl fmt::Debug for Literal {
         if let Some(lang) = &self.lang {
             write!(f, "\"{}\"@{lang}", self.form)
         } else if let Some(dtype) = &self.datatype {
-            write!(f, "\"{}\"^^{dtype}", self.form)
+            write!(f, "\"{}\"^^<{dtype}>", self.form)
         } else {
             write!(f, "\"{}\"", self.form)
         }

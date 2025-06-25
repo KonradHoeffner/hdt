@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let meta_top = "http://www.snik.eu/ontology/meta/Top";
     let rdfs_label = "http://www.w3.org/2000/01/rdf-schema#label";
     #[allow(unused_mut)]
-    let mut hdts = vec![Hdt::new(std::io::BufReader::new(file))?];
+    let mut hdts = vec![Hdt::read(std::io::BufReader::new(file))?];
     #[cfg(feature = "cache")]
     hdts.push(Hdt::new_from_path(path)?);
     for hdt in hdts {

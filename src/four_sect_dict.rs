@@ -25,6 +25,7 @@ pub enum IdKind {
 /// Dictionary with shared, subject, predicate and object sections.
 /// Types specified as <http://purl.org/HDT/hdt#dictionaryFour>.
 /// See <https://www.rdfhdt.org/hdt-internals/#dictionary>.
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
 pub struct FourSectDict {
     /// The shared section contains URIs that occur both in subject and object position. Its IDs start at one.
@@ -62,7 +63,7 @@ pub struct DictError {
 }
 
 #[derive(Error, Debug)]
-#[error("four sect dict section error in the {sect_kind:?} section, caused by {e}")]
+#[error("four sect dict section error in the {sect_kind:?} section")]
 pub struct DictSectError {
     #[source]
     e: DictSectReadError,
@@ -155,6 +156,18 @@ impl FourSectDict {
             crc_handles: [shared_crc, subjects_crc, predicates_crc, objects_crc],
         })
     }
+
+    /// write the whole Dictionary including control info and all sections
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
+        use SectKind::*;
+        ControlInfo::four_sect_dict().write(write)?;
+        self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        self.subjects.write(write).map_err(|e| DictSectError { e, sect_kind: Subject })?;
+        self.predicates.write(write).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        self.objects.write(write).map_err(|e| DictSectError { e, sect_kind: Object })?;
+        Ok(())
+    }
+
     /*
     pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
         triple_ids
@@ -207,12 +220,12 @@ mod tests {
     use super::*;
     use crate::header::Header;
     use crate::tests::init;
+    use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::fs::File;
     use std::io::BufReader;
 
     #[test]
-    fn read_dict() -> color_eyre::Result<()> {
+    fn read_write_dict() -> color_eyre::Result<()> {
         init();
         let file = File::open("tests/resources/snikmeta.hdt")?;
         let mut reader = BufReader::new(file);
@@ -248,6 +261,10 @@ mod tests {
                 assert_eq!(id, back, "{} id {} -> {} {} -> id {}", name, id, name, s, back);
             }
         }
+        let mut buf = Vec::new();
+        dict.write(&mut buf)?;
+        let dict2 = FourSectDict::read(&mut std::io::Cursor::new(buf))?.validate()?;
+        assert_eq!(dict, dict2);
         Ok(())
     }
 }

@@ -2,9 +2,7 @@ use crate::FourSectDict;
 use crate::containers::{ControlInfo, ControlInfoReadError};
 use crate::four_sect_dict::{DictError, DictReadError, IdKind};
 use crate::header::{Header, HeaderReadError};
-use crate::triples::{
-    ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap, TriplesReadError,
-};
+use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
@@ -21,7 +19,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[derive(Debug)]
 pub struct Hdt {
     //global_ci: ControlInfo,
-    //header: Header,
+    // header is not necessary for querying but shouldn't waste too much space and we need it for writing in the future, may also make it optional
+    header: Header,
     /// in-memory representation of dictionary
     pub dict: FourSectDict,
     /// in-memory representation of triples
@@ -41,13 +40,16 @@ pub struct TranslateError {
 
 /// The error type for the `new` method.
 #[derive(thiserror::Error, Debug)]
-#[error("failed to read HDT")]
 pub enum Error {
+    #[error("failed to read HDT control info")]
     ControlInfo(#[from] ControlInfoReadError),
+    #[error("failed to read HDT header")]
     Header(#[from] HeaderReadError),
-    /// Failed to read HDT dictionary
+    #[error("failed to read HDT four section dictionary")]
     FourSectDict(#[from] DictReadError),
-    Triples(#[from] TriplesReadError),
+    #[error("failed to read HDT triples section")]
+    Triples(#[from] crate::triples::Error),
+    #[error("failed to validate HDT dictionary")]
     DictionaryValidationErrorTodo(#[from] std::io::Error),
 }
 
@@ -69,11 +71,11 @@ impl Hdt {
     /// ```
     pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         let dict = unvalidated_dict.validate()?;
-        let hdt = Hdt { dict, triples };
+        let hdt = Hdt { header, dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -96,7 +98,7 @@ impl Hdt {
         let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader)?;
-        Header::read(&mut reader)?;
+        let header = Header::read(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let mut abs_path = std::fs::canonicalize(f)?;
         let _ = abs_path.pop();
@@ -117,7 +119,7 @@ impl Hdt {
         };
 
         let dict = unvalidated_dict.validate()?;
-        let hdt = Hdt { dict, triples };
+        let hdt = Hdt { header, dict, triples };
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -156,8 +158,17 @@ impl Hdt {
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
-        bincode::serde::encode_into_std_write(&triples, &mut writer, bincode::config::standard())?;
+        bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
         writer.flush()?;
+        Ok(())
+    }
+
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
+        ControlInfo::global().write(write)?;
+        self.header.write(write)?;
+        self.dict.write(write)?;
+        self.triples.write(write)?;
+        write.flush()?;
         Ok(())
     }
 
@@ -350,15 +361,25 @@ impl<'a> TripleCache<'a> {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use color_eyre::Result;
+    use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
-    use std::fs::File;
 
     #[test]
-    fn triples() -> color_eyre::Result<()> {
+    fn write() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename)?;
-        let hdt = Hdt::new(std::io::BufReader::new(file))?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
+        triples(&hdt)?;
+        let mut buf = Vec::<u8>::new();
+        hdt.write(&mut buf)?;
+        let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
+        triples(&hdt2)?;
+        Ok(())
+    }
+
+    fn triples(hdt: &Hdt) -> Result<()> {
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 328);

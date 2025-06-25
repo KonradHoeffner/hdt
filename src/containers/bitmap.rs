@@ -1,5 +1,5 @@
 //! Bitmap with rank and select support read from an HDT file.
-use crate::containers::vbyte::read_vbyte;
+use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
@@ -16,9 +16,11 @@ pub struct Bitmap {
     pub dict: Rank9Sel,
 }
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// The error type for the bitmap read function.
 #[derive(thiserror::Error, Debug)]
-pub enum BitmapReadError {
+pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
@@ -33,7 +35,7 @@ pub enum BitmapReadError {
 
 #[cfg(feature = "cache")]
 impl serde::Serialize for Bitmap {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
     where
         S: serde::ser::Serializer,
     {
@@ -51,7 +53,7 @@ impl serde::Serialize for Bitmap {
 
 #[cfg(feature = "cache")]
 impl<'de> serde::Deserialize<'de> for Bitmap {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
     where
         D: serde::de::Deserializer<'de>,
     {
@@ -73,7 +75,7 @@ impl<'de> serde::Deserialize<'de> for Bitmap {
 
 impl fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", ByteSize(self.size_in_bytes() as u64))
+        write!(f, "{}, {} bits", ByteSize(self.size_in_bytes() as u64), self.len())
     }
 }
 
@@ -93,7 +95,7 @@ impl Bitmap {
         self.dict.size_in_bytes()
     }
 
-    /// Number of bits in the bitmap
+    /// Number of bits in the bitmap, multiple of 64
     pub const fn len(&self) -> usize {
         self.dict.len()
     }
@@ -114,8 +116,8 @@ impl Bitmap {
     }
 
     /// Read bitmap from a suitable point within HDT file data and verify checksums.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, BitmapReadError> {
-        use BitmapReadError::*;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+        use Error::*;
         let mut history: Vec<u8> = Vec::with_capacity(5);
 
         // read the type
@@ -185,5 +187,64 @@ impl Bitmap {
         }
 
         Ok(Self::new(data))
+    }
+
+    pub fn write(&self, w: &mut impl std::io::Write) -> Result<()> {
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut hasher = crc.digest();
+        // type
+        let bitmap_type: [u8; 1] = [1];
+        w.write_all(&bitmap_type)?;
+        hasher.update(&bitmap_type);
+        // number of bits
+        let t = encode_vbyte(self.dict.len());
+        w.write_all(&t)?;
+        hasher.update(&t);
+        // crc8 checksum
+        let checksum = hasher.finalize();
+        w.write_all(&checksum.to_le_bytes())?;
+
+        // write data
+        let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut hasher = crc32.digest();
+
+        let words = self.dict.bit_vector().words();
+        let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
+        w.write_all(&bytes)?;
+        hasher.update(&bytes);
+        let crc_code = hasher.finalize();
+        let crc_code = crc_code.to_le_bytes();
+        w.write_all(&crc_code)?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::init;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn write() -> color_eyre::Result<()> {
+        init();
+        let bits: Vec<u64> = vec![0b10111];
+        let bitmap = Bitmap::new(bits);
+        assert_eq!(bitmap.len(), 64);
+        // position of k-1th 1 bit
+        // read bits from right to left, i.e. last one is pos 0
+        assert_eq!(bitmap.select1(0).unwrap(), 0);
+        assert_eq!(bitmap.select1(1).unwrap(), 1);
+        assert_eq!(bitmap.select1(2).unwrap(), 2);
+        assert_eq!(bitmap.select1(3).unwrap(), 4);
+        assert_eq!(bitmap.select1(4), None);
+        // number of one bits from the 0-th bit to the k-1-th bit
+        assert_eq!(bitmap.rank(1), 1);
+        assert_eq!(bitmap.rank(5), 4);
+        let mut buf = Vec::<u8>::new();
+        bitmap.write(&mut buf)?;
+        let bitmap2 = Bitmap::read(&mut std::io::Cursor::new(buf))?;
+        assert_eq!(bitmap.dict.bit_vector().words(), bitmap2.dict.bit_vector().words());
+        Ok(())
     }
 }

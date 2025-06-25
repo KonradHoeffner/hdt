@@ -1,4 +1,5 @@
 use criterion::{Criterion, criterion_group, criterion_main};
+use fs_err::File;
 use hdt::Hdt;
 use hdt::HdtGraph;
 use hdt::IdKind;
@@ -7,7 +8,6 @@ use sophia::api::graph::Graph;
 use sophia::api::term::IriRef;
 use sophia::api::term::SimpleTerm;
 use sophia::api::term::matcher::Any;
-use std::fs::File;
 
 const VINCENT: &str = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
@@ -19,7 +19,7 @@ fn load() -> HdtGraph {
         .expect(&format!("Error opening file {filename}, did you forget to download it? See README.md."));
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");
     //let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-    let hdt = Hdt::new(std::io::BufReader::new(file)).unwrap();
+    let hdt = Hdt::read(std::io::BufReader::new(file)).unwrap();
     HdtGraph::new(hdt)
 }
 

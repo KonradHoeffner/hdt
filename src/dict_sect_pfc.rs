@@ -7,10 +7,8 @@ use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
 use std::cmp::{Ordering, min};
-use std::error;
 use std::fmt;
-use std::fs::File;
-use std::io::{BufRead, BufWriter, Write};
+use std::io::{BufRead, Write};
 use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
@@ -18,6 +16,7 @@ use thiserror::Error;
 
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct DictSectPFC {
     /// total number of strings stored
     pub num_strings: usize,
@@ -36,8 +35,8 @@ pub enum DictSectReadError {
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
     InvalidCrc8Checksum(u8, u8),
-    #[error("Implementation only supports plain front coded dictionary sections")]
-    DictSectNotPfc,
+    #[error("implementation only supports plain front coded dictionary section type 2, found type {0}")]
+    DictSectNotPfc(u8),
     #[error("sequence read error")]
     SequenceReadError(#[from] SequenceReadError),
 }
@@ -46,11 +45,11 @@ impl fmt::Debug for DictSectPFC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "total size {}, {} strings, sequence {:?}, packed data {}",
+            "total size {}, {} strings, sequence {:?}, packed data {:?}",
             ByteSize(self.size_in_bytes() as u64),
             self.num_strings,
             self.sequence,
-            ByteSize(self.packed_data.len() as u64)
+            self.packed_data //ByteSize(self.packed_data.len() as u64)
         )
     }
 }
@@ -244,48 +243,54 @@ impl DictSectPFC {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
-            return Err(DictSectNotPfc);
+            return Err(DictSectNotPfc(preamble[0]));
         }
 
         // read section meta data
-        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
-        let mut digest = crc.digest();
+        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest8 = crc8.digest();
         // The CRC includes the type of the block, inaccuracy in the spec, careful.
-        digest.update(&[0x02]);
+        digest8.update(&[0x02]);
         // This was determined based on https://git.io/JthMG because the spec on this
         // https://www.rdfhdt.org/hdt-binary-format was inaccurate, it's 3 vbytes, not 2.
         let (num_strings, bytes_read) = read_vbyte(reader)?;
-        digest.update(&bytes_read);
+        digest8.update(&bytes_read);
+        //println!("num strings {num_strings}");
         let (packed_length, bytes_read) = read_vbyte(reader)?;
-        digest.update(&bytes_read);
+        digest8.update(&bytes_read);
+        //println!("packed_length {packed_length}");
         let (block_size, bytes_read) = read_vbyte(reader)?;
-        digest.update(&bytes_read);
-
+        digest8.update(&bytes_read);
+        //println!("block_size {block_size}");
         // read section CRC8
-        let mut crc_code = [0_u8];
-        reader.read_exact(&mut crc_code)?;
-        let crc_code = crc_code[0];
+        let mut crc_code8 = [0_u8];
+        reader.read_exact(&mut crc_code8)?;
+        let crc_code8 = crc_code8[0];
+        //println!("crc_code {crc_code8}");
 
-        let crc_calculated = digest.finalize();
-        if crc_calculated != crc_code {
-            return Err(InvalidCrc8Checksum(crc_calculated, crc_code));
+        let crc_calculated8 = digest8.finalize();
+        if crc_calculated8 != crc_code8 {
+            return Err(InvalidCrc8Checksum(crc_calculated8, crc_code8));
         }
 
         // read sequence log array
         let sequence = Sequence::read(reader)?;
+        //println!("read sequence of length {} {:?}", sequence.data.len(), sequence.data);
 
         // read packed data
         let mut packed_data = vec![0u8; packed_length];
         reader.read_exact(&mut packed_data)?;
         let packed_data = Arc::<[u8]>::from(packed_data);
+        //println!("read packed data of length {} {:?}", packed_data.len(), packed_data);
 
         // read packed data CRC32
-        let mut crc_code = [0_u8; 4];
+        let mut crc_code = [0u8; 4];
         reader.read_exact(&mut crc_code)?;
+        //println!("read crc32 {:?}", crc_code);
         let cloned_data = Arc::clone(&packed_data);
         let crc_handle = spawn(move || {
-            let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-            let mut digest = crc.digest();
+            let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+            let mut digest = crc32.digest();
             digest.update(&cloned_data[..]);
             digest.finalize() == u32::from_le_bytes(crc_code)
         });
@@ -294,37 +299,38 @@ impl DictSectPFC {
     }
 
     /// counterpoint to the read method
-    // TODO: use Write trait and add test
-    pub fn save(&self, dest_writer: &mut BufWriter<File>) -> Result<(), Box<dyn error::Error>> {
-        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
-        let mut hasher = crc.digest();
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), DictSectReadError> {
+        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let mut digest8 = crc8.digest();
         // libhdt/src/libdcs/CSD_PFC.cpp::save()
         // save type
         let seq_type: [u8; 1] = [2];
-        let _ = dest_writer.write(&seq_type)?;
-        hasher.update(&seq_type);
+        dest_writer.write_all(&seq_type)?;
+        digest8.update(&seq_type);
 
         // // Save sizes
         let mut buf: Vec<u8> = vec![];
         buf.extend_from_slice(&encode_vbyte(self.num_strings));
         buf.extend_from_slice(&encode_vbyte(self.packed_data.len()));
         buf.extend_from_slice(&encode_vbyte(self.block_size));
-        let _ = dest_writer.write(&buf)?;
-        hasher.update(&buf);
-        let checksum = hasher.finalize();
-        let _ = dest_writer.write(&checksum.to_le_bytes())?;
+        dest_writer.write_all(&buf)?;
+        digest8.update(&buf);
+        let checksum8: u8 = digest8.finalize();
+        dest_writer.write_all(&[checksum8])?;
 
-        self.sequence.save(dest_writer)?;
+        self.sequence.write(dest_writer)?;
 
         // Write packed data
-        let crc = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-        let mut hasher = crc.digest();
-        let _ = dest_writer.write(&self.packed_data)?;
-        hasher.update(&self.packed_data);
+        let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut digest32 = crc32.digest();
+        dest_writer.write_all(&self.packed_data)?;
+        digest32.update(&self.packed_data);
         // println!("{}", String::from_utf8_lossy(&self.compressed_terms));
-        let checksum = hasher.finalize();
-        let _ = dest_writer.write(&checksum.to_le_bytes())?;
-
+        let checksum32 = digest32.finalize();
+        let checksum_bytes: [u8; 4] = checksum32.to_le_bytes();
+        //println!("write crc32 {checksum_bytes:?}");
+        dest_writer.write_all(&checksum_bytes)?;
+        dest_writer.flush()?;
         Ok(())
     }
 }
@@ -335,8 +341,8 @@ mod tests {
     use crate::ControlInfo;
     use crate::header::Header;
     use crate::tests::init;
+    use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::fs::File;
     use std::io::BufReader;
     /* unused
     #[test]
@@ -349,7 +355,7 @@ mod tests {
     #[test]
     fn read_section_read() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+        let file = File::open("tests/resources/snikmeta.hdt")?;
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
@@ -390,6 +396,45 @@ mod tests {
         let sequence = subjects.sequence;
         let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
         assert_eq!(sequence.data.len(), data_size);
+        Ok(())
+    }
+
+    #[test]
+    fn write() -> color_eyre::Result<()> {
+        init();
+        let file = File::open("tests/resources/snikmeta.hdt")?;
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader)?;
+        Header::read(&mut reader)?;
+        let _ = ControlInfo::read(&mut reader)?;
+        let shared = DictSectPFC::read(&mut reader)?;
+        assert_eq!(shared.0.num_strings, 43);
+        assert_eq!(shared.0.packed_data.len(), 614);
+        assert_eq!(shared.0.block_size, 16);
+
+        let subjects = DictSectPFC::read(&mut reader)?;
+        let predicates = DictSectPFC::read(&mut reader)?;
+        let objects = DictSectPFC::read(&mut reader)?;
+
+        for (sect, crc_handle) in [shared, subjects, predicates, objects] {
+            assert!(crc_handle.join().unwrap());
+            println!("write section ****************************");
+            let mut buf = Vec::<u8>::new();
+            sect.write(&mut buf)?;
+            let mut cursor = std::io::Cursor::new(buf);
+            let (sect2, crc_handle2) = DictSectPFC::read(&mut cursor)?;
+            assert!(crc_handle2.join().unwrap());
+            assert_eq!(sect.num_strings, sect2.num_strings);
+            assert_eq!(sect.sequence, sect2.sequence);
+            assert_eq!(sect.packed_data.len(), sect2.packed_data.len());
+            assert_eq!(sect.block_size, sect2.block_size);
+            assert_eq!(sect.packed_data, sect2.packed_data);
+            //assert_eq!(sect, sect2);
+        }
+
+        //crc_handle.join().unwrap();
+        //assert_eq!(shared, shared2);
+        //assert_eq!(subjects, subjects2);
         Ok(())
     }
 }
