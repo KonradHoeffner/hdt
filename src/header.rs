@@ -95,7 +95,7 @@ impl Header {
 mod tests {
     use super::*;
     use crate::tests::init;
-    use std::fs::File;
+    use fs_err::File;
     use std::io::BufReader;
 
     #[test]

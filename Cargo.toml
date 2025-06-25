@@ -15,10 +15,7 @@ all-features = true
 
 [dependencies]
 bytesize = "2"
-clap = { version = "4.5", features = ["derive","cargo"] }
-clap-verbosity-flag = { version = "3.0", default-features = false, features = ["log"] }
 crc = "3"
-env_logger = { version = "0.11", default-features = false }
 iref = "3"
 langtag = "0.4"
 ntriple = "0.1"
@@ -29,10 +26,6 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-oxrdf = "0.2"
-oxrdfio = "0.1"
-chrono = "0.4.40"
-tempfile = "3.19.1"
 
 [features]
 default = ["sophia"]
@@ -60,5 +53,4 @@ criterion = { version = "0.6", default-features = false, features = ["cargo_benc
 #iai = "0.1"
 iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
 color-eyre = "0.6"
-walkdir = "2.5"
 fs-err = "3.1.0"

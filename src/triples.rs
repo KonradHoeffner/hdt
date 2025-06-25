@@ -498,8 +498,8 @@ mod tests {
     use crate::header::Header;
     use crate::tests::init;
     use crate::{FourSectDict, IdKind};
+    use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::fs::File;
     use std::io::BufReader;
 
     /// Iterator over all triples with a given ID in the specified position (subject, predicate or object).

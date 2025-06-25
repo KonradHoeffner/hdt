@@ -234,9 +234,9 @@ impl Graph for HdtGraph {
 mod tests {
     use super::*;
     use crate::tests::init;
+    use fs_err::File;
     use sophia::api::prelude::Triple;
     use sophia::api::term::matcher::Any;
-    use std::fs::File;
 
     #[test]
     fn test_graph() -> color_eyre::Result<()> {

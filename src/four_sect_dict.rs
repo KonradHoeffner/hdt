@@ -220,8 +220,8 @@ mod tests {
     use super::*;
     use crate::header::Header;
     use crate::tests::init;
+    use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::fs::File;
     use std::io::BufReader;
 
     #[test]
