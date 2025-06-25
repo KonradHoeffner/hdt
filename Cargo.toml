@@ -9,12 +9,6 @@ keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
 edition = "2024"
 rust-version = "1.85"
-default-run = "rdf2hdt"
-
-[[bin]]
-name = "rdf2hdt"
-path = "src/rdf2hdt/main.rs"
-bench = false
 
 [package.metadata."docs.rs"]
 all-features = true
