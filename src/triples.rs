@@ -1,5 +1,5 @@
-use crate::containers::{AdjList, Bitmap, Sequence, SequenceReadError, bitmap};
-use crate::{ControlInfo, ControlInfoReadError};
+use crate::ControlInfo;
+use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
 use log::{debug, error};
 use std::cmp::Ordering;
@@ -167,11 +167,11 @@ pub enum Level {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("failed to read control info")]
-    ControlInfoReadError(#[from] ControlInfoReadError),
+    ControlInfo(#[from] control_info::Error),
     #[error("bitmap error in the {0:?} level")]
     Bitmap(Level, #[source] bitmap::Error),
     #[error("sequence read error")]
-    Sequence(Level, #[source] SequenceReadError),
+    Sequence(Level, #[source] sequence::Error),
     #[error("unspecified triples order")]
     UnspecifiedTriplesOrder,
     #[error("unknown triples order")]
@@ -185,10 +185,10 @@ pub enum Error {
     #[error("({0},{1},{2}) none of the components of a triple may be 0.")]
     TripleComponentZero(usize, usize, usize),
     #[error("unspecified external library error")]
-    ExternalError(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
+    External(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error("cache decode error")]
     #[cfg(feature = "cache")]
-    DecodeError(#[from] bincode::error::DecodeError),
+    Decode(#[from] bincode::error::DecodeError),
 }
 
 impl fmt::Debug for TriplesBitmap {

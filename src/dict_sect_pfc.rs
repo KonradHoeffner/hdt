@@ -1,8 +1,8 @@
 #![allow(missing_docs)] // temporariy while we figure out what should be public in the end
+use crate::containers::Sequence;
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
-use crate::containers::{Sequence, SequenceReadError};
 use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
@@ -13,6 +13,8 @@ use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
 use thiserror::Error;
+
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
@@ -30,7 +32,7 @@ pub struct DictSectPFC {
 
 /// The error type for the DictSectPFC read function.
 #[derive(thiserror::Error, Debug)]
-pub enum DictSectReadError {
+pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
@@ -38,7 +40,7 @@ pub enum DictSectReadError {
     #[error("implementation only supports plain front coded dictionary section type 2, found type {0}")]
     DictSectNotPfc(u8),
     #[error("sequence read error")]
-    SequenceReadError(#[from] SequenceReadError),
+    Sequence(#[from] crate::containers::sequence::Error),
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -191,7 +193,7 @@ impl DictSectPFC {
     }
 
     /// extract the string with the given ID from the dictionary
-    pub fn extract(&self, id: Id) -> Result<String, ExtractError> {
+    pub fn extract(&self, id: Id) -> core::result::Result<String, ExtractError> {
         if id as usize > self.num_strings {
             return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
         }
@@ -238,12 +240,11 @@ impl DictSectPFC {
     }
 
     /// Returns an unverified dictionary section together with a handle to verify the checksum.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>), DictSectReadError> {
-        use DictSectReadError::*;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
-            return Err(DictSectNotPfc(preamble[0]));
+            return Err(Error::DictSectNotPfc(preamble[0]));
         }
 
         // read section meta data
@@ -270,7 +271,7 @@ impl DictSectPFC {
 
         let crc_calculated8 = digest8.finalize();
         if crc_calculated8 != crc_code8 {
-            return Err(InvalidCrc8Checksum(crc_calculated8, crc_code8));
+            return Err(Error::InvalidCrc8Checksum(crc_calculated8, crc_code8));
         }
 
         // read sequence log array
@@ -299,7 +300,7 @@ impl DictSectPFC {
     }
 
     /// counterpoint to the read method
-    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), DictSectReadError> {
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<()> {
         let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut digest8 = crc8.digest();
         // libhdt/src/libdcs/CSD_PFC.cpp::save()

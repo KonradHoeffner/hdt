@@ -10,6 +10,8 @@ use std::thread;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
 /// Also called "array" in the HDT spec, only Log64 is supported.
 //#[derive(Clone)]
@@ -35,19 +37,19 @@ enum SequenceType {
 }
 
 impl TryFrom<u8> for SequenceType {
-    type Error = SequenceReadError;
+    type Error = Error;
 
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
+    fn try_from(value: u8) -> Result<Self> {
         match value {
             1 => Ok(SequenceType::Log64),
-            _ => Err(SequenceReadError::UnsupportedSequenceType(value)),
+            _ => Err(Error::UnsupportedSequenceType(value)),
         }
     }
 }
 
 /// The error type for the sequence read function.
 #[derive(thiserror::Error, Debug)]
-pub enum SequenceReadError {
+pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
@@ -125,8 +127,7 @@ impl Sequence {
     }
 
     /// Read sequence including metadata from HDT data.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, SequenceReadError> {
-        use SequenceReadError::*;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         // read entry metadata
         // keep track of history for CRC8
         let mut history = Vec::<u8>::new();
@@ -143,7 +144,7 @@ impl Sequence {
         history.extend_from_slice(&buffer);
         let bits_per_entry = buffer[0] as usize;
         if bits_per_entry > USIZE_BITS {
-            return Err(EntrySizeTooLarge(bits_per_entry));
+            return Err(Error::EntrySizeTooLarge(bits_per_entry));
         }
 
         // read number of entries
@@ -162,7 +163,7 @@ impl Sequence {
 
         let crc_calculated = digest.finalize();
         if crc_calculated != crc_code {
-            return Err(InvalidCrc8Checksum(crc_calculated, crc_code));
+            return Err(Error::InvalidCrc8Checksum(crc_calculated, crc_code));
         }
 
         // read body data
@@ -213,7 +214,7 @@ impl Sequence {
     }
 
     /// save sequence per HDT spec using CRC
-    pub fn write(&self, dest_writer: &mut impl Write) -> Result<(), SequenceReadError> {
+    pub fn write(&self, dest_writer: &mut impl Write) -> Result<()> {
         let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut digest = crc8.digest();
         // libhdt/src/sequence/LogSequence2.cpp::save()

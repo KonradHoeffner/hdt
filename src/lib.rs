@@ -109,7 +109,7 @@ pub mod triples;
 //pub mod rdf2hdt;
 
 pub use crate::hdt::Hdt;
-use containers::{ControlInfo, ControlInfoReadError};
+use containers::ControlInfo;
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;

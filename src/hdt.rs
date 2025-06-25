@@ -1,8 +1,8 @@
 use crate::FourSectDict;
-use crate::containers::{ControlInfo, ControlInfoReadError};
+use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{DictError, DictReadError, IdKind};
-use crate::header::{Header, HeaderReadError};
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
+use crate::{header, header::Header};
 use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
@@ -42,9 +42,9 @@ pub struct TranslateError {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("failed to read HDT control info")]
-    ControlInfo(#[from] ControlInfoReadError),
+    ControlInfo(#[from] control_info::Error),
     #[error("failed to read HDT header")]
-    Header(#[from] HeaderReadError),
+    Header(#[from] header::Error),
     #[error("failed to read HDT four section dictionary")]
     FourSectDict(#[from] DictReadError),
     #[error("failed to read HDT triples section")]

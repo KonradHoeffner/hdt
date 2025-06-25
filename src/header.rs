@@ -5,6 +5,8 @@ use std::collections::BTreeSet;
 use std::io::BufRead;
 use std::str;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 /// Metadata about the dataset, see <https://www.rdfhdt.org/hdt-binary-format/#header>.
 #[derive(Debug, Clone)]
 pub struct Header {
@@ -19,11 +21,11 @@ pub struct Header {
 /// The error type for the `read` method.
 #[derive(thiserror::Error, Debug)]
 #[error("failed to read HDT header")]
-pub enum HeaderReadError {
+pub enum Error {
     #[error("{0}")]
     Other(String),
     Io(#[from] std::io::Error),
-    ControlInfoError(#[from] crate::containers::ControlInfoReadError),
+    ControlInfo(#[from] crate::containers::control_info::Error),
     #[error("invalid header format {0}, only 'ntriples' is supported")]
     InvalidHeaderFormat(String),
     #[error("invalid header length '{0}'")]
@@ -34,22 +36,21 @@ pub enum HeaderReadError {
 
 impl Header {
     /// Reader needs to be positioned directly after the global control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, HeaderReadError> {
-        use HeaderReadError::*;
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         let header_ci = ControlInfo::read(reader)?;
         if header_ci.format != "ntriples" {
-            return Err(InvalidHeaderFormat(header_ci.format));
+            return Err(Error::InvalidHeaderFormat(header_ci.format));
         }
 
-        let ls = header_ci.get("length").ok_or(HeaderReadError::MissingHeaderLength)?;
-        let length = ls.parse::<usize>().map_err(|_| InvalidHeaderLength(ls))?;
+        let ls = header_ci.get("length").ok_or(Error::MissingHeaderLength)?;
+        let length = ls.parse::<usize>().map_err(|_| Error::InvalidHeaderLength(ls))?;
 
         let mut body_buffer: Vec<u8> = vec![0; length];
         reader.read_exact(&mut body_buffer)?;
         let mut body = BTreeSet::new();
 
         for line_slice in body_buffer.split(|b| b == &b'\n') {
-            let line = str::from_utf8(line_slice).map_err(|_| Other("Header is not UTF-8".to_owned()))?;
+            let line = str::from_utf8(line_slice).map_err(|_| Error::Other("Header is not UTF-8".to_owned()))?;
             if let Ok(Some(triple)) = triple_line(line) {
                 let subject = match triple.subject {
                     ntriple::Subject::IriRef(iri) => Id::Named(iri),
@@ -82,7 +83,7 @@ impl Header {
         Ok(Header { format: header_ci.format, length, body })
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HeaderReadError> {
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::header(self.length).write(write)?;
         for triple in &self.body {
             writeln!(write, "{triple}")?;

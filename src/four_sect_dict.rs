@@ -2,7 +2,7 @@
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
-use crate::dict_sect_pfc::{DictSectReadError, ExtractError};
+use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
 //use eyre::{Result, WrapErr, eyre};
 use std::io;
@@ -66,14 +66,14 @@ pub struct DictError {
 #[error("four sect dict section error in the {sect_kind:?} section")]
 pub struct DictSectError {
     #[source]
-    e: DictSectReadError,
+    e: crate::dict_sect_pfc::Error,
     sect_kind: SectKind,
 }
 
 #[derive(Error, Debug)]
 #[error("error reading four section dictionary")]
 pub enum DictReadError {
-    ControlInfo(#[from] crate::containers::ControlInfoReadError),
+    ControlInfo(#[from] crate::containers::control_info::Error),
     DictSect(#[from] DictSectError),
     Other(String),
 }
@@ -81,7 +81,7 @@ pub enum DictReadError {
 impl FourSectDict {
     /// Get the string value of a given ID of a given type.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
-    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> Result<String, DictError> {
+    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> core::result::Result<String, DictError> {
         use SectKind::*;
         let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);

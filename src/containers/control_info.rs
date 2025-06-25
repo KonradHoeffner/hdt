@@ -4,6 +4,8 @@ use std::io::BufRead;
 use std::io::{self, Write};
 use std::str;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 pub const TERMINATOR: [u8; 1] = [0];
 const HDT_HEADER: &[u8] = b"$HDT";
 
@@ -24,7 +26,7 @@ pub enum ControlType {
 impl TryFrom<u8> for ControlType {
     type Error = ControlInfoReadErrorKind;
 
-    fn try_from(original: u8) -> Result<Self, Self::Error> {
+    fn try_from(original: u8) -> core::result::Result<Self, Self::Error> {
         match original {
             0 => Ok(ControlType::Unknown),
             1 => Ok(ControlType::Global),
@@ -51,7 +53,7 @@ pub struct ControlInfo {
 /// The error type for the `read` method.
 #[derive(thiserror::Error, Debug)]
 #[error("failed to read HDT control info")]
-pub struct ControlInfoReadError(#[from] ControlInfoReadErrorKind);
+pub struct Error(#[from] ControlInfoReadErrorKind);
 
 /// The kind of the ControlInfoReadError error.
 #[derive(thiserror::Error, Debug)]
@@ -107,12 +109,12 @@ impl ControlInfo {
     }
 
     /// Read and verify control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadError> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         Ok(Self::read_kind(reader)?)
     }
 
     // Helper function returning a ControlInfoReadErrorKind that is wrapped by Self::read.
-    fn read_kind<R: BufRead>(reader: &mut R) -> Result<Self, ControlInfoReadErrorKind> {
+    fn read_kind<R: BufRead>(reader: &mut R) -> core::result::Result<Self, ControlInfoReadErrorKind> {
         use ControlInfoReadErrorKind::*;
         //use std::io::Error;
 
@@ -173,12 +175,12 @@ impl ControlInfo {
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn write(&self, write: &mut impl Write) -> Result<(), ControlInfoReadError> {
+    pub fn write(&self, write: &mut impl Write) -> Result<()> {
         Ok(self.write_kind(write)?)
     }
 
     // Helper function for Self::write
-    fn write_kind(&self, dest_writer: &mut impl Write) -> Result<(), ControlInfoReadErrorKind> {
+    fn write_kind(&self, dest_writer: &mut impl Write) -> core::result::Result<(), ControlInfoReadErrorKind> {
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
         let mut hasher = crc.digest();
         dest_writer.write_all(HDT_HEADER)?;
