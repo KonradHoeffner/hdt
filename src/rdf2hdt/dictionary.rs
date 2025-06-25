@@ -181,27 +181,27 @@ impl FourSectDictBuilder {
         };
         ci.properties.insert("mappings".to_string(), "1".to_string());
         ci.properties.insert("sizeStrings".to_string(), self.size_strings.to_string());
-        ci.save(dest_writer)?;
+        ci.write(dest_writer)?;
         //shared
         // let log_seq = LogSequence2::compress(&self.dict.shared_terms)?;
         // log_seq.save(&mut dest_writer)?;
         let pfc = compress(&self.shared_terms, self.options.block_size)?;
-        pfc.save(dest_writer)?;
+        pfc.write(dest_writer)?;
         //subjects
         // let log_seq: LogSequence2 = LogSequence2::compress(&self.dict.subject_terms)?;
         // log_seq.save(&mut dest_writer)?;
         let pfc = compress(&self.subject_terms, self.options.block_size)?;
-        pfc.save(dest_writer)?;
+        pfc.write(dest_writer)?;
         //predicates
         // let log_seq = LogSequence2::compress(&self.dict.predicate_terms)?;
         // log_seq.save(&mut dest_writer)?;
         let pfc = compress(&self.predicate_terms, self.options.block_size)?;
-        pfc.save(dest_writer)?;
+        pfc.write(dest_writer)?;
         //objects
         // let log_seq = LogSequence2::compress(&self.dict.object_terms)?;
         // log_seq.save(&mut dest_writer)?;
         let pfc = compress(&self.object_terms, self.options.block_size)?;
-        pfc.save(dest_writer)?;
+        pfc.write(dest_writer)?;
         Ok(())
     }
 }

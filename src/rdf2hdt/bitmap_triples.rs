@@ -113,7 +113,7 @@ impl BitmapTriplesBuilder {
             ..Default::default()
         };
         ci.properties.insert("order".to_string(), (self.order.clone() as u8).to_string());
-        ci.save(dest_writer)?;
+        ci.write(dest_writer)?;
         self.save_bitmap(&self.bitmap_y, dest_writer)?;
 
         // bitmapZ->save(output);

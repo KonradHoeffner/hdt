@@ -78,7 +78,7 @@ impl ConvertedHDT {
             format: HDT_CONTAINER.to_string(),
             ..Default::default()
         };
-        ci.save(&mut dest_writer)?;
+        ci.write(&mut dest_writer)?;
 
         let mut ci = containers::ControlInfo {
             control_type: ControlType::Header,
@@ -91,7 +91,7 @@ impl ConvertedHDT {
         }
         let graph_string = graph.to_string();
         ci.properties.insert("length".to_string(), graph_string.len().to_string());
-        ci.save(&mut dest_writer)?;
+        ci.write(&mut dest_writer)?;
         let _ = dest_writer.write(graph_string.as_bytes())?;
 
         self.dict.save(&mut dest_writer)?;
