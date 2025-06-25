@@ -115,6 +115,8 @@ use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;
 #[cfg(feature = "sophia")]
 pub use hdt_graph::HdtGraph;
+#[cfg(feature = "sparql")]
+pub mod sparql;
 
 #[cfg(test)]
 mod tests {
