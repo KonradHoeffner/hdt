@@ -161,18 +161,11 @@ impl Graph for HdtGraph {
         O: TermMatcher + 's,
     {
         use HdtMatcher::{Constant, Other};
-        let xso = match self.unpack_matcher(&sm, &IdKind::Subject) {
-            None => return Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>,
-            Some(x) => x,
+        let Some(xso) = self.unpack_matcher(&sm, &IdKind::Subject) else {
+            return Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>;
         };
-        let xpo = match self.unpack_matcher(&pm, &IdKind::Predicate) {
-            None => return Box::new(iter::empty()),
-            Some(x) => x,
-        };
-        let xoo = match self.unpack_matcher(&om, &IdKind::Object) {
-            None => return Box::new(iter::empty()),
-            Some(x) => x,
-        };
+        let Some(xpo) = self.unpack_matcher(&pm, &IdKind::Predicate) else { return Box::new(iter::empty()) };
+        let Some(xoo) = self.unpack_matcher(&om, &IdKind::Object) else { return Box::new(iter::empty()) };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
             //if SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() { // always true

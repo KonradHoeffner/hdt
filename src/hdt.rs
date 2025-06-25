@@ -158,7 +158,7 @@ impl Hdt {
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
-        bincode::serde::encode_into_std_write(&triples, &mut writer, bincode::config::standard())?;
+        bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
         writer.flush()?;
         Ok(())
     }

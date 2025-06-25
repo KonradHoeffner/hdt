@@ -240,8 +240,8 @@ impl Sequence {
         //  unused zero bytes in the last usize are not written
         let num_bytes = (self.bits_per_entry * self.entries).div_ceil(8);
         let bytes = &bytes[..num_bytes];
-        dest_writer.write_all(&bytes)?;
-        digest32.update(&bytes);
+        dest_writer.write_all(bytes)?;
+        digest32.update(bytes);
         let checksum32 = digest32.finalize();
         dest_writer.write_all(&checksum32.to_le_bytes())?;
         dest_writer.flush()?;
@@ -265,7 +265,7 @@ impl Sequence {
         if rest_byte_amount > 0 {
             let mut last = [0u8; size_of::<usize>()];
             last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
-            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(last).unwrap()));
+            data.push(usize::from_le_bytes(last));
         }
         Sequence { entries, bits_per_entry, data, crc_handle: None }
     }

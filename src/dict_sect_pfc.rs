@@ -406,7 +406,7 @@ mod tests {
         let mut reader = BufReader::new(file);
         ControlInfo::read(&mut reader)?;
         Header::read(&mut reader)?;
-        let dict_ci = ControlInfo::read(&mut reader)?;
+        let _ = ControlInfo::read(&mut reader)?;
         let shared = DictSectPFC::read(&mut reader)?;
         assert_eq!(shared.0.num_strings, 43);
         assert_eq!(shared.0.packed_data.len(), 614);
@@ -416,9 +416,7 @@ mod tests {
         let predicates = DictSectPFC::read(&mut reader)?;
         let objects = DictSectPFC::read(&mut reader)?;
 
-        //for sect in [shared, subjects, predicates, objects]
-        for (sect, crc_handle) in [shared] {
-            //for (sect, crc_handle) in [shared, subjects, predicates, objects] {
+        for (sect, crc_handle) in [shared, subjects, predicates, objects] {
             assert!(crc_handle.join().unwrap());
             println!("write section ****************************");
             let mut buf = Vec::<u8>::new();
