@@ -85,7 +85,7 @@ impl Header {
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), HeaderReadError> {
         ControlInfo::header(self.length).write(write)?;
         for triple in &self.body {
-            writeln!(write, "{}", triple)?;
+            writeln!(write, "{triple}")?;
         }
         Ok(())
     }

@@ -73,6 +73,7 @@ fn query(hdt: Hdt)
 #![warn(clippy::print_stderr)]
 #![warn(clippy::missing_const_for_fn)]
 #![allow(clippy::unnecessary_cast)]
+#![allow(clippy::enum_glob_use)]
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]

@@ -268,24 +268,22 @@ impl TriplesBitmap {
     /// read the whole triple section including control information
     // TODO: rename to "read" for consistency with the other components and rename existing read function accordingly
     pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
-        use Error::*;
         let triples_ci = ControlInfo::read(reader)?;
 
         match &triples_ci.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::read(reader, &triples_ci),
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
-            f => Err(UnknownTriplesFormat(f.to_owned())),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(Error::TriplesList),
+            f => Err(Error::UnknownTriplesFormat(f.to_owned())),
         }
     }
 
     /// load the cached HDT index file, only supports TriplesBitmap
     #[cfg(feature = "cache")]
     pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
-        use Error::*;
         match &info.format[..] {
             "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(TriplesList),
-            f => Err(UnknownTriplesFormat(f.to_owned())),
+            "<http://purl.org/HDT/hdt#triplesList>" => Err(Error::TriplesList),
+            f => Err(Error::UnknownTriplesFormat(f.to_owned())),
         }
     }
 
@@ -369,10 +367,7 @@ impl TriplesBitmap {
         }
 
         // read bitmaps
-        println!("READ Y LEVEL BITMAP ***********");
         let bitmap_y = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Y, e))?;
-        println!("READ Z LEVEL BITMAP **********");
-        println!("bitmap_y: {bitmap_y:?}");
         let bitmap_z = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Z, e))?;
 
         // read sequences
@@ -404,6 +399,7 @@ impl TriplesBitmap {
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_bitvector = BitVector::new();
+        #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
         let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
             .map_err(|e| e.into_boxed_dyn_error())?;
         let wavelet_y = wavelet_thread.join().unwrap();
@@ -433,9 +429,7 @@ impl TriplesBitmap {
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        println!("WRITE Y LEVEL BITMAP **********");
         self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
-        println!("WRITE Z LEVEL BITMAP **********");
         self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
         Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
@@ -447,9 +441,8 @@ impl TriplesBitmap {
     /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
     /// Other orders may lead to undefined behaviour.
     pub fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
-        use Error::*;
         if x == 0 || y == 0 || z == 0 {
-            return Err(TripleComponentZero(x, y, z));
+            return Err(Error::TripleComponentZero(x, y, z));
         }
         match self.order {
             Order::SPO => Ok(TripleId::new(x, y, z)),
@@ -458,7 +451,7 @@ impl TriplesBitmap {
             Order::POS => Ok(TripleId::new(y, z, x)),
             Order::OSP => Ok(TripleId::new(z, x, y)),
             Order::OPS => Ok(TripleId::new(z, y, x)),
-            Order::Unknown => Err(UnknownTriplesOrder),
+            Order::Unknown => Err(Error::UnknownTriplesOrder),
         }
     }
 }
