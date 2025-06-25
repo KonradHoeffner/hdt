@@ -178,14 +178,11 @@ impl Bitmap {
         // read entry body CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
-        println!("read bitmap crc32 {:?}", crc_code);
-        println!("read bitmap data: {:?}", data);
         let crc_code = u32::from_le_bytes(crc_code);
 
         // validate entry body CRC32
         let crc_calculated = digest.finalize();
         if crc_calculated != crc_code {
-            println!("invalid crc32: {:?}, expected {:?}", crc_calculated.to_le_bytes(), crc_code.to_le_bytes());
             return Err(InvalidCrc32Checksum(crc_calculated, crc_code));
         }
 
@@ -213,12 +210,10 @@ impl Bitmap {
 
         let words = self.dict.bit_vector().words();
         let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
-        println!("write bitmap data as bytes: {:?}", bytes);
         w.write_all(&bytes)?;
         hasher.update(&bytes);
         let crc_code = hasher.finalize();
         let crc_code = crc_code.to_le_bytes();
-        println!("write bitmap crc32 {:?}", crc_code);
         w.write_all(&crc_code)?;
         Ok(())
     }
@@ -234,7 +229,6 @@ mod tests {
     fn write() -> color_eyre::Result<()> {
         init();
         let bits: Vec<u64> = vec![0b10111];
-        println!("test bitmap {:#b} {:?}", bits[0], bits);
         let bitmap = Bitmap::new(bits);
         assert_eq!(bitmap.len(), 64);
         // position of k-1th 1 bit

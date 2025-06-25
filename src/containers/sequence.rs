@@ -145,12 +145,10 @@ impl Sequence {
         if bits_per_entry > USIZE_BITS {
             return Err(EntrySizeTooLarge(bits_per_entry));
         }
-        //println!("bits per entry {bits_per_entry}");
 
         // read number of entries
         let (entries, bytes_read) = read_vbyte(reader)?;
         history.extend_from_slice(&bytes_read);
-        //println!("entries {entries} bytes read {bytes_read:?}");
 
         // read entry metadata CRC8
         let mut crc_code = [0_u8];
@@ -170,12 +168,9 @@ impl Sequence {
         // read body data
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
-        //println!("total_bits {total_bits}");
         let full_byte_amount = (total_bits.div_ceil(USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
-        //println!("full_byte_amount {full_byte_amount}");
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words)?;
-        //println!("full_words {full_words:?}");
         let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / size_of::<usize>() + 2);
         // read entry body
 
@@ -191,13 +186,11 @@ impl Sequence {
         let mut last_value: usize = 0;
         let last_entry_bits = if total_bits == 0 { 0 } else { ((total_bits - 1) % USIZE_BITS) + 1 };
 
-        //println!("last_entry_bits {last_entry_bits}");
         while bits_read < last_entry_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
             last_value |= (buffer[0] as usize) << bits_read;
-            //println!("last_value {last_value} {last_value:#b}");
             bits_read += size_of::<usize>();
         }
         data.push(last_value);
@@ -230,7 +223,6 @@ impl Sequence {
         digest.update(&seq_type);
         // Write numbits
         let bits_per_entry: [u8; 1] = [self.bits_per_entry.try_into().unwrap()];
-        //println!("bits_per_entry {bits_per_entry}");
         dest_writer.write_all(&bits_per_entry)?;
         digest.update(&bits_per_entry);
         // Write numentries
@@ -244,12 +236,10 @@ impl Sequence {
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
         //let offset_data = self.pack_bits();
-        //println!("data {:?}",self.data);
         let bytes: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
         //  unused zero bytes in the last usize are not written
         let num_bytes = (self.bits_per_entry * self.entries).div_ceil(8);
         let bytes = &bytes[..num_bytes];
-        //println!("data as bytes {bytes:?}");
         dest_writer.write_all(&bytes)?;
         digest32.update(&bytes);
         let checksum32 = digest32.finalize();
@@ -261,7 +251,6 @@ impl Sequence {
     // could also determine bits per entry using max of numbers but that would take time
     pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
         let numbers8 = Self::pack_bits(numbers, bits_per_entry);
-        //println!("numbers8 {numbers8:?}");
         // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
         // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
         let entries = numbers.len();
@@ -273,31 +262,22 @@ impl Sequence {
         for word in full_words.chunks_exact(size_of::<usize>()) {
             data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
         }
-        //println!("full bytes {full_byte_amount} rest bytes {rest_byte_amount}");
-        //println!("data {data:?}");
         if rest_byte_amount > 0 {
             let mut last = [0u8; size_of::<usize>()];
             last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
-            //println!("last {last:?}");
             data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(last).unwrap()));
         }
-        //println!("data {data:?}");
-        //println!("last data as bytes {:?}",data[0].to_le_bytes());
         Sequence { entries, bits_per_entry, data, crc_handle: None }
     }
 
     // manual compact integer sequence, as sucds lib does not allow export of internal storage
     fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
-        //println!("pack_bits");
         let mut output = Vec::new();
         let mut current_byte = 0u8;
         let mut bit_offset = 0;
 
         for value in numbers {
-            //println!("pack value {value} bits_per_entry {}", bits_per_entry);
             let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
-            //println!("mask {:#b}", (1 << bits_per_entry) - 1);
-            //println!("val {val}");
             let mut bits_left = bits_per_entry;
 
             while bits_left > 0 {
@@ -346,7 +326,6 @@ mod tests {
         // little endian
         data.push((5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1);
         let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone(), crc_handle: None };
-        //println!("{s:?}");
         let numbers: Vec<usize> = s.into_iter().collect();
         //let expected = vec![1];
         let expected = vec![1, 2, 3, 4, 5];
@@ -361,7 +340,6 @@ mod tests {
         assert_eq!(buf, expected);
         assert_eq!(encode_vbyte(5), [133]);
         let mut cursor = std::io::Cursor::new(&buf);
-        //println!("buf {buf:?}");
         let s2 = Sequence::read(&mut cursor)?;
         assert_eq!(s, s2);
         let numbers2: Vec<usize> = s2.into_iter().collect();
@@ -369,10 +347,8 @@ mod tests {
         assert_eq!(cursor.position(), buf.len() as u64);
         // new and pack_bits
         let s3 = Sequence::new(&numbers, 4);
-        //println!("{s3:?}: {:?}",s3.into_iter().collect::<Vec<_>>());
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
-        //println!("buf3 {buf3:?}");
         assert_eq!(s, s3);
         Ok(())
     }
