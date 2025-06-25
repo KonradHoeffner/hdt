@@ -371,22 +371,15 @@ mod tests {
         let filename = "tests/resources/snikmeta.hdt";
         let file = File::open(filename)?;
         let hdt = Hdt::read(std::io::BufReader::new(file))?;
-        let tmp_filename = "/tmp/hdt_rs_test.hdt";
-        let file2 = File::create(tmp_filename)?;
-        hdt.write(&mut std::io::BufWriter::new(file2))?;
-        // read back the file we just created
-        let file2 = File::open(tmp_filename)?;
-        let _hdt2 = Hdt::read(std::io::BufReader::new(file2))?;
-        //assert_eq!(hdt,hdt2);
+        triples(&hdt)?;
+        let mut buf = Vec::<u8>::new();
+        hdt.write(&mut buf)?;
+        let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
+        triples(&hdt2)?;
         Ok(())
     }
 
-    #[test]
-    fn triples() -> Result<()> {
-        init();
-        let filename = "tests/resources/snikmeta.hdt";
-        let file = File::open(filename)?;
-        let hdt = Hdt::read(std::io::BufReader::new(file))?;
+    fn triples(hdt: &Hdt) -> Result<()> {
         let triples = hdt.triples();
         let v: Vec<StringTriple> = triples.collect();
         assert_eq!(v.len(), 328);
