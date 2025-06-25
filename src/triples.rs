@@ -369,7 +369,9 @@ impl TriplesBitmap {
         }
 
         // read bitmaps
+        println!("READ Y LEVEL BITMAP ***********");
         let bitmap_y = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Y, e))?;
+        println!("READ Z LEVEL BITMAP **********");
         println!("bitmap_y: {bitmap_y:?}");
         let bitmap_z = Bitmap::read(reader).map_err(|e| Error::Bitmap(Level::Z, e))?;
 
@@ -431,7 +433,9 @@ impl TriplesBitmap {
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
+        println!("WRITE Y LEVEL BITMAP **********");
         self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
+        println!("WRITE Z LEVEL BITMAP **********");
         self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
         Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
