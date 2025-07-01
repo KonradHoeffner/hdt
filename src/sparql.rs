@@ -91,13 +91,25 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
+use crate::IdKind;
+use crate::triples::Id; // usize
+
+#[derive(PartialEq, Eq, Hash, Clone)]
+struct ShareTerm(Id);
+
+impl ShareTerm {
+    fn map(id: usize, kind: IdKind) -> Self {
+        ShareTerm(id)
+    }
+}
+
 impl QueryableDataset for HDTDatasetView {
-    type InternalTerm = String;
+    type InternalTerm = ShareTerm;
     type Error = Error;
 
     fn internal_quads_for_pattern(
-        &self, subject: Option<&String>, predicate: Option<&String>, object: Option<&String>,
-        graph_name: Option<Option<&String>>,
+        &self, subject: Option<&Self::InternalTerm>, predicate: Option<&Self::InternalTerm>,
+        object: Option<&Self::InternalTerm>, graph_name: Option<Option<&Self::InternalTerm>>,
     ) -> Box<dyn Iterator<Item = Result<InternalQuad<Self>, Error>>> {
         if let Some(graph_name) = graph_name {
             if graph_name.is_some() {
@@ -117,30 +129,39 @@ impl QueryableDataset for HDTDatasetView {
         for data in &self.hdts {
             // Query HDT for BGP by string values.
             let results = data.hdt.triples_with_pattern(
-                subject.map(|s| s.as_str()),
+                /*subject.map(|s| s.as_str()),
                 predicate.map(|s| s.as_str()),
-                object.map(|s| s.as_str()),
+                object.map(|s| s.as_str()),*/
+                subject.map(|s| ShareTerm::map(s, IdKind::Subject)),
+                predicate.map(|s| ShareTerm::map(s, IdKind::Predicate)),
+                object.map(|s| ShareTerm::map(s, IdKind::Object)),
             );
 
             // For each result
             for result in results {
-                let ex_s = (*result.0).to_string();
+                /*let ex_s = (*result.0).to_string();
                 let ex_p = (*result.1).to_string();
-                let ex_o = (*result.2).to_string();
+                let ex_o = (*result.2).to_string();*/
 
                 // Add the result to the vector.
-                v.push(Ok(InternalQuad { subject: ex_s, predicate: ex_p, object: ex_o, graph_name: None }));
+                //v.push(Ok(InternalQuad { subject: ex_s, predicate: ex_p, object: ex_o, graph_name: None }));
+                v.push(Ok(InternalQuad {
+                    subject: result.0,
+                    predicate: result.1,
+                    object: result.2,
+                    graph_name: None,
+                }));
             }
         }
 
         Box::new(v.into_iter())
     }
 
-    fn internalize_term(&self, term: Term) -> Result<String, Error> {
+    fn internalize_term(&self, term: Term) -> Result<Self::InternalTerm, Error> {
         Ok(term_to_hdt_bgp_str(term))
     }
 
-    fn externalize_term(&self, term: String) -> Result<Term, Error> {
+    fn externalize_term(&self, term: Self::InternalTerm) -> Result<Term, Error> {
         match hdt_bgp_str_to_term(&term) {
             Ok(s) => Ok(s),
             Err(e) => Err(Error::new(ErrorKind::InvalidData, format!("Unexpected externalize bug {e}"))),
