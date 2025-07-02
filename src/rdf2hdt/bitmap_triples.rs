@@ -18,7 +18,7 @@ use std::{
 };
 
 #[derive(Default, Debug)]
-pub struct BitmapTriplesBuilder {
+struct BitmapTriplesBuilder {
     y_vec: Vec<u32>,
     z_vec: Vec<u32>,
     bitmap_y: Vec<bool>,

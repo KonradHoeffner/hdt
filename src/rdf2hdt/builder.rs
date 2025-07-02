@@ -1,9 +1,10 @@
 // Copyright (c) 2024-2025, Decisym, LLC
 
-use super::{bitmap_triples::BitmapTriplesBuilder, dictionary::FourSectDictBuilder};
+use super::dictionary::FourSectDictBuilder;
 use crate::{
     containers::{self, ControlType},
     rdf2hdt::{rdf_reader::convert_to_nt, vocab::*},
+    triples::TriplesBitmap,
 };
 use log::{debug, error};
 use oxrdf::{BlankNodeRef, Literal, NamedNodeRef, Triple, vocab::rdf};
@@ -57,7 +58,7 @@ impl ConvertedHDT {
     fn load(nt_file: &str, opts: Options) -> Result<Self, Box<dyn Error>> {
         let (dictionary, encoded_triples) = FourSectDictBuilder::load(nt_file, opts.clone())?;
         let num_triples = encoded_triples.len();
-        let bmap_triples = BitmapTriplesBuilder::load(encoded_triples)?;
+        let bmap_triples = TriplesBitmap::new(encoded_triples)?;
 
         let mut converted_hdt =
             ConvertedHDT { dict: dictionary, triples: bmap_triples, num_triples, ..Default::default() };
@@ -221,7 +222,7 @@ impl ConvertedHDT {
 #[derive(Default, Debug)]
 pub struct ConvertedHDT {
     pub dict: FourSectDictBuilder,
-    pub triples: BitmapTriplesBuilder,
+    pub triples: TriplesBitmap,
     header: HashSet<oxrdf::Triple>,
     num_triples: usize,
 }

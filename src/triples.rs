@@ -265,6 +265,80 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 }
 
 impl TriplesBitmap {
+    /// Creates a new TriplesBitmap from a list of sorted RDF triples
+    // under construction, get it to compile with empty or nonsense values first, then fix
+    // originally written by Greg Hanson in the experimental-rdf2hdt PR, move here is in progress
+    pub fn new(triples: Vec<TripleId>) -> Self {
+        let mut y_bitmap = Vec::new();
+        let mut z_bitmap = Vec::new();
+        let mut array_y = Vec::new();
+        let mut array_z = Vec::new();
+
+        let mut last_x: u32 = 0;
+        let mut last_y: u32 = 0;
+        let mut last_z: u32 = 0;
+
+        for (i, triple) in triples.iter().enumerate() {
+            let x = triple.subject;
+            let y = triple.predicate;
+            let z = triple.object;
+
+            if x == 0 || y == 0 || z == 0 {
+                panic!("triple IDs should never be zero")
+            }
+
+            if i == 0 {
+                array_y.push(y);
+                array_z.push(z);
+            } else if x != last_x {
+                if x != last_x + 1 {
+                    panic!("the subjects must be correlative.")
+                }
+
+                //x unchanged
+                y_bitmap.push(true);
+                array_y.push(y);
+
+                z_bitmap.push(true);
+                array_z.push(z);
+            } else if y != last_y {
+                if y < last_y {
+                    panic!("the predicates must be in increasing order.")
+                }
+
+                // y unchanged
+                y_bitmap.push(false);
+                array_y.push(y);
+
+                z_bitmap.push(true);
+                array_z.push(z);
+            } else {
+                if z < last_z {
+                    panic!("the objects must be in increasing order")
+                }
+
+                // z changed
+                z_bitmap.push(false);
+                array_z.push(z);
+            }
+
+            last_x = x;
+            last_y = y;
+            last_z = z;
+        }
+
+        let bitmap_y = Bitmap::new(vec![]);
+        let bitmap_z = Bitmap::new(vec![]);
+        let sequence_y = Sequence::new(&[1, 2, 3], 4);
+        let sequence_z = Sequence::new(&[1, 2, 3], 4);
+        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
+        let wavelet_y = wavelet_thread.join().unwrap();
+        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
+        //let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
+        let op_index = OpIndex { sequence: sequence_z, bitmap: bitmap_z }; // just for compiling
+        TriplesBitmap { order: Order::SPO, bitmap_y, adjlist_z, op_index, wavelet_y }
+    }
+
     /// read the whole triple section including control information
     // TODO: rename to "read" for consistency with the other components and rename existing read function accordingly
     pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
