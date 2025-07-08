@@ -118,7 +118,7 @@ impl Hdt {
         let converted_hdt = Hdt {
             header: Header { format: String::new(), length: 0, body: BTreeSet::new() },
             dict: dictionary,
-            triples: TriplesBitmap::new(encoded_triples),
+            triples: TriplesBitmap::from_triples(encoded_triples),
         };
 
         // converted_hdt.build_header(f, num_triples, opts);

@@ -60,9 +60,13 @@ impl TryFrom<u32> for Order {
 }
 
 /// Inverse index from object id to positions in the object adjacency list.
+/// This object-based index allows to traverse from the leaves and support ??O and ?PO queries.
 /// Used for logarithmic (?) time access instead of linear time sequential search.
+/// See Martínez-Prieto, M., M. Arias, and J. Fernández (2012). Exchange and Consumption of Huge RDF Data. Pages 8--10.
 pub struct OpIndex {
     /// Compact integer vector of object positions.
+    /// "[...] integer sequence: SoP, which stores, for each object, a sorted list of references to the predicate-subject pairs (sorted by predicate) related to it."
+    // we don't use our own Sequence type because CompactVector is easier to construct step by step (should we rename it but if yes to what?)
     pub sequence: CompactVector,
     /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
@@ -265,12 +269,57 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 }
 
 impl TriplesBitmap {
+    /// builds the necessary indexes and constructs TriplesBitmap
+    pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
+        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
+
+        debug!("Building OPS index...");
+        let entries = adjlist_z.sequence.entries;
+        // if it takes too long to calculate, can also pass in as parameter
+        let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
+        // limited to < 2^32 objects
+        let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
+        // Count the indexes of appearance of each object
+        // In https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
+        // they count the number of appearances in a sequence instead, which saves memory
+        // temporarily but they need to loop over it an additional time.
+        for pos_z in 0..entries {
+            let object = adjlist_z.sequence.get(pos_z);
+            if object == 0 {
+                error!("ERROR: There is a zero value in the Z level.");
+                continue;
+            }
+            let pos_y = adjlist_z.bitmap.rank(pos_z.to_owned());
+            indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
+        }
+        // reduce memory consumption of index by using adjacency list
+        let mut bitmap_index_bitvector = BitVector::new();
+        #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
+        let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
+            .expect("Failed to create OPS index compact vector.");
+        let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization 
+        for mut indices in indicess {
+            let mut first = true;
+            // sort by predicate
+            indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
+            for index in indices {
+                bitmap_index_bitvector.push_bit(first);
+                first = false;
+                cv.push_int(index as usize).unwrap();
+            }
+        }
+        let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
+        let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
+        debug!("built OPS index");
+        Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
+    }
+
     /// Creates a new TriplesBitmap from a list of sorted RDF triples
     // under construction, get it to compile with empty or nonsense values first, then fix
     // originally written by Greg Hanson in the experimental-rdf2hdt PR, move here is in progress
-    pub fn new(triples: Vec<TripleId>) -> Self {
-        let mut y_bitmap = Vec::new();
-        let mut z_bitmap = Vec::new();
+    pub fn from_triples(triples: Vec<TripleId>) -> Self {
+        let mut y_bitmap = BitVector::new();
+        let mut z_bitmap = BitVector::new();
         let mut array_y = Vec::new();
         let mut array_z = Vec::new();
 
@@ -296,10 +345,10 @@ impl TriplesBitmap {
                 }
 
                 //x unchanged
-                y_bitmap.push(true);
+                y_bitmap.push_bit(true);
                 array_y.push(y);
 
-                z_bitmap.push(true);
+                z_bitmap.push_bit(true);
                 array_z.push(z);
             } else if y != last_y {
                 if y < last_y {
@@ -307,10 +356,10 @@ impl TriplesBitmap {
                 }
 
                 // y unchanged
-                y_bitmap.push(false);
+                y_bitmap.push_bit(false);
                 array_y.push(y);
 
-                z_bitmap.push(true);
+                z_bitmap.push_bit(true);
                 array_z.push(z);
             } else {
                 if z < last_z {
@@ -318,7 +367,7 @@ impl TriplesBitmap {
                 }
 
                 // z changed
-                z_bitmap.push(false);
+                z_bitmap.push_bit(false);
                 array_z.push(z);
             }
 
@@ -327,18 +376,14 @@ impl TriplesBitmap {
             last_z = z;
         }
 
-        let bits_per_entry = triples.len().ilog2() + 1;
+        let bits_per_entry: usize = (triples.len().ilog2() + 1).try_into().unwrap();
 
-        let bitmap_y = Bitmap::new(vec![]);
-        let bitmap_z = Bitmap::new(vec![]);
-        let sequence_y = Sequence::new(&array_y, bits_per_entry as usize);
-        let sequence_z = Sequence::new(&array_z, bits_per_entry as usize);
-        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let wavelet_y = wavelet_thread.join().unwrap();
+        let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
+        let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
+        let sequence_y = Sequence::new(&array_y, bits_per_entry);
+        let sequence_z = Sequence::new(&array_z, bits_per_entry);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        //let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
-        let op_index = OpIndex { sequence: sequence_z, bitmap: bitmap_z }; // just for compiling
-        TriplesBitmap { order: Order::SPO, bitmap_y, adjlist_z, op_index, wavelet_y }
+        TriplesBitmap::new(Order::SPO, sequence_y, bitmap_y, adjlist_z)
     }
 
     /// read the whole triple section including control information
@@ -412,7 +457,7 @@ impl TriplesBitmap {
     fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
         debug!("Building wavelet matrix...");
         let mut builder =
-            CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder");
+            CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder.");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
         for x in &sequence {
             builder.push_int(x).unwrap();
@@ -433,7 +478,6 @@ impl TriplesBitmap {
     */
 
     fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
-        // read order
         //let order: Order = Order::try_from(triples_ci.get("order").unwrap().parse::<u32>());
         let order: Order;
         if let Some(n) = triples_ci.get("order").and_then(|v| v.parse::<u32>().ok()) {
@@ -448,59 +492,13 @@ impl TriplesBitmap {
 
         // read sequences
         let sequence_y = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Y, e))?;
-        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
         let mut sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
-
-        // construct adjacency lists
-        // construct object-based index to traverse from the leaves and support ??O and ?PO queries
-        debug!("Building OPS index...");
-        let entries = sequence_z.entries;
-        // if it takes too long to calculate, can also pass in as parameter
-        let max_object = sequence_z.into_iter().max().unwrap().to_owned();
-        // limited to < 2^32 objects
-        let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
-
-        // Count the indexes of appearance of each object
-        // In https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
-        // they count the number of appearances in a sequence instead, which saves memory
-        // temporarily but they need to loop over it an additional time.
-        for pos_z in 0..entries {
-            let object = sequence_z.get(pos_z);
-            if object == 0 {
-                error!("ERROR: There is a zero value in the Z level.");
-                continue;
-            }
-            let pos_y = bitmap_z.rank(pos_z.to_owned());
-            indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
-        }
-        // reduce memory consumption of index by using adjacency list
-        let mut bitmap_index_bitvector = BitVector::new();
-        #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
-        let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-            .map_err(|e| e.into_boxed_dyn_error())?;
-        let wavelet_y = wavelet_thread.join().unwrap();
-        /*
-        let get_p = |pos_z: u32| {
-            let pos_y = bitmap_z.dict.rank(pos_z.to_owned() as u64, true);
-            wavelet_y.access(pos_y as usize).unwrap() as Id
-        };
-        */
-        for mut indices in indicess {
-            let mut first = true;
-            // sort by predicate
-            indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
-            for index in indices {
-                bitmap_index_bitvector.push_bit(first);
-                first = false;
-                cv.push_int(index as usize).unwrap();
-            }
-        }
-        let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
-        let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
-        debug!("built OPS index");
-        assert!(sequence_z.crc_handle.take().unwrap().join().unwrap(), "sequence_z CRC check failed.");
+        let crc_handle = sequence_z.crc_handle.take().unwrap();
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        Ok(TriplesBitmap { order, bitmap_y, adjlist_z, op_index, wavelet_y })
+
+        let triples_bitmap = TriplesBitmap::new(order, sequence_y, bitmap_y, adjlist_z);
+        assert!(crc_handle.join().unwrap(), "sequence_z CRC check failed.");
+        Ok(triples_bitmap)
     }
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
@@ -644,5 +642,11 @@ mod tests {
         // SP? where S and P are in the graph, but not together
         assert_eq!(0, SubjectIter::with_pattern(&triples, &TripleId::new(12, 14, 154)).count());
         Ok(())
+    }
+
+    #[test]
+    fn from_triples() -> color_eyre::Result<()> {
+        let triples: Vec<TripleId> = vec![TripleId::new(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
+        todo!("not yet implemented");
     }
 }

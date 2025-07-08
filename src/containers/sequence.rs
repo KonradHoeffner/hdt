@@ -272,6 +272,7 @@ impl Sequence {
     }
 
     // manual compact integer sequence, as sucds lib does not allow export of internal storage
+    // TODO: investigate if that really is true, there is the words function
     fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
         let mut output = Vec::new();
         let mut current_byte = 0u8;
