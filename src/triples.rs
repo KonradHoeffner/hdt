@@ -274,14 +274,14 @@ impl TriplesBitmap {
         let mut array_y = Vec::new();
         let mut array_z = Vec::new();
 
-        let mut last_x: u32 = 0;
-        let mut last_y: u32 = 0;
-        let mut last_z: u32 = 0;
+        let mut last_x = 0;
+        let mut last_y = 0;
+        let mut last_z = 0;
 
         for (i, triple) in triples.iter().enumerate() {
-            let x = triple.subject;
-            let y = triple.predicate;
-            let z = triple.object;
+            let x = triple.subject_id;
+            let y = triple.predicate_id;
+            let z = triple.object_id;
 
             if x == 0 || y == 0 || z == 0 {
                 panic!("triple IDs should never be zero")
@@ -327,10 +327,12 @@ impl TriplesBitmap {
             last_z = z;
         }
 
+        let bits_per_entry = triples.len().ilog2() + 1;
+
         let bitmap_y = Bitmap::new(vec![]);
         let bitmap_z = Bitmap::new(vec![]);
-        let sequence_y = Sequence::new(&[1, 2, 3], 4);
-        let sequence_z = Sequence::new(&[1, 2, 3], 4);
+        let sequence_y = Sequence::new(&array_y, bits_per_entry as usize);
+        let sequence_z = Sequence::new(&array_z, bits_per_entry as usize);
         let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
         let wavelet_y = wavelet_thread.join().unwrap();
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);

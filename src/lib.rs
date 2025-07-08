@@ -105,8 +105,8 @@ pub mod hdt_graph;
 pub mod header;
 /// Types for representing and querying triples.
 pub mod triples;
-
-pub mod rdf2hdt;
+/// Constants for triple terms
+pub mod vocab;
 
 pub use crate::hdt::Hdt;
 use containers::ControlInfo;

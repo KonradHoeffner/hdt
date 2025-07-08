@@ -7,6 +7,7 @@ use crate::triples::Id;
 use bytesize::ByteSize;
 use log::error;
 use std::cmp::{Ordering, min};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::io::{BufRead, Write};
 use std::str;
@@ -333,6 +334,45 @@ impl DictSectPFC {
         dest_writer.write_all(&checksum_bytes)?;
         dest_writer.flush()?;
         Ok(())
+    }
+
+    pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Self {
+        let mut terms: Vec<String> = set.iter().to_owned().cloned().collect();
+        terms.sort(); // Ensure lexicographic order
+        // println!("{:?}", terms);
+        let mut compressed_terms = Vec::new();
+        let mut offsets = Vec::new();
+        let mut last_term = "";
+
+        let num_terms = terms.len();
+        for (i, term) in terms.iter().enumerate() {
+            if i % block_size == 0 {
+                offsets.push(compressed_terms.len());
+                compressed_terms.extend_from_slice(term.as_bytes());
+            } else {
+                let common_prefix_len = last_term.chars().zip(term.chars()).take_while(|(a, b)| a == b).count();
+
+                let byte_offset = term.char_indices().nth(common_prefix_len).map(|(i, _)| i).unwrap_or(term.len());
+
+                compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
+                compressed_terms.extend_from_slice(&term.as_bytes()[byte_offset..]);
+            }
+
+            compressed_terms.push(0); // Null separator
+            last_term = term;
+        }
+        offsets.push(compressed_terms.len());
+
+        // offsets are an increasing list of array indices, therefore the last one will be the largest
+        // TODO: potential off by 1 in comparison with hdt-cpp implementation?
+        let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
+
+        DictSectPFC {
+            num_strings: num_terms,
+            block_size,
+            sequence: Sequence::new(&offsets, bits_per_entry),
+            packed_data: Arc::from(compressed_terms),
+        }
     }
 }
 

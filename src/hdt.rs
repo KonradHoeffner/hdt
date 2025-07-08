@@ -1,10 +1,16 @@
-use crate::FourSectDict;
+use crate::containers::rdf::Triple;
 use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{DictError, DictReadError, IdKind};
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
+use crate::vocab::*;
+use crate::{FourSectDict, containers};
 use crate::{header, header::Header};
 use bytesize::ByteSize;
 use log::{debug, error};
+use oxrdf::BlankNodeRef;
+use oxrdf::vocab::rdf;
+use oxrdf::{Literal, NamedNodeRef};
+use std::collections::{BTreeSet, HashSet};
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
@@ -53,6 +59,17 @@ pub enum Error {
     DictionaryValidationErrorTodo(#[from] std::io::Error),
 }
 
+#[derive(Clone, Debug)]
+pub struct Options {
+    pub block_size: usize,
+    pub order: String,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Options { block_size: 16, order: "SPO".to_string() }
+    }
+}
+
 impl Hdt {
     #[deprecated(since = "0.4.0", note = "please use `read` instead")]
     pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> {
@@ -80,6 +97,146 @@ impl Hdt {
         debug!("{hdt:#?}");
         Ok(hdt)
     }
+
+    /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
+    /// The path must point to an NT file.
+    /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
+    /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
+    /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
+    /// # Example
+    /// ```
+    /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
+    /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
+    /// ```
+    pub fn read_nt(f: &std::path::Path) -> Result<Self> {
+        let source = std::fs::File::open(f)?;
+        let mut reader = std::io::BufReader::new(source);
+        let opts = Options::default();
+        let (dictionary, encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
+        let num_triples = encoded_triples.len();
+
+        let converted_hdt = Hdt {
+            header: Header { format: String::new(), length: 0, body: BTreeSet::new() },
+            dict: dictionary,
+            triples: TriplesBitmap::new(encoded_triples),
+        };
+
+        // converted_hdt.build_header(f, num_triples, opts);
+        debug!("HDT size in memory {}, details:", ByteSize(converted_hdt.size_in_bytes() as u64));
+        debug!("{converted_hdt:#?}");
+        Ok(converted_hdt)
+    }
+
+    // fn build_header(&self, f: &std::path::Path, opts: Options, num_triples: usize) {
+    //     let mut headers = BTreeSet::new();
+    //     // libhdt/src/hdt/BasicHDT.cpp::fillHeader()
+
+    //     // uint64_t origSize = header->getPropertyLong(statisticsNode.c_str(), HDTVocabulary::ORIGINAL_SIZE.c_str());
+
+    //     // header->clear();
+    //     let file_iri = format!("file://{}", f.canonicalize()?.display());
+    //     let base_iri = NamedNodeRef::new(&file_iri)?;
+    //     // // BASE
+    //     // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::HDT_DATASET);
+    //     headers.insert(Triple{subject: containers::rdf::Id::Named(file_iri), predicate: rdf::TYPE.to_string(), object: containers::rdf::Literal::new(HDT_CONTAINER)});
+
+    //     // // VOID
+    //     // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::VOID_DATASET);
+    //     headers.insert(Triple::new(base_iri, rdf::TYPE, VOID_DATASET));
+    //     // header->insert(baseUri, HDTVocabulary::VOID_TRIPLES, triples->getNumberOfElements());
+    //     headers.insert(Triple::new(base_iri, VOID_TRIPLES, Literal::new_simple_literal(num_triples.to_string())));
+    //     // header->insert(baseUri, HDTVocabulary::VOID_PROPERTIES, dictionary->getNpredicates());
+    //     headers.insert(Triple::new(
+    //         base_iri,
+    //         VOID_PROPERTIES,
+    //         Literal::new_simple_literal(self.dict.predicates.num_strings.to_string()),
+    //     ));
+    //     // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_SUBJECTS, dictionary->getNsubjects());
+    //     headers.insert(Triple::new(
+    //         base_iri,
+    //         VOID_DISTINCT_SUBJECTS,
+    //         Literal::new_simple_literal(
+    //             (self.dict.subjects.num_strings + self.dict.shared.num_strings).to_string(),
+    //         ),
+    //     ));
+    //     // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_OBJECTS, dictionary->getNobjects());
+    //     headers.insert(Triple::new(
+    //         base_iri,
+    //         VOID_DISTINCT_OBJECTS,
+    //         Literal::new_simple_literal(
+    //             (self.dict.objects.num_strings + self.dict.shared.num_strings).to_string(),
+    //         ),
+    //     ));
+    //     // // TODO: Add more VOID Properties. E.g. void:classes
+
+    //     // // Structure
+    //     let stats_id = BlankNodeRef::new("statistics")?;
+    //     let pub_id = BlankNodeRef::new("publicationInformation")?;
+    //     let format_id = BlankNodeRef::new("format")?;
+    //     let dict_id = BlankNodeRef::new("dictionary")?;
+    //     let triples_id = BlankNodeRef::new("triples")?;
+    //     // header->insert(baseUri, HDTVocabulary::HDT_STATISTICAL_INFORMATION,	statisticsNode);
+    //     headers.insert(Triple::new(base_iri, HDT_STATISTICAL_INFORMATION, stats_id));
+    //     // header->insert(baseUri, HDTVocabulary::HDT_PUBLICATION_INFORMATION,	publicationInfoNode);
+    //     headers.insert(Triple::new(base_iri, HDT_STATISTICAL_INFORMATION, pub_id));
+    //     // header->insert(baseUri, HDTVocabulary::HDT_FORMAT_INFORMATION, formatNode);
+    //     headers.insert(Triple::new(base_iri, HDT_FORMAT_INFORMATION, format_id));
+    //     // header->insert(formatNode, HDTVocabulary::HDT_DICTIONARY, dictNode);
+    //     headers.insert(Triple::new(format_id, HDT_DICTIONARY, dict_id));
+    //     // header->insert(formatNode, HDTVocabulary::HDT_TRIPLES, triplesNode);
+    //     headers.insert(Triple::new(format_id, HDT_TRIPLES, triples_id));
+
+    //     // DICTIONARY
+    //     // header.insert(rootNode, HDTVocabulary::DICTIONARY_NUMSHARED, getNshared());
+    //     headers.insert(Triple::new(
+    //         dict_id,
+    //         HDT_DICT_SHARED_SO,
+    //         Literal::new_simple_literal(self.dict.shared.num_strings.to_string()),
+    //     ));
+    //     // header.insert(rootNode, HDTVocabulary::DICTIONARY_MAPPING, this->mapping);
+    //     headers.insert(Triple::new(dict_id, HDT_DICT_MAPPING, Literal::new_simple_literal("1")));
+    //     // header.insert(rootNode, HDTVocabulary::DICTIONARY_SIZE_STRINGS, size());
+    //     headers.insert(Triple::new(dict_id, HDT_DICT_SIZE_STRINGS, Literal::new_simple_literal("FIXME")));
+    //     // header.insert(rootNode, HDTVocabulary::DICTIONARY_BLOCK_SIZE, this->blocksize);
+    //     headers.insert(Triple::new(
+    //         dict_id,
+    //         HDT_DICT_BLOCK_SIZE,
+    //         Literal::new_simple_literal(opts.block_size.to_string()),
+    //     ));
+
+    //     // TRIPLES
+    //     // header.insert(rootNode, HDTVocabulary::TRIPLES_TYPE, getType());
+    //     headers.insert(Triple::new(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP));
+    //     // header.insert(rootNode, HDTVocabulary::TRIPLES_NUM_TRIPLES, getNumberOfElements() );
+    //     headers.insert(Triple::new(
+    //         triples_id,
+    //         HDT_NUM_TRIPLES,
+    //         Literal::new_simple_literal(num_triples.to_string()),
+    //     ));
+    //     // header.insert(rootNode, HDTVocabulary::TRIPLES_ORDER, getOrderStr(order) );
+    //     headers.insert(Triple::new(triples_id, HDT_TRIPLES_ORDER, Literal::new_simple_literal(opts.order)));
+
+    //     // // Sizes
+    //     let meta = File::open(std::path::Path::new(source_file))?.metadata().unwrap();
+    //     // header->insert(statisticsNode, HDTVocabulary::ORIGINAL_SIZE, origSize);
+    //     headers.insert(Triple::new(
+    //         stats_id,
+    //         HDT_ORIGINAL_SIZE,
+    //         Literal::new_simple_literal(meta.len().to_string()),
+    //     ));
+    //     // header->insert(statisticsNode, HDTVocabulary::HDT_SIZE, getDictionary()->size() + getTriples()->size());
+    //     headers.insert(Triple::new(stats_id, HDT_SIZE, Literal::new_simple_literal("FIXME")));
+
+    //     // // Current time
+    //     // struct tm* today = localtime(&now);
+    //     // strftime(date, 40, "%Y-%m-%dT%H:%M:%S%z", today);
+    //     // header->insert(publicationInfoNode, HDTVocabulary::DUBLIN_CORE_ISSUED, date);
+    //     let now = chrono::Utc::now(); // Get current local datetime
+    //     let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%z").to_string(); // Format as string
+    //     headers.insert(Triple::new(pub_id, DC_TERMS_ISSUED, Literal::new_simple_literal(datetime_str)));
+
+    //     self.header.body = headers;
+    // }
 
     /// Creates an immutable HDT instance containing the dictionary and triples from the Path.
     /// Will utilize a custom cached TriplesBitmap file if exists or create one if it does not exist.

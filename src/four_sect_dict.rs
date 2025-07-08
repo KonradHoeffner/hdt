@@ -1,10 +1,20 @@
-#![allow(missing_docs)] // temporariy while we figure out what should be public in the end
+#![allow(missing_docs)]
+use crate::hdt::Options;
+use crate::triples::TripleId;
+// temporariy while we figure out what should be public in the end
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
 use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
+use log::debug;
+use log::error;
+use oxrdf::Term;
+use oxrdfio::RdfFormat::NTriples;
+use oxrdfio::RdfParser;
+use std::collections::BTreeSet;
 //use eyre::{Result, WrapErr, eyre};
+use log::warn;
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;
@@ -76,6 +86,13 @@ pub enum DictReadError {
     ControlInfo(#[from] crate::containers::control_info::Error),
     DictSect(#[from] DictSectError),
     Other(String),
+}
+
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub struct EncodedTripleId {
+    pub subject: Id,
+    pub predicate: Id,
+    pub object: Id,
 }
 
 impl FourSectDict {
@@ -157,6 +174,128 @@ impl FourSectDict {
         })
     }
 
+    /// read the whole dictionary section including control information
+    pub fn read_nt<R: BufRead>(reader: &mut R, opts: Options) -> Result<(Self, Vec<TripleId>), DictReadError> {
+        // TODO switch to sophia
+        let quads = RdfParser::from_format(NTriples).for_reader(reader);
+        let timer = std::time::Instant::now();
+        let mut raw_triples = Vec::new(); // Store raw triples
+
+        // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
+        let mut subject_terms = BTreeSet::new();
+        let mut object_terms = BTreeSet::new();
+        let mut predicate_terms = BTreeSet::new();
+
+        for q in quads {
+            let q = match q {
+                Ok(v) => v,
+                Err(e) => return Err(DictReadError::Other(format!("error parsing triple file: {e}"))),
+            }; //propagate the error  
+
+            let subj_str = term_to_hdt_bgp_str(&q.subject.into());
+            let pred_str = term_to_hdt_bgp_str(&q.predicate.into());
+            let obj_str = term_to_hdt_bgp_str(&q.object);
+
+            subject_terms.insert(subj_str.clone());
+            predicate_terms.insert(pred_str.clone());
+            object_terms.insert(obj_str.clone());
+
+            raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
+        }
+        if predicate_terms.is_empty() {
+            warn!("no triples found in provided RDF");
+        }
+        raw_triples.sort_unstable(); // Faster than stable sort
+        raw_triples.dedup();
+
+        let mut shared_terms = subject_terms.clone();
+        shared_terms.retain(|item| object_terms.contains(item));
+        let unique_subject_terms: BTreeSet<String> = subject_terms.difference(&shared_terms).cloned().collect();
+        let unique_object_terms: BTreeSet<String> = object_terms.difference(&shared_terms).cloned().collect();
+
+        // let mut so_id_map: HashMap<String, u32> = HashMap::new();
+        // let mut pred_id_map: HashMap<String, u32> = HashMap::new();
+        // let mut subject_id_map: HashMap<String, u32> = HashMap::new();
+        // let mut object_id_map: HashMap<String, u32> = HashMap::new();
+
+        /*
+        https://www.w3.org/submissions/2011/SUBM-HDT-20110330/#dictionaryEncoding
+        Four subsets are mapped as follows (for a graph G with SG, PG, OG the different subjects, predicates and objects):
+        1. Common subject-objects (SOG) with IDs from 1 to |SOG|
+        2. Non common subjects (SG-SOG), mapped to [|SOG| +1, |SG|]
+        3. Non common objects (OG-SOG), in [|SOG|+1, |OG|]
+        4. Predicates, mapped to [1, |PG|].
+         */
+
+        // // Shared subject-objects: 1..=|SOG|
+        // let mut shared_id = 1;
+        // for term in &shared_terms {
+        //     so_id_map.insert(term.clone(), shared_id);
+        //     shared_id += 1;
+        // }
+
+        // // TODO run these 3 dictionary builds in parallel?
+
+        // // Subject-only: |SOG|+1 ..= |SG|
+        // let mut id = shared_id;
+        // for term in &t_subject_terms {
+        //     subject_id_map.insert(term.clone(), id);
+        //     id += 1;
+        // }
+
+        // // Object-only: |SOG|+1 ..= |OG|
+        // let mut id = shared_id;
+        // for term in &t_object_terms {
+        //     object_id_map.insert(term.clone(), id);
+        //     id += 1;
+        // }
+
+        // // Predicates: 1..=|PG|
+        // for (i, term) in predicate_terms.iter().enumerate() {
+        //     pred_id_map.insert(term.clone(), (i + 1) as u32);
+        // }
+
+        let dict = FourSectDict {
+            shared: DictSectPFC::compress(&shared_terms, opts.block_size),
+            predicates: DictSectPFC::compress(&predicate_terms, opts.block_size),
+            subjects: DictSectPFC::compress(&unique_subject_terms, opts.block_size),
+            objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
+        };
+
+        debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
+
+        let triple_encoder_timer = std::time::Instant::now();
+        // Then encode triples without re-parsing file
+        let encoded_triples: Vec<TripleId> = raw_triples
+            .into_iter()
+            .map(|(s, p, o)| TripleId {
+                subject_id: dict.string_to_id(&s, &IdKind::Subject),
+                predicate_id: dict.string_to_id(&p, &IdKind::Predicate),
+                object_id: dict.string_to_id(&o, &IdKind::Object),
+            })
+            .collect();
+        debug!("Encoding triples time: {:?}", triple_encoder_timer.elapsed());
+        debug!("Dictionary build time: {:?}", timer.elapsed());
+
+        // // println!("triples: {:?}", triples);
+        // Ok((dict, triples.into_iter().collect()))
+
+        // let dict_ci = ControlInfo::read(reader)?;
+        // if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
+        //     return Err(DictReadError::Other("Implementation only supports four section dictionaries".to_owned()));
+        // }
+        // let (shared, shared_crc) =
+        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
+        // let (subjects, subjects_crc) =
+        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Subject })?;
+        // let (predicates, predicates_crc) =
+        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
+        // let (objects, objects_crc) =
+        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Object })?;
+
+        Ok((dict, encoded_triples))
+    }
+
     /// write the whole Dictionary including control info and all sections
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
         use SectKind::*;
@@ -188,6 +327,20 @@ impl FourSectDict {
             + self.predicates.size_in_bytes()
             + self.objects.size_in_bytes()
     }
+}
+
+/// Convert triple string formats from OxRDF to HDT.
+pub fn term_to_hdt_bgp_str(term: &Term) -> String {
+    let hdt_str = match term {
+        // hdt terms should not include < >'s from IRIs
+        Term::NamedNode(named_node) => named_node.clone().into_string(),
+
+        Term::Literal(literal) => literal.to_string(),
+
+        Term::BlankNode(_s) => term.to_string(),
+    };
+
+    hdt_str
 }
 
 /// A wrapper to ensure prevent using FourSectDict before its checksum have been validated
