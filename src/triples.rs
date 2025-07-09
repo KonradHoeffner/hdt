@@ -271,7 +271,8 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
 impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
     pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
-        let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
+        //let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
+        let wavelet_y = Self::build_wavelet(sequence_y);
 
         debug!("Building OPS index...");
         let entries = adjlist_z.sequence.entries;
@@ -297,7 +298,8 @@ impl TriplesBitmap {
         #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
         let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
             .expect("Failed to create OPS index compact vector.");
-        let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization 
+        // disable parallelization temporarily for easier debugging
+        //let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
@@ -462,7 +464,11 @@ impl TriplesBitmap {
         for x in &sequence {
             builder.push_int(x).unwrap();
         }
-        assert!(sequence.crc_handle.take().unwrap().join().unwrap(), "Wavelet source CRC check failed.");
+        // may already be validated or be created without CRC
+        assert!(
+            sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()),
+            "Wavelet source CRC check failed."
+        );
         drop(sequence);
         let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
         debug!("Built wavelet matrix with length {}", wavelet.len());

@@ -82,7 +82,7 @@ impl Hdt {
     /// # Example
     /// ```
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-    /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
+    /// let hdt = hdt::Hdt::read(std::io::BufReader::new(file)).unwrap();
     /// ```
     pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         ControlInfo::read(&mut reader)?;
@@ -96,17 +96,15 @@ impl Hdt {
         Ok(hdt)
     }
 
-    /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
-    /// The path must point to an NT file.
-    /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
-    /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
-    /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
+    /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// # Example
     /// ```
-    /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
-    /// let hdt = hdt::Hdt::new(std::io::BufReader::new(file)).unwrap();
+    /// let path = std::path::Path::new("example.nt");
+    /// let hdt = hdt::Hdt::read_nt(path).unwrap();
+    ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
     /// ```
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
+        //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         let source = std::fs::File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         let opts = Options::default();
@@ -624,12 +622,15 @@ mod tests {
     }
 
     #[test]
-    fn convert() -> Result<()> {
+    fn nt_to_hdt() -> Result<()> {
         init();
+        //let filename = "tests/resources/snikmeta.nt";
         let filename = "tests/resources/apple.nt";
         let hdt = Hdt::read_nt(std::path::Path::new(filename))?;
+        hdt.write(&mut std::io::BufWriter::new(File::create("/tmp/fromnt.hdt")?))?;
         assert_eq!(hdt.dict.shared.num_strings, 1);
         assert_eq!(hdt.dict.predicates.num_strings, 7);
+        //triples(&hdt)?;
         Ok(())
     }
 
