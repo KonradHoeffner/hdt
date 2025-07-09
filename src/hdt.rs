@@ -7,6 +7,7 @@ use crate::{FourSectDict, containers};
 use crate::{header, header::Header};
 use bytesize::ByteSize;
 use log::{debug, error};
+use std::cmp::Ordering;
 use std::collections::BTreeSet;
 #[cfg(feature = "cache")]
 use std::fs::File;
@@ -109,11 +110,13 @@ impl Hdt {
         let source = std::fs::File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         let opts = Options::default();
-        let (dictionary, encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
+        let (dictionary, mut encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
         let num_triples = encoded_triples.len();
 
+        sort_triples_spo(&mut encoded_triples);
+
         let mut converted_hdt = Hdt {
-            header: Header { format: "ntriples".to_string(), length: 0, body: BTreeSet::new() },
+            header: Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() },
             dict: dictionary,
             triples: TriplesBitmap::from_triples(encoded_triples),
         };
@@ -139,27 +142,27 @@ impl Hdt {
         // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::HDT_DATASET);
         headers.insert(Triple::new(
             base_iri.clone(),
-            RDF_TYPE.to_string(),
-            containers::rdf::Term::Literal(containers::rdf::Literal::new(HDT_CONTAINER.to_string())),
+            RDF_TYPE.to_owned(),
+            containers::rdf::Term::Literal(containers::rdf::Literal::new(HDT_CONTAINER.to_owned())),
         ));
 
         // // VOID
         // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::VOID_DATASET);
         headers.insert(Triple::new(
             base_iri.clone(),
-            RDF_TYPE.to_string(),
-            containers::rdf::Term::Literal(containers::rdf::Literal::new(VOID_DATASET.to_string())),
+            RDF_TYPE.to_owned(),
+            containers::rdf::Term::Literal(containers::rdf::Literal::new(VOID_DATASET.to_owned())),
         ));
         // header->insert(baseUri, HDTVocabulary::VOID_TRIPLES, triples->getNumberOfElements());
         headers.insert(Triple::new(
             base_iri.clone(),
-            VOID_TRIPLES.to_string(),
+            VOID_TRIPLES.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(num_triples.to_string())),
         ));
         // header->insert(baseUri, HDTVocabulary::VOID_PROPERTIES, dictionary->getNpredicates());
         headers.insert(Triple::new(
             base_iri.clone(),
-            VOID_PROPERTIES.to_string(),
+            VOID_PROPERTIES.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 self.dict.predicates.num_strings.to_string(),
             )),
@@ -167,7 +170,7 @@ impl Hdt {
         // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_SUBJECTS, dictionary->getNsubjects());
         headers.insert(Triple::new(
             base_iri.clone(),
-            VOID_DISTINCT_SUBJECTS.to_string(),
+            VOID_DISTINCT_SUBJECTS.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 (self.dict.subjects.num_strings + self.dict.shared.num_strings).to_string(),
             )),
@@ -175,7 +178,7 @@ impl Hdt {
         // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_OBJECTS, dictionary->getNobjects());
         headers.insert(Triple::new(
             base_iri.clone(),
-            VOID_DISTINCT_OBJECTS.to_string(),
+            VOID_DISTINCT_OBJECTS.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 (self.dict.objects.num_strings + self.dict.shared.num_strings).to_string(),
             )),
@@ -183,39 +186,39 @@ impl Hdt {
         // // TODO: Add more VOID Properties. E.g. void:classes
 
         // // Structure
-        let stats_id = containers::rdf::Id::Blank("statistics".to_string());
-        let pub_id = containers::rdf::Id::Blank("publicationInformation".to_string());
-        let format_id = containers::rdf::Id::Blank("format".to_string());
-        let dict_id = containers::rdf::Id::Blank("dictionary".to_string());
-        let triples_id = containers::rdf::Id::Blank("triples".to_string());
+        let stats_id = containers::rdf::Id::Blank("statistics".to_owned());
+        let pub_id = containers::rdf::Id::Blank("publicationInformation".to_owned());
+        let format_id = containers::rdf::Id::Blank("format".to_owned());
+        let dict_id = containers::rdf::Id::Blank("dictionary".to_owned());
+        let triples_id = containers::rdf::Id::Blank("triples".to_owned());
         // header->insert(baseUri, HDTVocabulary::HDT_STATISTICAL_INFORMATION,	statisticsNode);
         headers.insert(Triple::new(
             base_iri.clone(),
-            HDT_STATISTICAL_INFORMATION.to_string(),
+            HDT_STATISTICAL_INFORMATION.to_owned(),
             containers::rdf::Term::Id(stats_id.clone()),
         ));
         // header->insert(baseUri, HDTVocabulary::HDT_PUBLICATION_INFORMATION,	publicationInfoNode);
         headers.insert(Triple::new(
             base_iri.clone(),
-            HDT_STATISTICAL_INFORMATION.to_string(),
+            HDT_STATISTICAL_INFORMATION.to_owned(),
             containers::rdf::Term::Id(pub_id.clone()),
         ));
         // header->insert(baseUri, HDTVocabulary::HDT_FORMAT_INFORMATION, formatNode);
         headers.insert(Triple::new(
             base_iri.clone(),
-            HDT_FORMAT_INFORMATION.to_string(),
+            HDT_FORMAT_INFORMATION.to_owned(),
             containers::rdf::Term::Id(format_id.clone()),
         ));
         // header->insert(formatNode, HDTVocabulary::HDT_DICTIONARY, dictNode);
         headers.insert(Triple::new(
             format_id.clone(),
-            HDT_DICTIONARY.to_string(),
+            HDT_DICTIONARY.to_owned(),
             containers::rdf::Term::Id(dict_id.clone()),
         ));
         // header->insert(formatNode, HDTVocabulary::HDT_TRIPLES, triplesNode);
         headers.insert(Triple::new(
             format_id,
-            HDT_TRIPLES.to_string(),
+            HDT_TRIPLES.to_owned(),
             containers::rdf::Term::Id(triples_id.clone()),
         ));
 
@@ -223,7 +226,7 @@ impl Hdt {
         // header.insert(rootNode, HDTVocabulary::DICTIONARY_NUMSHARED, getNshared());
         headers.insert(Triple::new(
             dict_id.clone(),
-            HDT_DICT_SHARED_SO.to_string(),
+            HDT_DICT_SHARED_SO.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 self.dict.shared.num_strings.to_string(),
             )),
@@ -231,13 +234,13 @@ impl Hdt {
         // header.insert(rootNode, HDTVocabulary::DICTIONARY_MAPPING, this->mapping);
         headers.insert(Triple::new(
             dict_id.clone(),
-            HDT_DICT_MAPPING.to_string(),
-            containers::rdf::Term::Literal(containers::rdf::Literal::new("1".to_string())),
+            HDT_DICT_MAPPING.to_owned(),
+            containers::rdf::Term::Literal(containers::rdf::Literal::new("1".to_owned())),
         ));
         // header.insert(rootNode, HDTVocabulary::DICTIONARY_SIZE_STRINGS, size());
         headers.insert(Triple::new(
             dict_id.clone(),
-            HDT_DICT_SIZE_STRINGS.to_string(),
+            HDT_DICT_SIZE_STRINGS.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 ByteSize(self.dict.size_in_bytes() as u64).to_string(),
             )),
@@ -245,7 +248,7 @@ impl Hdt {
         // header.insert(rootNode, HDTVocabulary::DICTIONARY_BLOCK_SIZE, this->blocksize);
         headers.insert(Triple::new(
             dict_id,
-            HDT_DICT_BLOCK_SIZE.to_string(),
+            HDT_DICT_BLOCK_SIZE.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(opts.block_size.to_string())),
         ));
 
@@ -253,19 +256,19 @@ impl Hdt {
         // header.insert(rootNode, HDTVocabulary::TRIPLES_TYPE, getType());
         headers.insert(Triple::new(
             triples_id.clone(),
-            DC_TERMS_FORMAT.to_string(),
-            containers::rdf::Term::Literal(containers::rdf::Literal::new(HDT_TYPE_BITMAP.to_string())),
+            DC_TERMS_FORMAT.to_owned(),
+            containers::rdf::Term::Literal(containers::rdf::Literal::new(HDT_TYPE_BITMAP.to_owned())),
         ));
         // header.insert(rootNode, HDTVocabulary::TRIPLES_NUM_TRIPLES, getNumberOfElements() );
         headers.insert(Triple::new(
             triples_id.clone(),
-            HDT_NUM_TRIPLES.to_string(),
+            HDT_NUM_TRIPLES.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(num_triples.to_string())),
         ));
         // header.insert(rootNode, HDTVocabulary::TRIPLES_ORDER, getOrderStr(order) );
         headers.insert(Triple::new(
             triples_id,
-            HDT_TRIPLES_ORDER.to_string(),
+            HDT_TRIPLES_ORDER.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(opts.order)),
         ));
 
@@ -274,13 +277,13 @@ impl Hdt {
         // header->insert(statisticsNode, HDTVocabulary::ORIGINAL_SIZE, origSize);
         headers.insert(Triple::new(
             stats_id.clone(),
-            HDT_ORIGINAL_SIZE.to_string(),
+            HDT_ORIGINAL_SIZE.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(meta.len().to_string())),
         ));
         // header->insert(statisticsNode, HDTVocabulary::HDT_SIZE, getDictionary()->size() + getTriples()->size());
         headers.insert(Triple::new(
             stats_id,
-            HDT_SIZE.to_string(),
+            HDT_SIZE.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(
                 ByteSize(self.size_in_bytes() as u64).to_string(),
             )),
@@ -294,7 +297,7 @@ impl Hdt {
         let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%z").to_string(); // Format as string
         headers.insert(Triple::new(
             pub_id,
-            DC_TERMS_ISSUED.to_string(),
+            DC_TERMS_ISSUED.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(datetime_str)),
         ));
 
@@ -526,6 +529,25 @@ impl Hdt {
     }
 }
 
+/// Function to sort a vector of Triples in SPO order
+fn sort_triples_spo(triples: &mut [TripleId]) {
+    triples.sort_by(spo_comparator);
+}
+
+fn spo_comparator(a: &TripleId, b: &TripleId) -> Ordering {
+    let subject_order = a.subject_id.cmp(&b.subject_id);
+    if subject_order != Ordering::Equal {
+        return subject_order;
+    }
+
+    let predicate_order = a.predicate_id.cmp(&b.predicate_id);
+    if predicate_order != Ordering::Equal {
+        return predicate_order;
+    }
+
+    a.object_id.cmp(&b.object_id)
+}
+
 /// A TripleCache stores the `Arc<str>` of the last returned triple
 #[derive(Clone, Debug)]
 pub struct TripleCache<'a> {
@@ -598,6 +620,16 @@ mod tests {
         hdt.write(&mut buf)?;
         let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
         triples(&hdt2)?;
+        Ok(())
+    }
+
+    #[test]
+    fn convert() -> Result<()> {
+        init();
+        let filename = "tests/resources/apple.nt";
+        let hdt = Hdt::read_nt(std::path::Path::new(filename))?;
+        assert_eq!(hdt.dict.shared.num_strings, 1);
+        assert_eq!(hdt.dict.predicates.num_strings, 7);
         Ok(())
     }
 

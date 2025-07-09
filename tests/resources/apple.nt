@@ -1,0 +1,9 @@
+<http://example.org/apple#Apple> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/apple#Fruit> .
+<http://example.org/apple#Apple> <http://example.org/apple#variety> "Red Delicious" .
+<http://example.org/apple#Apple> <http://example.org/apple#color> "Red" .
+<http://example.org/apple#Apple> <http://example.org/apple#weight> "150 grams" .
+<http://example.org/apple#Apple> <http://example.org/apple#origin> "United States" .
+<http://example.org/apple#Apple> <http://example.org/apple#isOrganic> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .
+<http://example.org/apple#Apple> <http://www.w3.org/2000/01/rdf-schema#label> "μApple" .
+<http://example.org/apple#Fruit> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2000/01/rdf-schema#Class> .
+<http://example.org/apple#Fruit> <http://www.w3.org/2000/01/rdf-schema#label> "Fruit" .
