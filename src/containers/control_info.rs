@@ -63,7 +63,7 @@ impl ControlInfo {
         let mut hdt_cookie: [u8; 4] = [0; 4];
         reader.read_exact(&mut hdt_cookie)?;
         if &hdt_cookie != b"$HDT" {
-            return Err(eyre!("Chunk {hdt_cookie:?} does not equal the HDT cookie '$HDT'"));
+            return Err(eyre!("Chunk {hdt_cookie:?} '{}' does not equal the HDT cookie '$HDT'",String::from_utf8_lossy(&hdt_cookie)));
         }
         digest.update(&hdt_cookie);
 
