@@ -334,17 +334,13 @@ impl TriplesBitmap {
             let y = triple.predicate_id;
             let z = triple.object_id;
 
-            if x == 0 || y == 0 || z == 0 {
-                panic!("triple IDs should never be zero")
-            }
+            assert!(!(x == 0 || y == 0 || z == 0), "triple IDs should never be zero");
 
             if i == 0 {
                 array_y.push(y);
                 array_z.push(z);
             } else if x != last_x {
-                if x != last_x + 1 {
-                    panic!("the subjects must be correlative.")
-                }
+                assert!(!(x != last_x + 1), "the subjects must be correlative.");
 
                 //x unchanged
                 y_bitmap.push_bit(true);
@@ -353,9 +349,7 @@ impl TriplesBitmap {
                 z_bitmap.push_bit(true);
                 array_z.push(z);
             } else if y != last_y {
-                if y < last_y {
-                    panic!("the predicates must be in increasing order.")
-                }
+                assert!(!(y < last_y), "the predicates must be in increasing order.");
 
                 // y unchanged
                 y_bitmap.push_bit(false);
@@ -364,9 +358,7 @@ impl TriplesBitmap {
                 z_bitmap.push_bit(true);
                 array_z.push(z);
             } else {
-                if z < last_z {
-                    panic!("the objects must be in increasing order")
-                }
+                assert!(!(z < last_z), "the objects must be in increasing order");
 
                 // z changed
                 z_bitmap.push_bit(false);
@@ -465,10 +457,7 @@ impl TriplesBitmap {
             builder.push_int(x).unwrap();
         }
         // may already be validated or be created without CRC
-        assert!(
-            sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()),
-            "Wavelet source CRC check failed."
-        );
+        assert!(sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()), "Wavelet source CRC check failed.");
         drop(sequence);
         let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
         debug!("Built wavelet matrix with length {}", wavelet.len());

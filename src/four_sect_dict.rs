@@ -331,16 +331,14 @@ impl FourSectDict {
 
 /// Convert triple string formats from OxRDF to HDT.
 pub fn term_to_hdt_bgp_str(term: &Term) -> String {
-    let hdt_str = match term {
+    match term {
         // hdt terms should not include < >'s from IRIs
         Term::NamedNode(named_node) => named_node.clone().into_string(),
 
         Term::Literal(literal) => literal.to_string(),
 
         Term::BlankNode(_s) => term.to_string(),
-    };
-
-    hdt_str
+    }
 }
 
 /// A wrapper to ensure prevent using FourSectDict before its checksum have been validated

@@ -64,7 +64,7 @@ pub struct Options {
 }
 impl Default for Options {
     fn default() -> Self {
-        Options { block_size: 16, order: "SPO".to_string() }
+        Options { block_size: 16, order: "SPO".to_owned() }
     }
 }
 

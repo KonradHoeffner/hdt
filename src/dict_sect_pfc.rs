@@ -337,7 +337,7 @@ impl DictSectPFC {
     }
 
     pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Self {
-        let mut terms: Vec<String> = set.iter().to_owned().cloned().collect();
+        let mut terms: Vec<String> = set.iter().cloned().collect();
         terms.sort(); // Ensure lexicographic order
         // println!("{:?}", terms);
         let mut compressed_terms = Vec::new();
@@ -352,7 +352,7 @@ impl DictSectPFC {
             } else {
                 let common_prefix_len = last_term.chars().zip(term.chars()).take_while(|(a, b)| a == b).count();
 
-                let byte_offset = term.char_indices().nth(common_prefix_len).map(|(i, _)| i).unwrap_or(term.len());
+                let byte_offset = term.char_indices().nth(common_prefix_len).map_or(term.len(), |(i, _)| i);
 
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
                 compressed_terms.extend_from_slice(&term.as_bytes()[byte_offset..]);
