@@ -21,3 +21,4 @@ pub const HDT_DICT_SIZE_STRINGS: &str = "http://purl.org/HDT/hdt#dictionarysizeS
 pub const HDT_DICT_BLOCK_SIZE: &str = "http://purl.org/HDT/hdt#dictionaryblockSize";
 pub const HDT_TYPE_BITMAP: &str = "http://purl.org/HDT/hdt#triplesBitmap";
 pub const HDT_DICTIONARY_TYPE_FOUR: &str = "http://purl.org/HDT/hdt#dictionaryFour";
+pub const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
