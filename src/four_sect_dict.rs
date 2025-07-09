@@ -123,7 +123,7 @@ impl FourSectDict {
         }
     }
 
-    /// Get the string value of an ID.
+    /// Get the ID for a given string or 0 if not found.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
     pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> Id {
         let shared_size = self.shared.num_strings();
@@ -265,13 +265,18 @@ impl FourSectDict {
         debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
 
         let triple_encoder_timer = std::time::Instant::now();
+        //println!("{raw_triples:?}");
         // Then encode triples without re-parsing file
+
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
-            .map(|(s, p, o)| TripleId {
-                subject_id: dict.string_to_id(&s, &IdKind::Subject),
-                predicate_id: dict.string_to_id(&p, &IdKind::Predicate),
-                object_id: dict.string_to_id(&o, &IdKind::Object),
+            .map(|(s, p, o)| {
+                let triple = TripleId {
+                    subject_id: dict.string_to_id(&s, &IdKind::Subject),
+                    predicate_id: dict.string_to_id(&p, &IdKind::Predicate),
+                    object_id: dict.string_to_id(&o, &IdKind::Object),
+                };
+                triple
             })
             .collect();
         debug!("Encoding triples time: {:?}", triple_encoder_timer.elapsed());
