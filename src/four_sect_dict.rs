@@ -174,7 +174,7 @@ impl FourSectDict {
         })
     }
 
-    /// read the whole dictionary section including control information
+    /// read N-Triples and convert them to a dictionary and triple IDs
     pub fn read_nt<R: BufRead>(reader: &mut R, opts: Options) -> Result<(Self, Vec<TripleId>), DictReadError> {
         // TODO switch to sophia
         let quads = RdfParser::from_format(NTriples).for_reader(reader);
@@ -185,7 +185,6 @@ impl FourSectDict {
         let mut subject_terms = BTreeSet::new();
         let mut object_terms = BTreeSet::new();
         let mut predicate_terms = BTreeSet::new();
-
         for q in quads {
             let q = match q {
                 Ok(v) => v,
@@ -207,6 +206,7 @@ impl FourSectDict {
         }
         raw_triples.sort_unstable(); // Faster than stable sort
         raw_triples.dedup();
+        assert!(raw_triples.len() == 328); // remove later, for debugging snikmeta.nt
 
         let mut shared_terms = subject_terms.clone();
         shared_terms.retain(|item| object_terms.contains(item));
@@ -261,7 +261,11 @@ impl FourSectDict {
             subjects: DictSectPFC::compress(&unique_subject_terms, opts.block_size),
             objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
         };
-
+        // for debugging, remove later
+        assert!(dict.shared.num_strings == shared_terms.len());
+        assert!(dict.predicates.num_strings == predicate_terms.len());
+        assert!(dict.subjects.num_strings == unique_subject_terms.len());
+        assert!(dict.objects.num_strings == unique_object_terms.len());
         debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
 
         let triple_encoder_timer = std::time::Instant::now();
@@ -276,6 +280,9 @@ impl FourSectDict {
                     predicate_id: dict.string_to_id(&p, &IdKind::Predicate),
                     object_id: dict.string_to_id(&o, &IdKind::Object),
                 };
+                if triple.subject_id == 0 || triple.predicate_id == 0 || triple.object_id == 0 {
+                    error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
+                }
                 triple
             })
             .collect();

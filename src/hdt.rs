@@ -628,8 +628,8 @@ mod tests {
     #[test]
     fn read_nt() -> Result<()> {
         init();
-        //let filename = "tests/resources/snikmeta.nt";
-        let filename = "tests/resources/apple.nt";
+        let filename = "tests/resources/snikmeta.nt";
+        //let filename = "tests/resources/apple.nt";
         let hdt = Hdt::read_nt(std::path::Path::new(filename))?;
         hdt.write(&mut std::io::BufWriter::new(File::create("/tmp/fromnt.hdt")?))?;
         //assert_eq!(hdt.dict.shared.num_strings, 1);

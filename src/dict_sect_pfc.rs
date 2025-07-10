@@ -366,13 +366,21 @@ impl DictSectPFC {
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?
         let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
-
-        DictSectPFC {
+        let sect = DictSectPFC {
             num_strings: num_terms,
             block_size,
             sequence: Sequence::new(&offsets, bits_per_entry),
             packed_data: Arc::from(compressed_terms),
+        };
+        let extracted: BTreeSet<_> = (1..sect.num_strings).map(|i| sect.extract(i).unwrap()).collect();
+        if &extracted != set {
+            error!(
+                "\x1b[34mSets are not equal!\nOnly in 'extracted': {:?}\nOnly in 'set': {:?}\x1b[0m",
+                extracted.difference(&set).collect::<BTreeSet<_>>(),
+                set.difference(&extracted).collect::<BTreeSet<_>>()
+            );
         }
+        sect
     }
 }
 

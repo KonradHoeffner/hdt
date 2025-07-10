@@ -102,6 +102,7 @@ impl<'a> IntoIterator for &'a Sequence {
 
 impl Sequence {
     /// Get the integer at the given index, counting from 0.
+    /// Panics if the index is out of bounds.
     pub fn get(&self, index: usize) -> usize {
         let scaled_index = index * self.bits_per_entry;
         let block_index = scaled_index / USIZE_BITS;
