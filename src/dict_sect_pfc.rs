@@ -193,7 +193,7 @@ impl DictSectPFC {
         id_in_block
     }
 
-    /// extract the string with the given ID from the dictionary
+    /// extract the string with the given ID between 1 and self.num_strings (inclusive) from the dictionary
     pub fn extract(&self, id: Id) -> core::result::Result<String, ExtractError> {
         if id as usize > self.num_strings {
             return Err(ExtractError::IdOutOfBounds { id, len: self.num_strings });
@@ -342,20 +342,18 @@ impl DictSectPFC {
         // println!("{:?}", terms);
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
-        let mut last_term = "";
+        let mut last_term: &[u8] = &[];
 
         let num_terms = terms.len();
         for (i, term) in terms.iter().enumerate() {
+            let term = term.as_bytes();
             if i % block_size == 0 {
                 offsets.push(compressed_terms.len());
-                compressed_terms.extend_from_slice(term.as_bytes());
+                compressed_terms.extend_from_slice(term);
             } else {
-                let common_prefix_len = last_term.chars().zip(term.chars()).take_while(|(a, b)| a == b).count();
-
-                let byte_offset = term.char_indices().nth(common_prefix_len).map_or(term.len(), |(i, _)| i);
-
+                let common_prefix_len = last_term.iter().zip(term).take_while(|(a, b)| a == b).count();
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-                compressed_terms.extend_from_slice(&term.as_bytes()[byte_offset..]);
+                compressed_terms.extend_from_slice(&term[common_prefix_len..]);
             }
 
             compressed_terms.push(0); // Null separator
@@ -372,7 +370,8 @@ impl DictSectPFC {
             sequence: Sequence::new(&offsets, bits_per_entry),
             packed_data: Arc::from(compressed_terms),
         };
-        let extracted: BTreeSet<_> = (1..sect.num_strings).map(|i| sect.extract(i).unwrap()).collect();
+        /* debugging compression issues, remove later
+        let extracted: BTreeSet<_> = (1..sect.num_strings+1).map(|i| sect.extract(i).unwrap()).collect();
         if &extracted != set {
             error!(
                 "\x1b[34mSets are not equal!\nOnly in 'extracted': {:?}\nOnly in 'set': {:?}\x1b[0m",
@@ -380,6 +379,7 @@ impl DictSectPFC {
                 set.difference(&extracted).collect::<BTreeSet<_>>()
             );
         }
+        */
         sect
     }
 }

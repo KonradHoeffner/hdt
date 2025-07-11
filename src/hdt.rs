@@ -133,14 +133,14 @@ impl Hdt {
 
     /// populated HDT header fields
     /// TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
-    fn build_header(&mut self, f: &std::path::Path, opts: Options, num_triples: usize) {
+    fn build_header(&mut self, path: &std::path::Path, opts: Options, num_triples: usize) {
         let mut headers = BTreeSet::new();
         // libhdt/src/hdt/BasicHDT.cpp::fillHeader()
 
         // uint64_t origSize = header->getPropertyLong(statisticsNode.c_str(), HDTVocabulary::ORIGINAL_SIZE.c_str());
 
         // header->clear();
-        let file_iri = format!("file://{}", f.canonicalize().unwrap().display());
+        let file_iri = format!("file://{}", path.canonicalize().unwrap().display());
         let base_iri = containers::rdf::Id::Named(file_iri);
         // // BASE
         // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::HDT_DATASET);
@@ -277,7 +277,7 @@ impl Hdt {
         ));
 
         // // Sizes
-        let meta = std::fs::File::open(f).unwrap().metadata().unwrap();
+        let meta = std::fs::File::open(path).unwrap().metadata().unwrap();
         // header->insert(statisticsNode, HDTVocabulary::ORIGINAL_SIZE, origSize);
         headers.insert(Triple::new(
             stats_id.clone(),
