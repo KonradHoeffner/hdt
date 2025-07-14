@@ -634,7 +634,7 @@ mod tests {
         hdt.write(&mut std::io::BufWriter::new(File::create("/tmp/fromnt.hdt")?))?;
         //assert_eq!(hdt.dict.shared.num_strings, 1);
         //assert_eq!(hdt.dict.predicates.num_strings, 7);
-        //triples(&hdt)?;
+        triples(&hdt)?;
         Ok(())
     }
 

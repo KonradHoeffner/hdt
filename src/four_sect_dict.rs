@@ -182,9 +182,9 @@ impl FourSectDict {
         let mut raw_triples = Vec::new(); // Store raw triples
 
         // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
-        let mut subject_terms = BTreeSet::new();
-        let mut object_terms = BTreeSet::new();
-        let mut predicate_terms = BTreeSet::new();
+        let mut subject_terms = BTreeSet::<String>::new();
+        let mut object_terms = BTreeSet::<String>::new();
+        let mut predicate_terms = Vec::<String>::new();
         for q in quads {
             let q = match q {
                 Ok(v) => v,
@@ -196,7 +196,7 @@ impl FourSectDict {
             let obj_str = term_to_hdt_bgp_str(&q.object);
 
             subject_terms.insert(subj_str.clone());
-            predicate_terms.insert(pred_str.clone());
+            predicate_terms.push(pred_str.clone());
             object_terms.insert(obj_str.clone());
 
             raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
@@ -204,14 +204,17 @@ impl FourSectDict {
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
+        let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
         raw_triples.sort_unstable(); // Faster than stable sort
         raw_triples.dedup();
-        assert!(raw_triples.len() == 328); // remove later, for debugging snikmeta.nt
+        assert!(raw_triples.len() == 328); // TODO: remove later, for debugging snikmeta.nt
 
-        let mut shared_terms = subject_terms.clone();
-        shared_terms.retain(|item| object_terms.contains(item));
-        let unique_subject_terms: BTreeSet<String> = subject_terms.difference(&shared_terms).cloned().collect();
-        let unique_object_terms: BTreeSet<String> = object_terms.difference(&shared_terms).cloned().collect();
+        let shared_terms: BTreeSet<&str> =
+            subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect();
+        let unique_subject_terms: BTreeSet<&str> =
+            subject_terms.difference(&object_terms).map(std::ops::Deref::deref).collect();
+        let unique_object_terms: BTreeSet<&str> =
+            object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect();
 
         // let mut so_id_map: HashMap<String, u32> = HashMap::new();
         // let mut pred_id_map: HashMap<String, u32> = HashMap::new();
@@ -254,18 +257,19 @@ impl FourSectDict {
         // for (i, term) in predicate_terms.iter().enumerate() {
         //     pred_id_map.insert(term.clone(), (i + 1) as u32);
         // }
-
         let dict = FourSectDict {
             shared: DictSectPFC::compress(&shared_terms, opts.block_size),
-            predicates: DictSectPFC::compress(&predicate_terms, opts.block_size),
+            predicates: DictSectPFC::compress(&predicate_terms_ref, opts.block_size),
             subjects: DictSectPFC::compress(&unique_subject_terms, opts.block_size),
             objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
         };
-        // for debugging, remove later
-        assert!(dict.shared.num_strings == shared_terms.len());
-        assert!(dict.predicates.num_strings == predicate_terms.len());
-        assert!(dict.subjects.num_strings == unique_subject_terms.len());
-        assert!(dict.objects.num_strings == unique_object_terms.len());
+        // for debugging, TODO: remove later
+        assert_eq!(dict.shared.num_strings, shared_terms.len());
+        assert_eq!(dict.predicates.num_strings, predicate_terms_ref.len());
+        //println!("{predicate_terms_ref:?}");
+        assert_eq!(dict.subjects.num_strings, unique_subject_terms.len());
+        println!("{unique_subject_terms:?}");
+        assert_eq!(dict.objects.num_strings, unique_object_terms.len());
         debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
 
         let triple_encoder_timer = std::time::Instant::now();

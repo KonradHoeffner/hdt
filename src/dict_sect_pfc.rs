@@ -336,9 +336,12 @@ impl DictSectPFC {
         Ok(())
     }
 
-    pub fn compress(set: &BTreeSet<String>, block_size: usize) -> Self {
-        let mut terms: Vec<String> = set.iter().cloned().collect();
-        terms.sort(); // Ensure lexicographic order
+    /// sorted and unique terms
+    pub fn compress(terms: &BTreeSet<&str>, block_size: usize) -> Self {
+        // terms parameter could also another type like a slice of &str
+        // but then we would need to sort and deduplicate ourselves
+        //let mut terms: Vec<&str> = set.iter().cloned().collect();
+        //terms.sort(); // Ensure lexicographic order
         // println!("{:?}", terms);
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
@@ -484,6 +487,22 @@ mod tests {
         //crc_handle.join().unwrap();
         //assert_eq!(shared, shared2);
         //assert_eq!(subjects, subjects2);
+        Ok(())
+    }
+
+    #[test]
+    fn compress() -> color_eyre::Result<()> {
+        init();
+        //let strings = ["\"ХОББИ\"@ru", "bello", "hello", "ХОББИ"];
+        let strings = [
+            "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
+            "http://www.snik.eu/ontology/meta/homonym", "http://www.snik.eu/ontology/meta/master",
+            "http://www.snik.eu/ontology/meta/typicalFeature", "http://www.snik.eu/ontology/meta/хобби-N-0",
+        ];
+        let set: BTreeSet<&str> = strings.into_iter().collect();
+        let dict = DictSectPFC::compress(&set, 16);
+        let items: Vec<String> = (1..dict.num_strings() + 1).map(|i| dict.extract(i).unwrap()).collect();
+        assert!(strings.iter().eq(&items), "input: {strings:?} output: {items:?}");
         Ok(())
     }
 }
