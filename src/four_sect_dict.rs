@@ -207,7 +207,6 @@ impl FourSectDict {
         let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
         raw_triples.sort_unstable(); // Faster than stable sort
         raw_triples.dedup();
-        assert!(raw_triples.len() == 328); // TODO: remove later, for debugging snikmeta.nt
 
         let shared_terms: BTreeSet<&str> =
             subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect();
@@ -264,12 +263,6 @@ impl FourSectDict {
             objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
         };
         // for debugging, TODO: remove later
-        assert_eq!(dict.shared.num_strings, shared_terms.len());
-        assert_eq!(dict.predicates.num_strings, predicate_terms_ref.len());
-        //println!("{predicate_terms_ref:?}");
-        assert_eq!(dict.subjects.num_strings, unique_subject_terms.len());
-        println!("{unique_subject_terms:?}");
-        assert_eq!(dict.objects.num_strings, unique_object_terms.len());
         debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
 
         let triple_encoder_timer = std::time::Instant::now();

@@ -369,6 +369,8 @@ impl TriplesBitmap {
             last_y = y;
             last_z = z;
         }
+        y_bitmap.push_bit(true);
+        z_bitmap.push_bit(true);
 
         let bits_per_entry: usize = (triples.len().ilog2() + 1).try_into().unwrap();
 
@@ -642,9 +644,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn from_triples() -> color_eyre::Result<()> {
-        //let triples: Vec<TripleId> = vec![TripleId::new(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
-        todo!("not yet implemented");
-    }
+    /*
+      #[test]
+        fn from_triples() -> color_eyre::Result<()> {
+            //let triples: Vec<TripleId> = vec![TripleId::new(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
+            todo!("not yet implemented");
+        }
+    */
 }

@@ -99,7 +99,7 @@ impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// # Example
     /// ```
-    /// let path = std::path::Path::new("example.nt");
+    /// let path = std::path::Path::new("tests/resources/apple.nt");
     /// let hdt = hdt::Hdt::read_nt(path).unwrap();
     /// ```
     ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
@@ -125,7 +125,7 @@ impl Hdt {
             writeln!(buf, "{triple}")?;
         }
         hdt.header.length = buf.len();
-        println!("header length {}", hdt.header.length);
+        //println!("header length {}", hdt.header.length);
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
@@ -622,11 +622,11 @@ pub mod tests {
     fn write() -> Result<()> {
         init();
         let hdt = snikmeta()?;
-        triples(&hdt)?;
+        snikmeta_check(&hdt)?;
         let mut buf = Vec::<u8>::new();
         hdt.write(&mut buf)?;
         let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
-        triples(&hdt2)?;
+        snikmeta_check(&hdt2)?;
         Ok(())
     }
 
@@ -635,18 +635,28 @@ pub mod tests {
         init();
         let filename = "tests/resources/snikmeta.nt";
         //let filename = "tests/resources/apple.nt";
-        let hdt = Hdt::read_nt(std::path::Path::new(filename))?;
-        hdt.write(&mut std::io::BufWriter::new(File::create("/tmp/fromnt.hdt")?))?;
-        //assert_eq!(hdt.dict.shared.num_strings, 1);
-        //assert_eq!(hdt.dict.predicates.num_strings, 7);
-        triples(&hdt)?;
+        let snikmeta_nt = Hdt::read_nt(std::path::Path::new(filename))?;
+
+        let snikmeta = snikmeta()?;
+        let hdt_triples: Vec<StringTriple> = snikmeta.triples().collect();
+        let nt_triples: Vec<StringTriple> = snikmeta_nt.triples().collect();
+
+        assert_eq!(nt_triples, hdt_triples);
+        assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
+        snikmeta_check(&snikmeta_nt)?;
         Ok(())
     }
 
-    fn triples(hdt: &Hdt) -> Result<()> {
-        let triples = hdt.triples();
-        let v: Vec<StringTriple> = triples.collect();
+    fn snikmeta_check(hdt: &Hdt) -> Result<()> {
+        let triples = &hdt.triples;
+        assert_eq!(triples.bitmap_y.num_ones(), 49, "{:?}", triples.bitmap_y); // one for each subjecct
+        //assert_eq!();
+        let v: Vec<StringTriple> = hdt.triples().collect();
         assert_eq!(v.len(), 328);
+        assert_eq!(hdt.dict.shared.num_strings, 43);
+        assert_eq!(hdt.dict.subjects.num_strings, 6);
+        assert_eq!(hdt.dict.predicates.num_strings, 23);
+        assert_eq!(hdt.dict.objects.num_strings, 133);
         assert_eq!(v, hdt.triples_with_pattern(None, None, None).collect::<Vec<_>>(), "all triples not equal ???");
         assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
@@ -691,9 +701,11 @@ pub mod tests {
             "S?O multiple"
         );
         let s = "http://www.snik.eu/ontology/meta/хобби-N-0";
+        assert_eq!(hdt.dict.string_to_id(s, &IdKind::Subject), 49);
+        assert_eq!(hdt.dict.id_to_string(49, &IdKind::Subject)?, s);
         let o = "\"ХОББИ\"@ru";
         let triple_vec = vec![(Arc::from(s), Arc::from(p), Arc::from(o))];
-        assert_eq!(triple_vec, hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(),);
+        assert_eq!(hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), triple_vec);
         Ok(())
     }
 }
