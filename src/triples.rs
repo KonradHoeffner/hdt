@@ -419,7 +419,10 @@ impl TriplesBitmap {
         if subject_id == 0 {
             return 0;
         }
-        self.bitmap_y.select1(subject_id - 1).unwrap_or_else(|| panic!("invalid s_id {subject_id}")) as usize + 1
+        self.bitmap_y.select1(subject_id - 1).unwrap_or_else(|| {
+            panic!("invalid s_id {subject_id}, there are only {} subjects", self.bitmap_y.num_ones())
+        }) as usize
+            + 1
     }
 
     /// Position in the wavelet index of the last predicate for the given subject ID.

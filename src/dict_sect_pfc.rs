@@ -391,6 +391,7 @@ impl DictSectPFC {
 mod tests {
     use super::*;
     use crate::ControlInfo;
+    use crate::hdt::tests::snikmeta;
     use crate::header::Header;
     use crate::tests::init;
     use fs_err::File;
@@ -404,6 +405,7 @@ mod tests {
         assert_eq!(d, "\"123\"^^<http://www.w3.org/2001/XMLSchema#integer>");
     }
     */
+
     #[test]
     fn read_section_read() -> color_eyre::Result<()> {
         init();
@@ -493,16 +495,36 @@ mod tests {
     #[test]
     fn compress() -> color_eyre::Result<()> {
         init();
-        //let strings = ["\"ХОББИ\"@ru", "bello", "hello", "ХОББИ"];
+        const BLOCK_SIZE: usize = 16;
+        // stand-alone small test
         let strings = [
             "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
             "http://www.snik.eu/ontology/meta/homonym", "http://www.snik.eu/ontology/meta/master",
             "http://www.snik.eu/ontology/meta/typicalFeature", "http://www.snik.eu/ontology/meta/хобби-N-0",
         ];
-        let set: BTreeSet<&str> = strings.into_iter().collect();
-        let dict = DictSectPFC::compress(&set, 16);
-        let items: Vec<String> = (1..dict.num_strings() + 1).map(|i| dict.extract(i).unwrap()).collect();
-        assert!(strings.iter().eq(&items), "input: {strings:?} output: {items:?}");
+        let string_vec = Vec::from(strings);
+        let set: BTreeSet<&str> = BTreeSet::from(strings);
+        let dict = DictSectPFC::compress(&set, BLOCK_SIZE);
+        // could add this as DictSectPFC::items if required elsewhere
+        let sect_items = |ds: &DictSectPFC| -> Vec<String> {
+            (1..ds.num_strings() + 1).map(|i| ds.extract(i).unwrap()).collect()
+        };
+        //let items: Vec<String> = (1..dict.num_strings() + 1).map(|i| dict.extract(i).unwrap()).collect();
+        let items = sect_items(&dict);
+        assert_eq!(string_vec, items);
+
+        // large test that relies on HDT reading and involved components working correctly
+        let hdt = snikmeta()?;
+        let dict = hdt.dict;
+        let names = ["shared", "subject", "predicate", "object"];
+        let sects = [dict.shared, dict.subjects, dict.predicates, dict.objects];
+        for (sect, name) in sects.iter().zip(names) {
+            let items1 = sect_items(sect);
+            let set1: BTreeSet<&str> = items1.iter().map(std::ops::Deref::deref).collect();
+            let sect2 = DictSectPFC::compress(&set1, BLOCK_SIZE);
+            let items2 = sect_items(&sect2);
+            assert_eq!(items1, items2, "error compressing {name} section");
+        }
         Ok(())
     }
 }

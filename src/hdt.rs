@@ -604,19 +604,24 @@ impl<'a> TripleCache<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
 
+    /// reusable test HDT read from SNIK Meta test HDT file
+    pub fn snikmeta() -> Result<Hdt> {
+        let filename = "tests/resources/snikmeta.hdt";
+        let file = File::open(filename)?;
+        Ok(Hdt::read(std::io::BufReader::new(file))?)
+    }
+
     #[test]
     fn write() -> Result<()> {
         init();
-        let filename = "tests/resources/snikmeta.hdt";
-        let file = File::open(filename)?;
-        let hdt = Hdt::read(std::io::BufReader::new(file))?;
+        let hdt = snikmeta()?;
         triples(&hdt)?;
         let mut buf = Vec::<u8>::new();
         hdt.write(&mut buf)?;

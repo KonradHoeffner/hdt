@@ -7,7 +7,7 @@ use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 use sucds::Serializable;
-use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
+use sucds::bit_vectors::{Access, BitVector, NumBits, Rank, Rank9Sel, Select};
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
@@ -98,6 +98,11 @@ impl Bitmap {
     /// Number of bits in the bitmap, multiple of 64
     pub const fn len(&self) -> usize {
         self.dict.len()
+    }
+
+    /// Number of bits set
+    pub fn num_ones(&self) -> usize {
+        self.dict.num_ones()
     }
 
     /// Returns the position of the k-1-th one bit or None if there aren't that many.
