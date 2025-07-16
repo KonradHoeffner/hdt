@@ -616,8 +616,14 @@ pub mod tests {
     #[cfg(feature = "sophia")]
     fn read_nt() -> Result<()> {
         init();
-        let filename = "tests/resources/snikmeta.nt";
-        let snikmeta_nt = Hdt::read_nt(std::path::Path::new(filename))?;
+        let path = std::path::Path::new("tests/resources/snikmeta.nt");
+        if !path.exists() {
+            println!("Creating test resource snikmeta.nt.");
+            let graph = crate::hdt_graph::HdtGraph::new(snikmeta()?);
+            let mut writer = std::io::BufWriter::new(File::create(path)?);
+            graph.write_nt(&mut writer)?;
+        }
+        let snikmeta_nt = Hdt::read_nt(path)?;
 
         let snikmeta = snikmeta()?;
         let hdt_triples: Vec<StringTriple> = snikmeta.triples().collect();
