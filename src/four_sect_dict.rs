@@ -1,20 +1,11 @@
 #![allow(missing_docs)]
-use crate::hdt::Options;
-use crate::triples::TripleId;
-// temporariy while we figure out what should be public in the end
+// temporary while we figure out what should be public in the end
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
 use crate::dict_sect_pfc::ExtractError;
 use crate::triples::Id;
-use log::debug;
 use log::error;
-use oxrdf::Term;
-use oxrdfio::RdfFormat::NTriples;
-use oxrdfio::RdfParser;
-use std::collections::BTreeSet;
-//use eyre::{Result, WrapErr, eyre};
-use log::warn;
 use std::io;
 use std::io::{BufRead, Error, ErrorKind};
 use std::thread::JoinHandle;
@@ -81,10 +72,12 @@ pub struct DictSectError {
 }
 
 #[derive(Error, Debug)]
-#[error("error reading four section dictionary")]
 pub enum DictReadError {
+    #[error("failed to read FourSectDict control info")]
     ControlInfo(#[from] crate::containers::control_info::Error),
+    #[error("failed to read FourSectDict section")]
     DictSect(#[from] DictSectError),
+    #[error("failed to read FourSectDict: {0}")]
     Other(String),
 }
 
@@ -175,9 +168,17 @@ impl FourSectDict {
     }
 
     /// read N-Triples and convert them to a dictionary and triple IDs
-    pub fn read_nt<R: BufRead>(reader: &mut R, opts: Options) -> Result<(Self, Vec<TripleId>), DictReadError> {
-        // TODO switch to sophia
-        let quads = RdfParser::from_format(NTriples).for_reader(reader);
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn read_nt<R: BufRead>(
+        r: &mut R, opts: crate::hdt::Options,
+    ) -> Result<(Self, Vec<crate::triples::TripleId>), DictReadError> {
+        use crate::triples::TripleId;
+        use log::{debug, warn};
+        use sophia::api::prelude::TripleSource;
+        use sophia::turtle::parser::nt;
+        use std::collections::BTreeSet;
+
         let timer = std::time::Instant::now();
         let mut raw_triples = Vec::new(); // Store raw triples
 
@@ -185,22 +186,30 @@ impl FourSectDict {
         let mut subject_terms = BTreeSet::<String>::new();
         let mut object_terms = BTreeSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
-        for q in quads {
-            let q = match q {
-                Ok(v) => v,
-                Err(e) => return Err(DictReadError::Other(format!("error parsing triple file: {e}"))),
-            }; //propagate the error  
+        nt::parse_bufread(r)
+            .for_each_triple(|q| {
+                // HDT does not have angled brackets around IRIs
+                let clean = |s: &mut String| {
+                    let mut chars = s.chars();
+                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                        s.remove(0);
+                        s.pop();
+                    }
+                };
+                let mut subj_str = q.subject.to_string();
+                clean(&mut subj_str);
+                let mut pred_str = q.predicate.to_string();
+                clean(&mut pred_str);
+                let mut obj_str = q.object.to_string();
+                clean(&mut obj_str);
 
-            let subj_str = term_to_hdt_bgp_str(&q.subject.into());
-            let pred_str = term_to_hdt_bgp_str(&q.predicate.into());
-            let obj_str = term_to_hdt_bgp_str(&q.object);
+                subject_terms.insert(subj_str.clone());
+                predicate_terms.push(pred_str.clone());
+                object_terms.insert(obj_str.clone());
 
-            subject_terms.insert(subj_str.clone());
-            predicate_terms.push(pred_str.clone());
-            object_terms.insert(obj_str.clone());
-
-            raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
-        }
+                raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
+            })
+            .map_err(|e| DictReadError::Other(format!("Error reading N-Triples: {e:?}")))?;
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
@@ -215,47 +224,6 @@ impl FourSectDict {
         let unique_object_terms: BTreeSet<&str> =
             object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect();
 
-        // let mut so_id_map: HashMap<String, u32> = HashMap::new();
-        // let mut pred_id_map: HashMap<String, u32> = HashMap::new();
-        // let mut subject_id_map: HashMap<String, u32> = HashMap::new();
-        // let mut object_id_map: HashMap<String, u32> = HashMap::new();
-
-        /*
-        https://www.w3.org/submissions/2011/SUBM-HDT-20110330/#dictionaryEncoding
-        Four subsets are mapped as follows (for a graph G with SG, PG, OG the different subjects, predicates and objects):
-        1. Common subject-objects (SOG) with IDs from 1 to |SOG|
-        2. Non common subjects (SG-SOG), mapped to [|SOG| +1, |SG|]
-        3. Non common objects (OG-SOG), in [|SOG|+1, |OG|]
-        4. Predicates, mapped to [1, |PG|].
-         */
-
-        // // Shared subject-objects: 1..=|SOG|
-        // let mut shared_id = 1;
-        // for term in &shared_terms {
-        //     so_id_map.insert(term.clone(), shared_id);
-        //     shared_id += 1;
-        // }
-
-        // // TODO run these 3 dictionary builds in parallel?
-
-        // // Subject-only: |SOG|+1 ..= |SG|
-        // let mut id = shared_id;
-        // for term in &t_subject_terms {
-        //     subject_id_map.insert(term.clone(), id);
-        //     id += 1;
-        // }
-
-        // // Object-only: |SOG|+1 ..= |OG|
-        // let mut id = shared_id;
-        // for term in &t_object_terms {
-        //     object_id_map.insert(term.clone(), id);
-        //     id += 1;
-        // }
-
-        // // Predicates: 1..=|PG|
-        // for (i, term) in predicate_terms.iter().enumerate() {
-        //     pred_id_map.insert(term.clone(), (i + 1) as u32);
-        // }
         let dict = FourSectDict {
             shared: DictSectPFC::compress(&shared_terms, opts.block_size),
             predicates: DictSectPFC::compress(&predicate_terms_ref, opts.block_size),
@@ -266,8 +234,6 @@ impl FourSectDict {
         debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
 
         let triple_encoder_timer = std::time::Instant::now();
-        //println!("{raw_triples:?}");
-        // Then encode triples without re-parsing file
 
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
@@ -286,22 +252,6 @@ impl FourSectDict {
         debug!("Encoding triples time: {:?}", triple_encoder_timer.elapsed());
         debug!("Dictionary build time: {:?}", timer.elapsed());
 
-        // // println!("triples: {:?}", triples);
-        // Ok((dict, triples.into_iter().collect()))
-
-        // let dict_ci = ControlInfo::read(reader)?;
-        // if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-        //     return Err(DictReadError::Other("Implementation only supports four section dictionaries".to_owned()));
-        // }
-        // let (shared, shared_crc) =
-        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
-        // let (subjects, subjects_crc) =
-        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Subject })?;
-        // let (predicates, predicates_crc) =
-        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
-        // let (objects, objects_crc) =
-        //     DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Object })?;
-
         Ok((dict, encoded_triples))
     }
 
@@ -316,37 +266,12 @@ impl FourSectDict {
         Ok(())
     }
 
-    /*
-    pub fn translate_all_ids(&self, triple_ids: &[TripleId]) -> Vec<(String, String, String)> {
-        triple_ids
-            .into_par_iter()
-            .map(|id: &TripleId| {
-                let subject = self.id_to_string(id.subject_id, IdKind::Subject).unwrap();
-                let predicate = self.id_to_string(id.predicate_id, IdKind::Predicate).unwrap();
-                let object = self.id_to_string(id.object_id, IdKind::Object).unwrap();
-                (subject, predicate, object)
-            })
-            .collect()
-    }
-    */
     /// size in bytes of the in memory four section dictionary
     pub fn size_in_bytes(&self) -> usize {
         self.shared.size_in_bytes()
             + self.subjects.size_in_bytes()
             + self.predicates.size_in_bytes()
             + self.objects.size_in_bytes()
-    }
-}
-
-/// Convert triple string formats from OxRDF to HDT.
-pub fn term_to_hdt_bgp_str(term: &Term) -> String {
-    match term {
-        // hdt terms should not include < >'s from IRIs
-        Term::NamedNode(named_node) => named_node.clone().into_string(),
-
-        Term::Literal(literal) => literal.to_string(),
-
-        Term::BlankNode(_s) => term.to_string(),
     }
 }
 

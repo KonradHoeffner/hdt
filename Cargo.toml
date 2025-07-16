@@ -26,9 +26,7 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-oxrdf = "0.2"
-oxrdfio = "0.1"
-chrono = "0.4"
+#chrono = "0.4"
 
 [features]
 default = ["sophia"]

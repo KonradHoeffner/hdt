@@ -1,14 +1,10 @@
-use crate::containers::rdf::Triple;
+use crate::FourSectDict;
 use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{DictError, DictReadError, IdKind};
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
-use crate::vocab::*;
-use crate::{FourSectDict, containers};
 use crate::{header, header::Header};
 use bytesize::ByteSize;
 use log::{debug, error};
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
 #[cfg(feature = "cache")]
 use std::fs::File;
 #[cfg(feature = "cache")]
@@ -97,6 +93,7 @@ impl Hdt {
     }
 
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     /// # Example
     /// ```
     /// let path = std::path::Path::new("tests/resources/apple.nt");
@@ -104,7 +101,30 @@ impl Hdt {
     /// ```
     ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
     // TODO: I (KH) prefer to use a BufRead here, is the file IRI important? I don't mind leaving it out of the header.
+    #[cfg(feature = "sophia")]
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
+        use std::cmp::Ordering;
+        use std::collections::BTreeSet;
+
+        /// Function to sort a vector of Triples in SPO order
+        fn sort_triples_spo(triples: &mut [TripleId]) {
+            triples.sort_by(spo_comparator);
+        }
+
+        fn spo_comparator(a: &TripleId, b: &TripleId) -> Ordering {
+            let subject_order = a.subject_id.cmp(&b.subject_id);
+            if subject_order != Ordering::Equal {
+                return subject_order;
+            }
+
+            let predicate_order = a.predicate_id.cmp(&b.predicate_id);
+            if predicate_order != Ordering::Equal {
+                return predicate_order;
+            }
+
+            a.object_id.cmp(&b.object_id)
+        }
+
         //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         let source = std::fs::File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
@@ -133,7 +153,12 @@ impl Hdt {
 
     /// populated HDT header fields
     /// TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
+    #[cfg(feature = "sophia")]
     fn build_header(&mut self, path: &std::path::Path, opts: Options, num_triples: usize) {
+        use crate::vocab::*;
+        use crate::{containers, containers::rdf::Triple};
+        use std::collections::BTreeSet;
+
         let mut headers = BTreeSet::new();
         // libhdt/src/hdt/BasicHDT.cpp::fillHeader()
 
@@ -293,10 +318,12 @@ impl Hdt {
             )),
         ));
 
+        // exclude for now to skip dependency on chrono
         // // Current time
         // struct tm* today = localtime(&now);
         // strftime(date, 40, "%Y-%m-%dT%H:%M:%S%z", today);
         // header->insert(publicationInfoNode, HDTVocabulary::DUBLIN_CORE_ISSUED, date);
+        /*
         let now = chrono::Utc::now(); // Get current local datetime
         let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%z").to_string(); // Format as string
         headers.insert(Triple::new(
@@ -304,7 +331,7 @@ impl Hdt {
             DC_TERMS_ISSUED.to_owned(),
             containers::rdf::Term::Literal(containers::rdf::Literal::new(datetime_str)),
         ));
-
+        */
         self.header.body = headers;
     }
 
@@ -531,25 +558,6 @@ impl Hdt {
     }
 }
 
-/// Function to sort a vector of Triples in SPO order
-fn sort_triples_spo(triples: &mut [TripleId]) {
-    triples.sort_by(spo_comparator);
-}
-
-fn spo_comparator(a: &TripleId, b: &TripleId) -> Ordering {
-    let subject_order = a.subject_id.cmp(&b.subject_id);
-    if subject_order != Ordering::Equal {
-        return subject_order;
-    }
-
-    let predicate_order = a.predicate_id.cmp(&b.predicate_id);
-    if predicate_order != Ordering::Equal {
-        return predicate_order;
-    }
-
-    a.object_id.cmp(&b.object_id)
-}
-
 /// A TripleCache stores the `Arc<str>` of the last returned triple
 #[derive(Clone, Debug)]
 pub struct TripleCache<'a> {
@@ -631,6 +639,7 @@ pub mod tests {
     }
 
     #[test]
+    #[cfg(feature = "sophia")]
     fn read_nt() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.nt";

@@ -85,10 +85,7 @@ impl fmt::Debug for Bitmap {
                 .bit_vector()
                 .iter()
                 .take(500)
-                .map(|b| match b {
-                    true => 1,
-                    false => 0,
-                })
+                .map(|b| if b { 1 } else { 0 })
                 .collect::<Vec<_>>()
         )
         //write!(f, "{}, {} bits", ByteSize(self.size_in_bytes() as u64), self.len())

@@ -340,7 +340,7 @@ impl TriplesBitmap {
                 array_y.push(y);
                 array_z.push(z);
             } else if x != last_x {
-                assert!(!(x != last_x + 1), "the subjects must be correlative.");
+                assert!((x == last_x + 1), "the subjects must be correlative.");
 
                 //x unchanged
                 y_bitmap.push_bit(true);
@@ -349,7 +349,7 @@ impl TriplesBitmap {
                 z_bitmap.push_bit(true);
                 array_z.push(z);
             } else if y != last_y {
-                assert!(!(y < last_y), "the predicates must be in increasing order.");
+                assert!((y >= last_y), "the predicates must be in increasing order.");
 
                 // y unchanged
                 y_bitmap.push_bit(false);
@@ -358,7 +358,7 @@ impl TriplesBitmap {
                 z_bitmap.push_bit(true);
                 array_z.push(z);
             } else {
-                assert!(!(z < last_z), "the objects must be in increasing order");
+                assert!((z >= last_z), "the objects must be in increasing order");
 
                 // z changed
                 z_bitmap.push_bit(false);
