@@ -237,7 +237,6 @@ impl Sequence {
         // Write data
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
-        //let offset_data = self.pack_bits();
         let bytes: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
         //  unused zero bytes in the last usize are not written
         let num_bytes = (self.bits_per_entry * self.entries).div_ceil(8);
@@ -272,8 +271,9 @@ impl Sequence {
         Sequence { entries, bits_per_entry, data, crc_handle: None }
     }
 
-    // manual compact integer sequence, as sucds lib does not allow export of internal storage
-    // TODO: investigate if that really is true, there is the words function
+    // manual compact integer sequence, as sucds lib does not allow export of internal storage for CompactVector, see <https://github.com/kampersanda/sucds/issues/99>
+    // other succinct data structure libraries like https://github.com/Cydhra/vers don't seem to offer bit-packing integer sequences
+    /// Compresses the given integer sequence using bit packing, i.e. using the given number of bits even across byte boundaries.
     fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
         let mut output = Vec::new();
         let mut current_byte = 0u8;

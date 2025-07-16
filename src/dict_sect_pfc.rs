@@ -338,11 +338,6 @@ impl DictSectPFC {
 
     /// sorted and unique terms
     pub fn compress(terms: &BTreeSet<&str>, block_size: usize) -> Self {
-        // terms parameter could also another type like a slice of &str
-        // but then we would need to sort and deduplicate ourselves
-        //let mut terms: Vec<&str> = set.iter().cloned().collect();
-        //terms.sort(); // Ensure lexicographic order
-        // println!("{:?}", terms);
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
         let mut last_term: &[u8] = &[];
@@ -367,23 +362,12 @@ impl DictSectPFC {
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?
         let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
-        let sect = DictSectPFC {
+        DictSectPFC {
             num_strings: num_terms,
             block_size,
             sequence: Sequence::new(&offsets, bits_per_entry),
             packed_data: Arc::from(compressed_terms),
-        };
-        /* debugging compression issues, remove later
-        let extracted: BTreeSet<_> = (1..sect.num_strings+1).map(|i| sect.extract(i).unwrap()).collect();
-        if &extracted != set {
-            error!(
-                "\x1b[34mSets are not equal!\nOnly in 'extracted': {:?}\nOnly in 'set': {:?}\x1b[0m",
-                extracted.difference(&set).collect::<BTreeSet<_>>(),
-                set.difference(&extracted).collect::<BTreeSet<_>>()
-            );
         }
-        */
-        sect
     }
 }
 

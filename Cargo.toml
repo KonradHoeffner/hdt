@@ -26,7 +26,6 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-#chrono = "0.4"
 
 [features]
 default = ["sophia"]
@@ -55,4 +54,3 @@ criterion = { version = "0.6", default-features = false, features = ["cargo_benc
 iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
 color-eyre = "0.6"
 fs-err = "3.1.0"
-walkdir = "2.5"
