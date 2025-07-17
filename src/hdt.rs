@@ -104,6 +104,7 @@ impl Hdt {
     #[cfg(feature = "sophia")]
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
         use std::collections::BTreeSet;
+        use std::io::Write;
 
         //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         let source = std::fs::File::open(f)?;
@@ -113,13 +114,12 @@ impl Hdt {
         let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
         let num_triples = encoded_triples.len();
         encoded_triples.sort_unstable_by_key(|t| (t.subject_id, t.predicate_id, t.object_id));
-        let triples = TriplesBitmap::from_triples(encoded_triples);
+        let triples = TriplesBitmap::from_triples(&encoded_triples);
 
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
 
         let mut hdt = Hdt { header, dict, triples };
         hdt.build_header(f, opts, num_triples);
-        use std::io::Write;
         let mut buf = Vec::<u8>::new();
         for triple in &hdt.header.body {
             writeln!(buf, "{triple}")?;
@@ -135,58 +135,34 @@ impl Hdt {
     /// TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
     #[cfg(feature = "sophia")]
     fn build_header(&mut self, path: &std::path::Path, opts: Options, num_triples: usize) {
-        use crate::containers::rdf::{Id, Literal, Term, Triple};
+        use crate::containers::rdf::{Id, Literal, Term, Term::Literal as Lit, Triple};
         use crate::vocab::*;
         use std::collections::BTreeSet;
 
-        let mut headers = BTreeSet::new();
+        let mut headers = BTreeSet::<Triple>::new();
 
-        // header->clear();
+        macro_rules! literal {
+            ($s:expr, $p:expr, $o:expr) => {
+                headers.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
+            };
+        }
+        macro_rules! insert_id {
+            ($s:expr, $p:expr, $o:expr) => {
+                headers.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
+            };
+        }
+
         let file_iri = format!("file://{}", path.canonicalize().unwrap().display());
-        let base_iri = Id::Named(file_iri);
-        // // BASE
-        // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::HDT_DATASET);
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            RDF_TYPE.to_owned(),
-            Term::Literal(Literal::new(HDT_CONTAINER.to_owned())),
-        ));
+        let base = Id::Named(file_iri);
 
-        // // VOID
-        // header->insert(baseUri, HDTVocabulary::RDF_TYPE, HDTVocabulary::VOID_DATASET);
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            RDF_TYPE.to_owned(),
-            Term::Literal(Literal::new(VOID_DATASET.to_owned())),
-        ));
-        // header->insert(baseUri, HDTVocabulary::VOID_TRIPLES, triples->getNumberOfElements());
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            VOID_TRIPLES.to_owned(),
-            Term::Literal(Literal::new(num_triples.to_string())),
-        ));
-        // header->insert(baseUri, HDTVocabulary::VOID_PROPERTIES, dictionary->getNpredicates());
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            VOID_PROPERTIES.to_owned(),
-            Term::Literal(Literal::new(self.dict.predicates.num_strings.to_string())),
-        ));
-        // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_SUBJECTS, dictionary->getNsubjects());
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            VOID_DISTINCT_SUBJECTS.to_owned(),
-            Term::Literal(Literal::new(
-                (self.dict.subjects.num_strings + self.dict.shared.num_strings).to_string(),
-            )),
-        ));
-        // header->insert(baseUri, HDTVocabulary::VOID_DISTINCT_OBJECTS, dictionary->getNobjects());
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            VOID_DISTINCT_OBJECTS.to_owned(),
-            Term::Literal(Literal::new(
-                (self.dict.objects.num_strings + self.dict.shared.num_strings).to_string(),
-            )),
-        ));
+        literal!(base, RDF_TYPE, HDT_CONTAINER);
+        literal!(base, RDF_TYPE, VOID_DATASET);
+        literal!(base, VOID_TRIPLES, num_triples);
+        literal!(base, VOID_PROPERTIES, self.dict.predicates.num_strings);
+        let [d_s, d_o] =
+            [&self.dict.subjects, &self.dict.objects].map(|s| s.num_strings + self.dict.shared.num_strings);
+        literal!(base, VOID_DISTINCT_SUBJECTS, d_s);
+        literal!(base, VOID_DISTINCT_OBJECTS, d_o);
         // // TODO: Add more VOID Properties. E.g. void:classes
 
         // // Structure
@@ -195,95 +171,33 @@ impl Hdt {
         let format_id = Id::Blank("format".to_owned());
         let dict_id = Id::Blank("dictionary".to_owned());
         let triples_id = Id::Blank("triples".to_owned());
-        // header->insert(baseUri, HDTVocabulary::HDT_STATISTICAL_INFORMATION,	statisticsNode);
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            HDT_STATISTICAL_INFORMATION.to_owned(),
-            Term::Id(stats_id.clone()),
-        ));
-        // header->insert(baseUri, HDTVocabulary::HDT_PUBLICATION_INFORMATION,	publicationInfoNode);
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            HDT_STATISTICAL_INFORMATION.to_owned(),
-            Term::Id(pub_id.clone()),
-        ));
-        // header->insert(baseUri, HDTVocabulary::HDT_FORMAT_INFORMATION, formatNode);
-        headers.insert(Triple::new(
-            base_iri.clone(),
-            HDT_FORMAT_INFORMATION.to_owned(),
-            Term::Id(format_id.clone()),
-        ));
-        // header->insert(formatNode, HDTVocabulary::HDT_DICTIONARY, dictNode);
-        headers.insert(Triple::new(format_id.clone(), HDT_DICTIONARY.to_owned(), Term::Id(dict_id.clone())));
-        // header->insert(formatNode, HDTVocabulary::HDT_TRIPLES, triplesNode);
-        headers.insert(Triple::new(format_id, HDT_TRIPLES.to_owned(), Term::Id(triples_id.clone())));
+        insert_id!(base, HDT_STATISTICAL_INFORMATION, stats_id);
+        insert_id!(base, HDT_STATISTICAL_INFORMATION, pub_id);
+        insert_id!(base, HDT_FORMAT_INFORMATION, format_id);
+        insert_id!(format_id, HDT_DICTIONARY, dict_id);
+        insert_id!(format_id, HDT_TRIPLES, triples_id);
 
         // DICTIONARY
-        // header.insert(rootNode, HDTVocabulary::DICTIONARY_NUMSHARED, getNshared());
-        headers.insert(Triple::new(
-            dict_id.clone(),
-            HDT_DICT_SHARED_SO.to_owned(),
-            Term::Literal(Literal::new(self.dict.shared.num_strings.to_string())),
-        ));
-        // header.insert(rootNode, HDTVocabulary::DICTIONARY_MAPPING, this->mapping);
-        headers.insert(Triple::new(
-            dict_id.clone(),
-            HDT_DICT_MAPPING.to_owned(),
-            Term::Literal(Literal::new("1".to_owned())),
-        ));
-        // header.insert(rootNode, HDTVocabulary::DICTIONARY_SIZE_STRINGS, size());
-        headers.insert(Triple::new(
-            dict_id.clone(),
-            HDT_DICT_SIZE_STRINGS.to_owned(),
-            Term::Literal(Literal::new(ByteSize(self.dict.size_in_bytes() as u64).to_string())),
-        ));
-        // header.insert(rootNode, HDTVocabulary::DICTIONARY_BLOCK_SIZE, this->blocksize);
-        headers.insert(Triple::new(
-            dict_id,
-            HDT_DICT_BLOCK_SIZE.to_owned(),
-            Term::Literal(Literal::new(opts.block_size.to_string())),
-        ));
+        literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
+        literal!(dict_id, HDT_DICT_MAPPING, "1");
+        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
+        literal!(dict_id, HDT_DICT_BLOCK_SIZE, opts.block_size);
 
         // TRIPLES
-        // header.insert(rootNode, HDTVocabulary::TRIPLES_TYPE, getType());
-        headers.insert(Triple::new(
-            triples_id.clone(),
-            DC_TERMS_FORMAT.to_owned(),
-            Term::Literal(Literal::new(HDT_TYPE_BITMAP.to_owned())),
-        ));
-        // header.insert(rootNode, HDTVocabulary::TRIPLES_NUM_TRIPLES, getNumberOfElements() );
-        headers.insert(Triple::new(
-            triples_id.clone(),
-            HDT_NUM_TRIPLES.to_owned(),
-            Term::Literal(Literal::new(num_triples.to_string())),
-        ));
-        // header.insert(rootNode, HDTVocabulary::TRIPLES_ORDER, getOrderStr(order) );
-        headers.insert(Triple::new(
-            triples_id,
-            HDT_TRIPLES_ORDER.to_owned(),
-            Term::Literal(Literal::new(opts.order)),
-        ));
+        literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
+        literal!(triples_id, HDT_NUM_TRIPLES, num_triples);
+        literal!(triples_id, HDT_TRIPLES_ORDER, opts.order);
 
         // // Sizes
         let meta = std::fs::File::open(path).unwrap().metadata().unwrap();
-        // header->insert(statisticsNode, HDTVocabulary::ORIGINAL_SIZE, origSize);
-        headers.insert(Triple::new(
-            stats_id.clone(),
-            HDT_ORIGINAL_SIZE.to_owned(),
-            Term::Literal(Literal::new(meta.len().to_string())),
-        ));
-        // header->insert(statisticsNode, HDTVocabulary::HDT_SIZE, getDictionary()->size() + getTriples()->size());
-        headers.insert(Triple::new(
-            stats_id,
-            HDT_SIZE.to_owned(),
-            Term::Literal(Literal::new(ByteSize(self.size_in_bytes() as u64).to_string())),
-        ));
-
+        literal!(stats_id, HDT_ORIGINAL_SIZE, meta.len());
+        // header->literal!(statisticsNode, HDTVocabulary::HDT_SIZE, getDictionary()->size() + getTriples()->size());
+        literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
         // exclude for now to skip dependency on chrono
         /*
         let now = chrono::Utc::now(); // Get current local datetime
         let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%z").to_string(); // Format as string
-        headers.insert(Triple::new(pub_id,DC_TERMS_ISSUED.to_owned(),Term::Literal(Literal::new(datetime_str)),
+        headers.literal!(Triple::new(pub_id,DC_TERMS_ISSUED,Term::Literal(Literal::new(datetime_str)),
         ));
         */
         self.header.body = headers;

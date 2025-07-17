@@ -317,9 +317,7 @@ impl TriplesBitmap {
     }
 
     /// Creates a new TriplesBitmap from a list of sorted RDF triples
-    // under construction, get it to compile with empty or nonsense values first, then fix
-    // originally written by Greg Hanson in the experimental-rdf2hdt PR, move here is in progress
-    pub fn from_triples(triples: Vec<TripleId>) -> Self {
+    pub fn from_triples(triples: &[TripleId]) -> Self {
         let mut y_bitmap = BitVector::new();
         let mut z_bitmap = BitVector::new();
         let mut array_y = Vec::new();
