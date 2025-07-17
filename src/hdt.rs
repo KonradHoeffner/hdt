@@ -103,27 +103,7 @@ impl Hdt {
     // TODO: I (KH) prefer to use a BufRead here, is the file IRI important? I don't mind leaving it out of the header.
     #[cfg(feature = "sophia")]
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
-        use std::cmp::Ordering;
         use std::collections::BTreeSet;
-
-        /// Function to sort a vector of Triples in SPO order
-        fn sort_triples_spo(triples: &mut [TripleId]) {
-            triples.sort_by(spo_comparator);
-        }
-
-        fn spo_comparator(a: &TripleId, b: &TripleId) -> Ordering {
-            let subject_order = a.subject_id.cmp(&b.subject_id);
-            if subject_order != Ordering::Equal {
-                return subject_order;
-            }
-
-            let predicate_order = a.predicate_id.cmp(&b.predicate_id);
-            if predicate_order != Ordering::Equal {
-                return predicate_order;
-            }
-
-            a.object_id.cmp(&b.object_id)
-        }
 
         //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
         let source = std::fs::File::open(f)?;
@@ -132,7 +112,7 @@ impl Hdt {
 
         let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
         let num_triples = encoded_triples.len();
-        sort_triples_spo(&mut encoded_triples);
+        encoded_triples.sort_unstable_by_key(|t| (t.subject_id, t.predicate_id, t.object_id));
         let triples = TriplesBitmap::from_triples(encoded_triples);
 
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
