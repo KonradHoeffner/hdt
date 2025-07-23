@@ -66,10 +66,11 @@ impl fmt::Debug for Sequence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} with {} entries, {} bits per entry",
+            "{} with {} entries, {} bits per entry, starting with {:?}",
             ByteSize(self.size_in_bytes() as u64),
             self.entries,
-            self.bits_per_entry
+            self.bits_per_entry,
+            self.into_iter().take(10).collect::<Vec::<_>>()
         )
     }
 }
@@ -102,6 +103,7 @@ impl<'a> IntoIterator for &'a Sequence {
 
 impl Sequence {
     /// Get the integer at the given index, counting from 0.
+    /// Panics if the index is out of bounds.
     pub fn get(&self, index: usize) -> usize {
         let scaled_index = index * self.bits_per_entry;
         let block_index = scaled_index / USIZE_BITS;
@@ -236,7 +238,6 @@ impl Sequence {
         // Write data
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
-        //let offset_data = self.pack_bits();
         let bytes: Vec<u8> = self.data.iter().flat_map(|&val| val.to_le_bytes()).collect();
         //  unused zero bytes in the last usize are not written
         let num_bytes = (self.bits_per_entry * self.entries).div_ceil(8);
@@ -249,62 +250,17 @@ impl Sequence {
         Ok(())
     }
 
-    // could also determine bits per entry using max of numbers but that would take time
-    pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
-        let numbers8 = Self::pack_bits(numbers, bits_per_entry);
-        // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
-        // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
-        let entries = numbers.len();
-        let bytes = numbers8.len();
-        let rest_byte_amount = bytes % size_of::<usize>();
-        let full_byte_amount = bytes - rest_byte_amount;
-        let mut data = Vec::<usize>::new();
-        let full_words = &numbers8[..full_byte_amount];
-        for word in full_words.chunks_exact(size_of::<usize>()) {
-            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
-        }
-        if rest_byte_amount > 0 {
-            let mut last = [0u8; size_of::<usize>()];
-            last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
-            data.push(usize::from_le_bytes(last));
-        }
+    /// Pack the given integers., which have to fit into the given number of bits.
+    pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
+        use sucds::int_vectors::CompactVector;
+        let entries = nums.len();
+        let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
+        cv.extend(nums.iter().copied()).unwrap();
+        // current API of sucds does not allow moving out the internal data
+        let data = cv.bit_vector().words().to_vec();
+        // waiting for acceptance on https://github.com/kampersanda/sucds/pull/105
+        // let data = cv.into_bit_vector().into_words();
         Sequence { entries, bits_per_entry, data, crc_handle: None }
-    }
-
-    // manual compact integer sequence, as sucds lib does not allow export of internal storage
-    fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
-        let mut output = Vec::new();
-        let mut current_byte = 0u8;
-        let mut bit_offset = 0;
-
-        for value in numbers {
-            let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
-            let mut bits_left = bits_per_entry;
-
-            while bits_left > 0 {
-                let available = 8 - bit_offset;
-                let to_write = bits_left.min(available);
-
-                // Shift bits to align with current byte offset
-                current_byte |= ((val & ((1 << to_write) - 1)) as u8) << bit_offset;
-
-                bit_offset += to_write;
-                val >>= to_write;
-                bits_left -= to_write;
-
-                if bit_offset == 8 {
-                    output.push(current_byte);
-                    current_byte = 0;
-                    bit_offset = 0;
-                }
-            }
-        }
-
-        // Push final byte if there's remaining bits
-        if bit_offset > 0 {
-            output.push(current_byte);
-        }
-        output
     }
 }
 

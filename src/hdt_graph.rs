@@ -1,4 +1,4 @@
-// //! *This module is available only if HDT is built with the `"sophia"` feature.*
+// //! *This module is available only if HDT is built with the `"sophia"` feature, included by default.*
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
@@ -58,6 +58,14 @@ impl HdtGraph {
             },
             None => Some(HdtMatcher::Other),
         }
+    }
+
+    /// Write as N-Triples
+    pub fn write_nt(&self, write: &mut impl std::io::Write) -> std::io::Result<()> {
+        use sophia::api::prelude::TripleSerializer;
+        use sophia::turtle::serializer::nt::NtSerializer;
+        NtSerializer::new(write).serialize_graph(self).map_err(|e| Error::other(format!("{e}")))?;
+        Ok(())
     }
 }
 

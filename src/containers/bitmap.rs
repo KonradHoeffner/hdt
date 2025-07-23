@@ -7,7 +7,7 @@ use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 use sucds::Serializable;
-use sucds::bit_vectors::{Access, BitVector, Rank, Rank9Sel, Select};
+use sucds::bit_vectors::{Access, BitVector, NumBits, Rank, Rank9Sel, Select};
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
@@ -81,10 +81,10 @@ impl fmt::Debug for Bitmap {
 
 impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
-    pub fn new(data: Vec<u64>) -> Self {
+    pub fn new(data: Vec<usize>) -> Self {
         let mut v = BitVector::new();
         for d in data {
-            let _ = v.push_bits(d as usize, 64);
+            let _ = v.push_bits(d, std::mem::size_of::<usize>() * 8);
         }
         let dict = Rank9Sel::new(v).select1_hints();
         Bitmap { dict }
@@ -98,6 +98,11 @@ impl Bitmap {
     /// Number of bits in the bitmap, multiple of 64
     pub const fn len(&self) -> usize {
         self.dict.len()
+    }
+
+    /// Number of bits set
+    pub fn num_ones(&self) -> usize {
+        self.dict.num_ones()
     }
 
     /// Returns the position of the k-1-th one bit or None if there aren't that many.
@@ -150,11 +155,12 @@ impl Bitmap {
         let full_byte_amount = ((num_bits - 1) >> 6) * 8;
         let mut full_words = vec![0_u8; full_byte_amount];
         // div_ceil is unstable
-        let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
+        let mut data: Vec<usize> =
+            Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
 
-        for word in full_words.chunks_exact(size_of::<u64>()) {
-            data.push(u64::from_le_bytes(<[u8; 8]>::try_from(word)?));
+        for word in full_words.chunks_exact(size_of::<usize>()) {
+            data.push(usize::from_le_bytes(<[u8; 8]>::try_from(word)?));
         }
 
         // initiate computation of CRC32
@@ -163,14 +169,14 @@ impl Bitmap {
         digest.update(&full_words);
 
         let mut bits_read = 0;
-        let mut last_value: u64 = 0;
+        let mut last_value: usize = 0;
         let last_word_bits = if num_bits == 0 { 0 } else { ((num_bits - 1) % 64) + 1 };
 
         while bits_read < last_word_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
             digest.update(&buffer);
-            last_value |= (buffer[0] as u64) << bits_read;
+            last_value |= (buffer[0] as usize) << bits_read;
             bits_read += 8;
         }
         data.push(last_value);
@@ -228,7 +234,7 @@ mod tests {
     #[test]
     fn write() -> color_eyre::Result<()> {
         init();
-        let bits: Vec<u64> = vec![0b10111];
+        let bits: Vec<usize> = vec![0b10111];
         let bitmap = Bitmap::new(bits);
         assert_eq!(bitmap.len(), 64);
         // position of k-1th 1 bit

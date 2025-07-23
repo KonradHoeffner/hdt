@@ -1,3 +1,4 @@
+#![cfg(feature = "sophia")]
 use hdt::{Hdt, HdtGraph};
 use sophia::api::prelude::{Stringifier, TripleSerializer};
 use sophia::turtle::serializer::nt::NtSerializer;

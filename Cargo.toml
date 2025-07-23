@@ -20,7 +20,8 @@ iref = "3"
 langtag = "0.4"
 ntriple = "0.1"
 sophia = { version = "0.9", optional = true }
-sucds = "0.8"
+sucds = "0.8.2"
+#sucds = { git = "file:///home/konrad/tmp/sucds", branch = "pr-move-out"} 
 thiserror = "2"
 log = "0.4"
 mownstr = "0.3"
