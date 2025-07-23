@@ -174,12 +174,11 @@ impl FourSectDict {
         r: &mut R, opts: crate::hdt::Options,
     ) -> Result<(Self, Vec<crate::triples::TripleId>), DictReadError> {
         use crate::triples::TripleId;
-        use log::{debug, warn};
+        use log::warn;
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
         use std::collections::BTreeSet;
 
-        let timer = std::time::Instant::now();
         let mut raw_triples = Vec::new(); // Store raw triples
 
         // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
@@ -230,10 +229,6 @@ impl FourSectDict {
             subjects: DictSectPFC::compress(&unique_subject_terms, opts.block_size),
             objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
         };
-        // for debugging, TODO: remove later
-        debug!("Four Section Dictions sort time: {:?}", timer.elapsed());
-
-        let triple_encoder_timer = std::time::Instant::now();
 
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
@@ -249,8 +244,6 @@ impl FourSectDict {
                 triple
             })
             .collect();
-        debug!("Encoding triples time: {:?}", triple_encoder_timer.elapsed());
-        debug!("Dictionary build time: {:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
     }

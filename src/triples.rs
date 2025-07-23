@@ -1,7 +1,7 @@
 use crate::ControlInfo;
 use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
-use log::{debug, error};
+use log::error;
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
@@ -274,7 +274,6 @@ impl TriplesBitmap {
         //let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
         let wavelet_y = Self::build_wavelet(sequence_y);
 
-        debug!("Building OPS index...");
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
         let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
@@ -312,7 +311,6 @@ impl TriplesBitmap {
         }
         let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
         let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
-        debug!("built OPS index");
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
@@ -452,7 +450,6 @@ impl TriplesBitmap {
     }
 
     fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
-        debug!("Building wavelet matrix...");
         let mut builder =
             CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder.");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
@@ -463,7 +460,6 @@ impl TriplesBitmap {
         assert!(sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()), "Wavelet source CRC check failed.");
         drop(sequence);
         let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
-        debug!("Built wavelet matrix with length {}", wavelet.len());
         wavelet
     }
 
