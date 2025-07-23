@@ -75,15 +75,7 @@ impl<'de> serde::Deserialize<'de> for Bitmap {
 
 impl fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}, {} bits, {} one bits: first 500 {:?}",
-            ByteSize(self.size_in_bytes() as u64),
-            self.len(),
-            self.num_ones(),
-            self.dict.bit_vector().iter().take(500).map(|b| i32::from(b)).collect::<Vec<_>>()
-        )
-        //write!(f, "{}, {} bits", ByteSize(self.size_in_bytes() as u64), self.len())
+        write!(f, "{}, {} bits", ByteSize(self.size_in_bytes() as u64), self.len())
     }
 }
 
