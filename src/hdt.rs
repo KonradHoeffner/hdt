@@ -185,6 +185,15 @@ impl Hdt {
         self.header.body = headers;
     }
 
+    /// Write as N-Triples
+    #[cfg(feature = "sophia")]
+    pub fn write_nt(&self, write: &mut impl std::io::Write) -> std::io::Result<()> {
+        use sophia::api::prelude::TripleSerializer;
+        use sophia::turtle::serializer::nt::NtSerializer;
+        NtSerializer::new(write).serialize_graph(self).map_err(|e| std::io::Error::other(format!("{e}")))?;
+        Ok(())
+    }
+
     /// Creates an immutable HDT instance containing the dictionary and triples from the Path.
     /// Will utilize a custom cached TriplesBitmap file if exists or create one if it does not exist.
     /// The file path must point to the beginning of the data of an HDT file as produced by hdt-cpp.
@@ -288,10 +297,10 @@ impl Hdt {
     /// # Example
     /// ```
     /// fn print_first_triple(hdt: hdt::Hdt) {
-    ///     println!("{:?}", hdt.triples().next().expect("no triple in the graph"));
+    ///     println!("{:?}", hdt.triples_all().next().expect("no triple in the graph"));
     /// }
     /// ```
-    pub fn triples(&self) -> impl Iterator<Item = StringTriple> + '_ {
+    pub fn triples_all(&self) -> impl Iterator<Item = StringTriple> + '_ {
         let mut triple_cache = TripleCache::new(self);
         self.triples.into_iter().map(move |ids| triple_cache.translate(ids).unwrap())
     }
@@ -403,7 +412,7 @@ impl Hdt {
                     o.0.clone(),
                 )
             })),
-            (None, None, None) => Box::new(self.triples()),
+            (None, None, None) => Box::new(self.triples_all()),
         }
     }
 }
@@ -495,15 +504,14 @@ pub mod tests {
         let path = std::path::Path::new("tests/resources/snikmeta.nt");
         if !path.exists() {
             println!("Creating test resource snikmeta.nt.");
-            let graph = crate::hdt_graph::HdtGraph::new(snikmeta()?);
             let mut writer = std::io::BufWriter::new(File::create(path)?);
-            graph.write_nt(&mut writer)?;
+            snikmeta()?.write_nt(&mut writer)?;
         }
         let snikmeta_nt = Hdt::read_nt(path)?;
 
         let snikmeta = snikmeta()?;
-        let hdt_triples: Vec<StringTriple> = snikmeta.triples().collect();
-        let nt_triples: Vec<StringTriple> = snikmeta_nt.triples().collect();
+        let hdt_triples: Vec<StringTriple> = snikmeta.triples_all().collect();
+        let nt_triples: Vec<StringTriple> = snikmeta_nt.triples_all().collect();
 
         assert_eq!(nt_triples, hdt_triples);
         assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
@@ -515,7 +523,7 @@ pub mod tests {
         let triples = &hdt.triples;
         assert_eq!(triples.bitmap_y.num_ones(), 49, "{:?}", triples.bitmap_y); // one for each subjecct
         //assert_eq!();
-        let v: Vec<StringTriple> = hdt.triples().collect();
+        let v: Vec<StringTriple> = hdt.triples_all().collect();
         assert_eq!(v.len(), 328);
         assert_eq!(hdt.dict.shared.num_strings, 43);
         assert_eq!(hdt.dict.subjects.num_strings, 6);
@@ -526,7 +534,7 @@ pub mod tests {
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple.0.as_ref() == uri).collect();
             let with_s: Vec<_> = hdt.triples_with_pattern(Some(uri), None, None).collect();
-            assert_eq!(filtered, with_s, "different results between triples() and triples_with_s() for {}", uri);
+            assert_eq!(filtered, with_s, "results differ between triples_all() and S?? query for {}", uri);
         }
         let s = "http://www.snik.eu/ontology/meta/Top";
         let p = "http://www.w3.org/2000/01/rdf-schema#label";
