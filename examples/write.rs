@@ -1,7 +1,6 @@
 #![cfg(feature = "sophia")]
-use hdt::{Hdt, HdtGraph};
+use hdt::Hdt;
 use sophia::api::prelude::{Stringifier, TripleSerializer};
-use sophia::turtle::serializer::nt::NtSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
 use std::fs::File;
 use std::io::Write;
@@ -17,21 +16,16 @@ fn main() -> color_eyre::Result<()> {
     hdt.write(&mut writer)?;
 
     // write in other formats using Sophia
-    let graph = HdtGraph::new(hdt);
-
     // N-Triples
     let mut nt_writer = std::io::BufWriter::new(File::create("/tmp/out.nt")?);
-    let nt = NtSerializer::new_stringifier().serialize_graph(&graph)?.to_string();
-    writeln!(nt_writer, "{nt}")?;
-
+    hdt.write_nt(&mut nt_writer)?;
     // Turtle
     let mut turtle_writer = std::io::BufWriter::new(File::create("/tmp/out.ttl")?);
     // disable pretty printing for large files as it is very slow
     let config = TurtleConfig::new().with_pretty(true);
     //.with_own_prefix_map(prefixes().clone()); // if you have a prefix map
-    let turtle = TurtleSerializer::new_stringifier_with_config(config).serialize_graph(&graph)?.to_string();
+    let turtle = TurtleSerializer::new_stringifier_with_config(config).serialize_graph(&hdt)?.to_string();
     writeln!(turtle_writer, "{turtle}")?;
-
     // other formats: see Sophia docs https://docs.rs/sophia/latest/sophia
     Ok(())
 }

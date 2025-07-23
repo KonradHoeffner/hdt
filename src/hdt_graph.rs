@@ -14,58 +14,33 @@ use std::sync::Arc;
 mod term;
 pub use term::HdtTerm;
 
-/// Adapter to use HDT as a Sophia graph.
-pub struct HdtGraph {
-    /// Wrapped HDT instance
-    pub hdt: Hdt,
-}
-
 /// HdtGraph does not support all of the Sophia TermMatcher functionality.
 enum HdtMatcher {
     Constant((HdtTerm, Id)),
     Other,
 }
 
-impl HdtGraph {
-    /// Wrapper around Hdt.
-    pub const fn new(hdt: Hdt) -> Self {
-        HdtGraph { hdt }
-    }
-    /// Size in bytes on the heap.
-    pub fn size_in_bytes(&self) -> usize {
-        self.hdt.size_in_bytes()
-    }
+fn id_term(hdt: &Hdt, id: Id, kind: &'static IdKind) -> HdtTerm {
+    auto_term(&hdt.dict.id_to_string(id, kind).unwrap()).unwrap()
+    // TODO: optimize by excluding cases depending on the id kind
+    //IriRef::new_unchecked(MownStr::from(s)).into_term()
+}
 
-    fn id_term(&self, id: Id, kind: &'static IdKind) -> HdtTerm {
-        auto_term(&self.hdt.dict.id_to_string(id, kind).unwrap()).unwrap()
-        // TODO: optimize by excluding cases depending on the id kind
-        //IriRef::new_unchecked(MownStr::from(s)).into_term()
-    }
-
-    /// Transforms a Sophia TermMatcher to a constant HdtTerm and Id if possible.
-    /// Returns none if it matches a constant term that cannot be found.
-    fn unpack_matcher<T: TermMatcher>(&self, tm: &T, kind: &IdKind) -> Option<HdtMatcher> {
-        match tm.constant() {
-            Some(t) => match HdtTerm::try_from(t.borrow_term()) {
-                Some(t) => {
-                    let id = self.hdt.dict.string_to_id(&term_string(&t), kind);
-                    if id == 0 {
-                        return None;
-                    }
-                    Some(HdtMatcher::Constant((t, id)))
+/// Transforms a Sophia TermMatcher to a constant HdtTerm and Id if possible.
+/// Returns none if it matches a constant term that cannot be found.
+fn unpack_matcher<T: TermMatcher>(hdt: &Hdt, tm: &T, kind: &IdKind) -> Option<HdtMatcher> {
+    match tm.constant() {
+        Some(t) => match HdtTerm::try_from(t.borrow_term()) {
+            Some(t) => {
+                let id = hdt.dict.string_to_id(&term_string(&t), kind);
+                if id == 0 {
+                    return None;
                 }
-                None => None,
-            },
-            None => Some(HdtMatcher::Other),
-        }
-    }
-
-    /// Write as N-Triples
-    pub fn write_nt(&self, write: &mut impl std::io::Write) -> std::io::Result<()> {
-        use sophia::api::prelude::TripleSerializer;
-        use sophia::turtle::serializer::nt::NtSerializer;
-        NtSerializer::new(write).serialize_graph(self).map_err(|e| Error::other(format!("{e}")))?;
-        Ok(())
+                Some(HdtMatcher::Constant((t, id)))
+            }
+            None => None,
+        },
+        None => Some(HdtMatcher::Other),
     }
 }
 
@@ -127,20 +102,20 @@ fn term_string(t: &HdtTerm) -> String {
     }
 }
 
-impl Graph for HdtGraph {
+impl Graph for Hdt {
     type Triple<'a> = [HdtTerm; 3];
     type Error = Infallible; // infallible for now, figure out what to put here later
 
     /// # Example
     /// ```
     /// use hdt::sophia::api::graph::Graph;
-    /// fn print_first_triple(graph: hdt::HdtGraph) {
+    /// fn print_first_triple(graph: hdt::Hdt) {
     ///     println!("{:?}", graph.triples().next().expect("no triple in the graph"));
     /// }
     /// ```
     fn triples(&self) -> impl Iterator<Item = Result<Self::Triple<'_>, Self::Error>> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
-        self.hdt.triples().map(move |(s, p, o)| {
+        self.triples_all().map(move |(s, p, o)| {
             Ok([auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()])
         })
     }
@@ -150,11 +125,11 @@ impl Graph for HdtGraph {
     /// # Example
     /// Who was born in Leipzig?
     /// ```
-    /// use hdt::{Hdt,HdtGraph};
+    /// use hdt::Hdt;
     /// use hdt::sophia::api::graph::Graph;
     /// use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
     ///
-    /// fn query(dbpedia: hdt::HdtGraph) {
+    /// fn query(dbpedia: hdt::Hdt) {
     ///     let birth_place = SimpleTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/ontology/birthPlace".into()));
     ///     let leipzig = SimpleTerm::Iri(IriRef::new_unchecked("http://www.snik.eu/resource/Leipzig".into()));
     ///     let persons = dbpedia.triples_matching(Any, Some(birth_place), Some(leipzig));
@@ -169,65 +144,67 @@ impl Graph for HdtGraph {
         O: TermMatcher + 's,
     {
         use HdtMatcher::{Constant, Other};
-        let Some(xso) = self.unpack_matcher(&sm, &IdKind::Subject) else {
+        let Some(xso) = unpack_matcher(self, &sm, &IdKind::Subject) else {
             return Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>;
         };
-        let Some(xpo) = self.unpack_matcher(&pm, &IdKind::Predicate) else { return Box::new(iter::empty()) };
-        let Some(xoo) = self.unpack_matcher(&om, &IdKind::Object) else { return Box::new(iter::empty()) };
+        let Some(xpo) = unpack_matcher(self, &pm, &IdKind::Predicate) else { return Box::new(iter::empty()) };
+        let Some(xoo) = unpack_matcher(self, &om, &IdKind::Object) else { return Box::new(iter::empty()) };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
-            //if SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() { // always true
+            //if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() { // always true
             (Constant(s), Constant(p), Constant(o)) => Box::new(iter::once(Ok([s.0, p.0, o.0]))),
             (Constant(s), Constant(p), Other) => Box::new(
-                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, p.1, 0))
+                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0))
                     .map(|tid| {
-                        auto_term(&self.hdt.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap()).unwrap()
+                        auto_term(&self.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap()).unwrap()
                     })
                     .filter(move |term| om.matches(term))
                     .map(move |term| Ok([s.0.clone(), p.0.clone(), term])),
             ),
             (Constant(s), Other, Constant(o)) => Box::new(
-                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, o.1))
-                    .map(|t| self.id_term(t.predicate_id, &IdKind::Predicate))
+                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1))
+                    .map(|t| id_term(self, t.predicate_id, &IdKind::Predicate))
                     .filter(move |term| pm.matches(term))
                     .map(move |term| Ok([s.0.clone(), term, o.0.clone()])),
             ),
             (Constant(s), Other, Other) => Box::new(
-                SubjectIter::with_pattern(&self.hdt.triples, &TripleId::new(s.1, 0, 0))
+                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0))
                     .map(move |t| {
                         [
-                            self.id_term(t.predicate_id, &IdKind::Predicate),
-                            self.id_term(t.object_id, &IdKind::Object),
+                            id_term(self, t.predicate_id, &IdKind::Predicate),
+                            id_term(self, t.object_id, &IdKind::Object),
                         ]
                     })
                     .filter(move |[pt, ot]| pm.matches(pt) && om.matches(ot))
                     .map(move |[pt, ot]| Ok([s.0.clone(), pt, ot])),
             ),
             (Other, Constant(p), Constant(o)) => Box::new(
-                PredicateObjectIter::new(&self.hdt.triples, p.1, o.1)
-                    .map(|sid| self.id_term(sid, &IdKind::Subject))
+                PredicateObjectIter::new(&self.triples, p.1, o.1)
+                    .map(|sid| id_term(self, sid, &IdKind::Subject))
                     .filter(move |term| sm.matches(term))
                     .map(move |term| Ok([term, p.0.clone(), o.0.clone()])),
             ),
             (Other, Constant(p), Other) => Box::new(
-                PredicateIter::new(&self.hdt.triples, p.1)
+                PredicateIter::new(&self.triples, p.1)
                     .map(move |t| {
-                        [self.id_term(t.subject_id, &IdKind::Subject), self.id_term(t.object_id, &IdKind::Object)]
+                        [
+                            id_term(self, t.subject_id, &IdKind::Subject),
+                            id_term(self, t.object_id, &IdKind::Object),
+                        ]
                     })
                     .filter(move |[st, ot]| sm.matches(st) && om.matches(ot))
                     .map(move |[st, ot]| Ok([st, p.0.clone(), ot])),
             ),
-            (Other, Other, Constant(o)) => Box::new(ObjectIter::new(&self.hdt.triples, o.1).map(move |t| {
+            (Other, Other, Constant(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 Ok([
-                    auto_term(&Arc::from(self.hdt.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
+                    auto_term(&Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
                         .unwrap(),
-                    self.id_term(t.predicate_id, &IdKind::Predicate),
+                    id_term(self, t.predicate_id, &IdKind::Predicate),
                     o.0.clone(),
                 ])
             })),
             (Other, Other, Other) => Box::new(
-                self.hdt
-                    .triples()
+                self.triples_all()
                     .map(move |(s, p, o)| {
                         [auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()]
                     })
@@ -250,8 +227,8 @@ mod tests {
     fn test_graph() -> color_eyre::Result<()> {
         init();
         let file = File::open("tests/resources/snikmeta.hdt")?;
-        let hdt = Hdt::read(std::io::BufReader::new(file))?;
-        let graph = HdtGraph::new(hdt);
+        let graph = Hdt::read(std::io::BufReader::new(file))?;
+        // Hdt has a triples() method as well
         let triples: Vec<Result<[HdtTerm; 3], Infallible>> = graph.triples().collect();
         assert_eq!(triples.len(), 328);
         let meta_top = "http://www.snik.eu/ontology/meta/Top";

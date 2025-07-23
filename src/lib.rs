@@ -42,19 +42,18 @@ let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta
     doc = r#"
 # Additional Optional Features
 
-Using the **sophia** adapter:
+Using the **sophia** Graph trait implementation for Hdt: 
 
 ```
-use hdt::{Hdt,HdtGraph};
+use hdt::Hdt;
 use hdt::sophia::api::graph::Graph;
 use hdt::sophia::api::term::{IriRef, SimpleTerm, matcher::Any};
 
 fn query(hdt: Hdt)
 {
-  let graph = HdtGraph::new(hdt);
   let s = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/resource/Leipzig".into()));
   let p = SimpleTerm::Iri(IriRef::new_unchecked("http://dbpedia.org/ontology/major".into()));
-  let majors = graph.triples_matching(Some(s),Some(p),Any);
+  let majors = hdt.triples_matching(Some(s),Some(p),Any);
 }
 ```
 "#
@@ -113,8 +112,6 @@ use containers::ControlInfo;
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;
-#[cfg(feature = "sophia")]
-pub use hdt_graph::HdtGraph;
 
 #[cfg(test)]
 mod tests {
