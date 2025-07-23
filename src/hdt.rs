@@ -132,7 +132,7 @@ impl Hdt {
     }
 
     /// populated HDT header fields
-    /// TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
+    // TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
     #[cfg(feature = "sophia")]
     fn build_header(&mut self, path: &std::path::Path, opts: Options, num_triples: usize) {
         use crate::containers::rdf::{Id, Literal, Term, Term::Literal as Lit, Triple};
@@ -176,30 +176,22 @@ impl Hdt {
         insert_id!(base, HDT_FORMAT_INFORMATION, format_id);
         insert_id!(format_id, HDT_DICTIONARY, dict_id);
         insert_id!(format_id, HDT_TRIPLES, triples_id);
-
         // DICTIONARY
         literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
         literal!(dict_id, HDT_DICT_MAPPING, "1");
         literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
         literal!(dict_id, HDT_DICT_BLOCK_SIZE, opts.block_size);
-
         // TRIPLES
         literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
         literal!(triples_id, HDT_NUM_TRIPLES, num_triples);
         literal!(triples_id, HDT_TRIPLES_ORDER, opts.order);
-
         // // Sizes
         let meta = std::fs::File::open(path).unwrap().metadata().unwrap();
         literal!(stats_id, HDT_ORIGINAL_SIZE, meta.len());
-        // header->literal!(statisticsNode, HDTVocabulary::HDT_SIZE, getDictionary()->size() + getTriples()->size());
         literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
         // exclude for now to skip dependency on chrono
-        /*
-        let now = chrono::Utc::now(); // Get current local datetime
-        let datetime_str = now.format("%Y-%m-%dT%H:%M:%S%z").to_string(); // Format as string
-        headers.literal!(Triple::new(pub_id,DC_TERMS_ISSUED,Term::Literal(Literal::new(datetime_str)),
-        ));
-        */
+        //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
+        //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
         self.header.body = headers;
     }
 
