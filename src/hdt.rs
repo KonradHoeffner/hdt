@@ -53,17 +53,6 @@ pub enum Error {
     DictionaryValidationErrorTodo(#[from] std::io::Error),
 }
 
-#[derive(Clone, Debug)]
-pub struct Options {
-    pub block_size: usize,
-    pub order: String,
-}
-impl Default for Options {
-    fn default() -> Self {
-        Options { block_size: 16, order: "SPO".to_owned() }
-    }
-}
-
 impl Hdt {
     #[deprecated(since = "0.4.0", note = "please use `read` instead")]
     pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> {
@@ -102,16 +91,16 @@ impl Hdt {
     ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
     // TODO: I (KH) prefer to use a BufRead here, is the file IRI important? I don't mind leaving it out of the header.
     #[cfg(feature = "sophia")]
+    //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
         use std::collections::BTreeSet;
         use std::io::Write;
 
-        //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
+        const BLOCK_SIZE: usize = 16;
+
         let source = std::fs::File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
-        let opts = Options::default();
-
-        let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, opts.clone())?;
+        let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         encoded_triples.sort_unstable_by_key(|t| (t.subject_id, t.predicate_id, t.object_id));
         let triples = TriplesBitmap::from_triples(&encoded_triples);
@@ -119,7 +108,7 @@ impl Hdt {
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
 
         let mut hdt = Hdt { header, dict, triples };
-        hdt.build_header(f, opts, num_triples);
+        hdt.build_header(f, BLOCK_SIZE, num_triples);
         let mut buf = Vec::<u8>::new();
         for triple in &hdt.header.body {
             writeln!(buf, "{triple}")?;
@@ -134,11 +123,12 @@ impl Hdt {
     /// populated HDT header fields
     // TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
     #[cfg(feature = "sophia")]
-    fn build_header(&mut self, path: &std::path::Path, opts: Options, num_triples: usize) {
+    fn build_header(&mut self, path: &std::path::Path, block_size: usize, num_triples: usize) {
         use crate::containers::rdf::{Id, Literal, Term, Term::Literal as Lit, Triple};
         use crate::vocab::*;
         use std::collections::BTreeSet;
 
+        const ORDER: &str = "SPO";
         let mut headers = BTreeSet::<Triple>::new();
 
         macro_rules! literal {
@@ -180,11 +170,11 @@ impl Hdt {
         literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
         literal!(dict_id, HDT_DICT_MAPPING, "1");
         literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
-        literal!(dict_id, HDT_DICT_BLOCK_SIZE, opts.block_size);
+        literal!(dict_id, HDT_DICT_BLOCK_SIZE, block_size);
         // TRIPLES
         literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
         literal!(triples_id, HDT_NUM_TRIPLES, num_triples);
-        literal!(triples_id, HDT_TRIPLES_ORDER, opts.order);
+        literal!(triples_id, HDT_TRIPLES_ORDER, ORDER);
         // // Sizes
         let meta = std::fs::File::open(path).unwrap().metadata().unwrap();
         literal!(stats_id, HDT_ORIGINAL_SIZE, meta.len());

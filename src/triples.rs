@@ -459,8 +459,7 @@ impl TriplesBitmap {
         // may already be validated or be created without CRC
         assert!(sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()), "Wavelet source CRC check failed.");
         drop(sequence);
-        let wavelet = WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.");
-        wavelet
+        WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
     }
 
     /*

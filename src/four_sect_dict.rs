@@ -171,7 +171,7 @@ impl FourSectDict {
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
     pub fn read_nt<R: BufRead>(
-        r: &mut R, opts: crate::hdt::Options,
+        r: &mut R, block_size: usize,
     ) -> Result<(Self, Vec<crate::triples::TripleId>), DictReadError> {
         use crate::triples::TripleId;
         use log::warn;
@@ -224,10 +224,10 @@ impl FourSectDict {
             object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect();
 
         let dict = FourSectDict {
-            shared: DictSectPFC::compress(&shared_terms, opts.block_size),
-            predicates: DictSectPFC::compress(&predicate_terms_ref, opts.block_size),
-            subjects: DictSectPFC::compress(&unique_subject_terms, opts.block_size),
-            objects: DictSectPFC::compress(&unique_object_terms, opts.block_size),
+            shared: DictSectPFC::compress(&shared_terms, block_size),
+            predicates: DictSectPFC::compress(&predicate_terms_ref, block_size),
+            subjects: DictSectPFC::compress(&unique_subject_terms, block_size),
+            objects: DictSectPFC::compress(&unique_object_terms, block_size),
         };
 
         let encoded_triples: Vec<TripleId> = raw_triples
