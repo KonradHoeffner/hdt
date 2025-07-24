@@ -102,7 +102,7 @@ impl Hdt {
         let mut reader = std::io::BufReader::new(source);
         let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
-        encoded_triples.sort_unstable_by_key(|t| (t.subject_id, t.predicate_id, t.object_id));
+        encoded_triples.sort_unstable();
         let triples = TriplesBitmap::from_triples(&encoded_triples);
 
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
@@ -364,37 +364,25 @@ impl Hdt {
         let mut cache = TripleCache::new(self);
         match (xso, xpo, xoo) {
             (Some(s), Some(p), Some(o)) => {
-                if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() {
+                if SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, o.1)).next().is_some() {
                     Box::new(iter::once((s.0, p.0, o.0)))
                 } else {
                     Box::new(iter::empty())
                 }
             }
             (Some(s), Some(p), None) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0)).map(move |t| {
-                    (
-                        s.0.clone(),
-                        p.0.clone(),
-                        Arc::from(self.dict.id_to_string(t.object_id, &IdKind::Object).unwrap()),
-                    )
+                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, 0)).map(move |t| {
+                    (s.0.clone(), p.0.clone(), Arc::from(self.dict.id_to_string(t.2, &IdKind::Object).unwrap()))
                 }))
             }
             (Some(s), None, Some(o)) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1)).map(move |t| {
-                    (
-                        s.0.clone(),
-                        Arc::from(self.dict.id_to_string(t.predicate_id, &IdKind::Predicate).unwrap()),
-                        o.0.clone(),
-                    )
+                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, o.1)).map(move |t| {
+                    (s.0.clone(), Arc::from(self.dict.id_to_string(t.1, &IdKind::Predicate).unwrap()), o.0.clone())
                 }))
             }
             (Some(s), None, None) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0)).map(move |t| {
-                    (
-                        s.0.clone(),
-                        cache.get_p_string(t.predicate_id).unwrap(),
-                        cache.get_o_string(t.object_id).unwrap(),
-                    )
+                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, 0)).map(move |t| {
+                    (s.0.clone(), cache.get_p_string(t.1).unwrap(), cache.get_o_string(t.2).unwrap())
                 }))
             }
             (None, Some(p), Some(o)) => {
@@ -402,16 +390,16 @@ impl Hdt {
                     (Arc::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()), p.0.clone(), o.0.clone())
                 }))
             }
-            (None, Some(p), None) => Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
-                (cache.get_s_string(t.subject_id).unwrap(), p.0.clone(), cache.get_o_string(t.object_id).unwrap())
-            })),
-            (None, None, Some(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
-                (
-                    cache.get_s_string(t.subject_id).unwrap(),
-                    cache.get_p_string(t.predicate_id).unwrap(),
-                    o.0.clone(),
-                )
-            })),
+            (None, Some(p), None) => {
+                Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
+                    (cache.get_s_string(t.0).unwrap(), p.0.clone(), cache.get_o_string(t.2).unwrap())
+                }))
+            }
+            (None, None, Some(o)) => {
+                Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
+                    (cache.get_s_string(t.0).unwrap(), cache.get_p_string(t.1).unwrap(), o.0.clone())
+                }))
+            }
             (None, None, None) => Box::new(self.triples_all()),
         }
     }
@@ -449,9 +437,9 @@ impl<'a> TripleCache<'a> {
     /// Translate a triple of indexes into a triple of strings.
     pub fn translate(&mut self, t: TripleId) -> core::result::Result<StringTriple, TranslateError> {
         Ok((
-            self.get_s_string(t.subject_id).map_err(|e| TranslateError { e, t })?,
-            self.get_p_string(t.predicate_id).map_err(|e| TranslateError { e, t })?,
-            self.get_o_string(t.object_id).map_err(|e| TranslateError { e, t })?,
+            self.get_s_string(t.0).map_err(|e| TranslateError { e, t })?,
+            self.get_p_string(t.1).map_err(|e| TranslateError { e, t })?,
+            self.get_o_string(t.2).map_err(|e| TranslateError { e, t })?,
         ))
     }
 

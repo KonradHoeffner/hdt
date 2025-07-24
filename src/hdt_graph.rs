@@ -151,30 +151,23 @@ impl Graph for Hdt {
         let Some(xoo) = unpack_matcher(self, &om, &IdKind::Object) else { return Box::new(iter::empty()) };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
-            //if SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, o.1)).next().is_some() { // always true
+            //if SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, o.1)).next().is_some() { // always true
             (Constant(s), Constant(p), Constant(o)) => Box::new(iter::once(Ok([s.0, p.0, o.0]))),
             (Constant(s), Constant(p), Other) => Box::new(
-                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, p.1, 0))
-                    .map(|tid| {
-                        auto_term(&self.dict.id_to_string(tid.object_id, &IdKind::Object).unwrap()).unwrap()
-                    })
+                SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, 0))
+                    .map(|tid| auto_term(&self.dict.id_to_string(tid.2, &IdKind::Object).unwrap()).unwrap())
                     .filter(move |term| om.matches(term))
                     .map(move |term| Ok([s.0.clone(), p.0.clone(), term])),
             ),
             (Constant(s), Other, Constant(o)) => Box::new(
-                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, o.1))
-                    .map(|t| id_term(self, t.predicate_id, &IdKind::Predicate))
+                SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, o.1))
+                    .map(|t| id_term(self, t.1, &IdKind::Predicate))
                     .filter(move |term| pm.matches(term))
                     .map(move |term| Ok([s.0.clone(), term, o.0.clone()])),
             ),
             (Constant(s), Other, Other) => Box::new(
-                SubjectIter::with_pattern(&self.triples, &TripleId::new(s.1, 0, 0))
-                    .map(move |t| {
-                        [
-                            id_term(self, t.predicate_id, &IdKind::Predicate),
-                            id_term(self, t.object_id, &IdKind::Object),
-                        ]
-                    })
+                SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, 0))
+                    .map(move |t| [id_term(self, t.1, &IdKind::Predicate), id_term(self, t.2, &IdKind::Object)])
                     .filter(move |[pt, ot]| pm.matches(pt) && om.matches(ot))
                     .map(move |[pt, ot]| Ok([s.0.clone(), pt, ot])),
             ),
@@ -186,20 +179,14 @@ impl Graph for Hdt {
             ),
             (Other, Constant(p), Other) => Box::new(
                 PredicateIter::new(&self.triples, p.1)
-                    .map(move |t| {
-                        [
-                            id_term(self, t.subject_id, &IdKind::Subject),
-                            id_term(self, t.object_id, &IdKind::Object),
-                        ]
-                    })
+                    .map(move |t| [id_term(self, t.0, &IdKind::Subject), id_term(self, t.2, &IdKind::Object)])
                     .filter(move |[st, ot]| sm.matches(st) && om.matches(ot))
                     .map(move |[st, ot]| Ok([st, p.0.clone(), ot])),
             ),
             (Other, Other, Constant(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 Ok([
-                    auto_term(&Arc::from(self.dict.id_to_string(t.subject_id, &IdKind::Subject).unwrap()))
-                        .unwrap(),
-                    id_term(self, t.predicate_id, &IdKind::Predicate),
+                    auto_term(&Arc::from(self.dict.id_to_string(t.0, &IdKind::Subject).unwrap())).unwrap(),
+                    id_term(self, t.1, &IdKind::Predicate),
                     o.0.clone(),
                 ])
             })),

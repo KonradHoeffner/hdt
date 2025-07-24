@@ -233,12 +233,12 @@ impl FourSectDict {
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
             .map(|(s, p, o)| {
-                let triple = TripleId {
-                    subject_id: dict.string_to_id(&s, &IdKind::Subject),
-                    predicate_id: dict.string_to_id(&p, &IdKind::Predicate),
-                    object_id: dict.string_to_id(&o, &IdKind::Object),
-                };
-                if triple.subject_id == 0 || triple.predicate_id == 0 || triple.object_id == 0 {
+                let triple = TripleId(
+                    dict.string_to_id(&s, &IdKind::Subject),
+                    dict.string_to_id(&p, &IdKind::Predicate),
+                    dict.string_to_id(&o, &IdKind::Object),
+                );
+                if triple.0 == 0 || triple.1 == 0 || triple.2 == 0 {
                     error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
                 }
                 triple

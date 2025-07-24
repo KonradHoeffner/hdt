@@ -326,9 +326,7 @@ impl TriplesBitmap {
         let mut last_z = 0;
 
         for (i, triple) in triples.iter().enumerate() {
-            let x = triple.subject_id;
-            let y = triple.predicate_id;
-            let z = triple.object_id;
+            let TripleId(x, y, z) = *triple;
 
             assert!(!(x == 0 || y == 0 || z == 0), "triple IDs should never be zero");
 
@@ -505,19 +503,19 @@ impl TriplesBitmap {
     }
 
     /// Transform the given IDs of the layers in triple section order to a triple ID.
-    /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId::new(x,y,z)`.
+    /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId(x,y,z)`.
     /// Other orders may lead to undefined behaviour.
     pub const fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
         if x == 0 || y == 0 || z == 0 {
             return Err(Error::TripleComponentZero(x, y, z));
         }
         match self.order {
-            Order::SPO => Ok(TripleId::new(x, y, z)),
-            Order::SOP => Ok(TripleId::new(x, z, y)),
-            Order::PSO => Ok(TripleId::new(y, x, z)),
-            Order::POS => Ok(TripleId::new(y, z, x)),
-            Order::OSP => Ok(TripleId::new(z, x, y)),
-            Order::OPS => Ok(TripleId::new(z, y, x)),
+            Order::SPO => Ok(TripleId(x, y, z)),
+            Order::SOP => Ok(TripleId(x, z, y)),
+            Order::PSO => Ok(TripleId(y, x, z)),
+            Order::POS => Ok(TripleId(y, z, x)),
+            Order::OSP => Ok(TripleId(z, x, y)),
+            Order::OPS => Ok(TripleId(z, y, x)),
             Order::Unknown => Err(Error::UnknownTriplesOrder),
         }
     }
@@ -542,22 +540,13 @@ pub type Id = usize;
 
 /// Type for a triple encoded as numeric IDs for subject, predicate and object, respectively.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#triples>.
+/// Subject index starting at 1 in the combined shared and subject section.
+/// Predicate index starting at 1 in the predicate section.
+/// Predicate index starting at 1 in the combined shared and object section.
+/// When used as a triple, 0 values are invalid.
+/// When used as a pattern, 0 values in a position match all values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TripleId {
-    /// Index starting at 1 in the combined shared and subject section.
-    pub subject_id: Id,
-    /// Index starting at 1 in the predicate section.
-    pub predicate_id: Id,
-    /// Index starting at 1 in the combined shared and object section.
-    pub object_id: Id,
-}
-
-impl TripleId {
-    /// Create a new triple ID.
-    pub const fn new(subject_id: Id, predicate_id: Id, object_id: Id) -> Self {
-        TripleId { subject_id, predicate_id, object_id }
-    }
-}
+pub struct TripleId(pub Id, pub Id, pub Id);
 
 #[cfg(test)]
 mod tests {
@@ -591,16 +580,16 @@ mod tests {
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 328);
-        assert_eq!(v[0].subject_id, 1);
-        assert_eq!(v[2].subject_id, 1);
-        assert_eq!(v[3].subject_id, 2);
+        assert_eq!(v[0].0, 1);
+        assert_eq!(v[2].0, 1);
+        assert_eq!(v[3].0, 2);
         let num_subjects = 48;
         let num_predicates = 23;
         let num_objects = 175;
         let mut filtered: Vec<TripleId>;
         let kinds = [IdKind::Subject, IdKind::Predicate, IdKind::Object];
         let lens = [num_subjects, num_predicates, num_objects];
-        let funs = [|t: TripleId| t.subject_id, |t: TripleId| t.predicate_id, |t: TripleId| t.object_id];
+        let funs = [|t: TripleId| t.0, |t: TripleId| t.1, |t: TripleId| t.2];
         for j in 0..kinds.len() {
             for i in 1..=lens[j] {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
@@ -615,32 +604,32 @@ mod tests {
         assert_eq!(0, SubjectIter::empty(&triples).count());
         // SPO
         assert_eq!(
-            vec![TripleId::new(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, &TripleId::new(14, 14, 154)).collect::<Vec<_>>()
+            vec![TripleId(14, 14, 154)],
+            SubjectIter::with_pattern(&triples, TripleId(14, 14, 154)).collect::<Vec<_>>()
         );
         // SP
         assert_eq!(
-            vec![TripleId::new(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, &TripleId::new(14, 14, 0)).collect::<Vec<_>>()
+            vec![TripleId(14, 14, 154)],
+            SubjectIter::with_pattern(&triples, TripleId(14, 14, 0)).collect::<Vec<_>>()
         );
         // S??
         for i in 1..num_subjects {
             assert_eq!(
                 SubjectIter::with_s(&triples, i).collect::<Vec<_>>(),
-                SubjectIter::with_pattern(&triples, &TripleId::new(i, 0, 0)).collect::<Vec<_>>()
+                SubjectIter::with_pattern(&triples, TripleId(i, 0, 0)).collect::<Vec<_>>()
             );
         }
         // ??? (all triples)
-        assert_eq!(v, SubjectIter::with_pattern(&triples, &TripleId::new(0, 0, 0)).collect::<Vec<_>>());
+        assert_eq!(v, SubjectIter::with_pattern(&triples, TripleId(0, 0, 0)).collect::<Vec<_>>());
         // SP? where S and P are in the graph, but not together
-        assert_eq!(0, SubjectIter::with_pattern(&triples, &TripleId::new(12, 14, 154)).count());
+        assert_eq!(0, SubjectIter::with_pattern(&triples, TripleId(12, 14, 154)).count());
         Ok(())
     }
 
     /*
       #[test]
         fn from_triples() -> color_eyre::Result<()> {
-            //let triples: Vec<TripleId> = vec![TripleId::new(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
+            //let triples: Vec<TripleId> = vec![TripleId(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
             todo!("not yet implemented");
         }
     */

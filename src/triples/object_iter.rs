@@ -38,7 +38,7 @@ impl Iterator for ObjectIter<'_> {
         let y = self.triples.wavelet_y.access(pos_y).unwrap() as Id;
         let x = self.triples.bitmap_y.rank(pos_y) as Id + 1;
         self.pos_index += 1;
-        Some(TripleId::new(x, y, self.o))
+        Some(TripleId(x, y, self.o))
         //Some(self.triples.coord_to_triple(x, y, self.o).unwrap())
     }
 }

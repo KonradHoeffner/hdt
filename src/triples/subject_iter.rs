@@ -50,15 +50,15 @@ impl<'a> SubjectIter<'a> {
     /// # Examples
     /// ```text
     /// // S?? pattern, all triples with subject ID 1
-    /// SubjectIter::with_pattern(triples, TripleId::new(1, 0, 0);
+    /// SubjectIter::with_pattern(triples, TripleId(1, 0, 0);
     /// // SP? pattern, all triples with subject ID 1 and predicate ID 2
-    /// SubjectIter::with_pattern(triples, TripleId::new(1, 2, 0);
+    /// SubjectIter::with_pattern(triples, TripleId(1, 2, 0);
     /// // match a specific triple, not useful in practice except as an ASK query
-    /// SubjectIter::with_pattern(triples, TripleId::new(1, 2, 3);
+    /// SubjectIter::with_pattern(triples, TripleId(1, 2, 3);
     /// ```
     // Translated from <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>.
-    pub fn with_pattern(triples: &'a TriplesBitmap, pat: &TripleId) -> Self {
-        let (pat_x, pat_y, pat_z) = (pat.subject_id, pat.predicate_id, pat.object_id);
+    pub fn with_pattern(triples: &'a TriplesBitmap, pat: TripleId) -> Self {
+        let TripleId(pat_x, pat_y, pat_z) = pat;
         let (min_y, max_y, min_z, max_z);
         let mut x = 1;
         let mut search_z = 0;
