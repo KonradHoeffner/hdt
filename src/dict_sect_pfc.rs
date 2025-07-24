@@ -38,11 +38,18 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
     InvalidCrc8Checksum(u8, u8),
+    #[error("Invalid CRC32-iSCSI checksum {0}, expected {1}")]
+    InvalidCrc32Checksum(u32, u32),
     #[error("implementation only supports plain front coded dictionary section type 2, found type {0}")]
     DictSectNotPfc(u8),
     #[error("sequence read error")]
     Sequence(#[from] crate::containers::sequence::Error),
 }
+
+/*#[derive(thiserror::Error, Debug)]
+#[error("Invalid CRC32-iSCSI checksum {0}, expected {1}")]
+pub struct InvalidCrc32Checksum(u32, u32);
+*/
 
 impl fmt::Debug for DictSectPFC {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -241,7 +248,7 @@ impl DictSectPFC {
     }
 
     /// Returns an unverified dictionary section together with a handle to verify the checksum.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<bool>)> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<(Self, JoinHandle<Result<()>>)> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -292,11 +299,15 @@ impl DictSectPFC {
         let cloned_data = Arc::clone(&packed_data);
         let crc_handle = spawn(move || {
             let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-            let mut digest = crc32.digest();
-            digest.update(&cloned_data[..]);
-            digest.finalize() == u32::from_le_bytes(crc_code)
+            let mut digest32 = crc32.digest();
+            digest32.update(&cloned_data[..]);
+            let crc_calculated32 = digest32.finalize();
+            let crc_code32 = u32::from_le_bytes(crc_code);
+            if crc_calculated32 != crc_code32 {
+                return Err(Error::InvalidCrc32Checksum(crc_calculated32, crc_code32));
+            }
+            Ok(())
         });
-
         Ok((DictSectPFC { num_strings, block_size, sequence, packed_data }, crc_handle))
     }
 
@@ -455,24 +466,19 @@ mod tests {
         let objects = DictSectPFC::read(&mut reader)?;
 
         for (sect, crc_handle) in [shared, subjects, predicates, objects] {
-            assert!(crc_handle.join().unwrap());
+            crc_handle.join().unwrap()?;
             println!("write section ****************************");
             let mut buf = Vec::<u8>::new();
             sect.write(&mut buf)?;
             let mut cursor = std::io::Cursor::new(buf);
             let (sect2, crc_handle2) = DictSectPFC::read(&mut cursor)?;
-            assert!(crc_handle2.join().unwrap());
+            crc_handle2.join().unwrap()?;
             assert_eq!(sect.num_strings, sect2.num_strings);
             assert_eq!(sect.sequence, sect2.sequence);
             assert_eq!(sect.packed_data.len(), sect2.packed_data.len());
             assert_eq!(sect.block_size, sect2.block_size);
             assert_eq!(sect.packed_data, sect2.packed_data);
-            //assert_eq!(sect, sect2);
         }
-
-        //crc_handle.join().unwrap();
-        //assert_eq!(shared, shared2);
-        //assert_eq!(subjects, subjects2);
         Ok(())
     }
 

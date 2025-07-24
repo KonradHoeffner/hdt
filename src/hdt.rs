@@ -1,6 +1,6 @@
 use crate::FourSectDict;
 use crate::containers::{ControlInfo, control_info};
-use crate::four_sect_dict::{DictError, DictReadError, IdKind};
+use crate::four_sect_dict::{self, IdKind};
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use crate::{header, header::Header};
 use bytesize::ByteSize;
@@ -34,7 +34,7 @@ type StringTriple = (Arc<str>, Arc<str>, Arc<str>);
 #[error("cannot translate triple ID {t:?} to string triple: {e}")]
 pub struct TranslateError {
     #[source]
-    e: DictError,
+    e: four_sect_dict::ExtractError,
     t: TripleId,
 }
 
@@ -46,11 +46,11 @@ pub enum Error {
     #[error("failed to read HDT header")]
     Header(#[from] header::Error),
     #[error("failed to read HDT four section dictionary")]
-    FourSectDict(#[from] DictReadError),
+    FourSectDict(#[from] four_sect_dict::Error),
     #[error("failed to read HDT triples section")]
     Triples(#[from] crate::triples::Error),
-    #[error("failed to validate HDT dictionary")]
-    DictionaryValidationErrorTodo(#[from] std::io::Error),
+    #[error("IO Error")]
+    Io(#[from] std::io::Error),
 }
 
 impl Hdt {
@@ -420,17 +420,17 @@ impl<'a> TripleCache<'a> {
     }
 
     /// Get the string representation of the subject `sid`.
-    pub fn get_s_string(&mut self, sid: usize) -> core::result::Result<Arc<str>, DictError> {
+    pub fn get_s_string(&mut self, sid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
         self.get_x_string(sid, 0, &IdKind::Subject)
     }
 
     /// Get the string representation of the predicate `pid`.
-    pub fn get_p_string(&mut self, pid: usize) -> core::result::Result<Arc<str>, DictError> {
+    pub fn get_p_string(&mut self, pid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
         self.get_x_string(pid, 1, &IdKind::Predicate)
     }
 
     /// Get the string representation of the object `oid`.
-    pub fn get_o_string(&mut self, oid: usize) -> core::result::Result<Arc<str>, DictError> {
+    pub fn get_o_string(&mut self, oid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
         self.get_x_string(oid, 2, &IdKind::Object)
     }
 
@@ -445,7 +445,7 @@ impl<'a> TripleCache<'a> {
 
     fn get_x_string(
         &mut self, i: usize, pos: usize, kind: &'static IdKind,
-    ) -> core::result::Result<Arc<str>, DictError> {
+    ) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
         debug_assert!(i != 0);
         if self.idx[pos] == i {
             Ok(self.arc[pos].as_ref().unwrap().clone())

@@ -3,13 +3,14 @@
 use crate::ControlInfo;
 use crate::DictSectPFC;
 /// Four section dictionary.
-use crate::dict_sect_pfc::ExtractError;
+use crate::dict_sect_pfc;
 use crate::triples::Id;
 use log::error;
-use std::io;
-use std::io::{BufRead, Error, ErrorKind};
+use std::io::BufRead;
 use std::thread::JoinHandle;
 use thiserror::Error;
+
+pub type Result<T> = core::result::Result<T, Error>;
 
 /// Position in an RDF triple.
 #[derive(Debug, Clone)]
@@ -55,9 +56,9 @@ pub enum SectKind {
 /// Wraps an extraction error with additional information on which dictionary section it occurred in.
 #[derive(Error, Debug)]
 #[error("four sect dict error id_to_string({id},IdKind::{id_kind:?}) in the {sect_kind:?} section, caused by {e}")]
-pub struct DictError {
+pub struct ExtractError {
     #[source]
-    e: ExtractError,
+    e: dict_sect_pfc::ExtractError,
     id: Id,
     id_kind: &'static IdKind,
     sect_kind: SectKind,
@@ -67,12 +68,12 @@ pub struct DictError {
 #[error("four sect dict section error in the {sect_kind:?} section")]
 pub struct DictSectError {
     #[source]
-    e: crate::dict_sect_pfc::Error,
+    e: dict_sect_pfc::Error,
     sect_kind: SectKind,
 }
 
 #[derive(Error, Debug)]
-pub enum DictReadError {
+pub enum Error {
     #[error("failed to read FourSectDict control info")]
     ControlInfo(#[from] crate::containers::control_info::Error),
     #[error("failed to read FourSectDict section")]
@@ -91,26 +92,26 @@ pub struct EncodedTripleId {
 impl FourSectDict {
     /// Get the string value of a given ID of a given type.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
-    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> core::result::Result<String, DictError> {
+    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> core::result::Result<String, ExtractError> {
         use SectKind::*;
         let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);
         match id_kind {
             IdKind::Subject => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Shared })
+                    self.shared.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Shared })
                 } else {
-                    self.subjects.extract(d).map_err(|e| DictError { e, id, id_kind, sect_kind: Subject })
+                    self.subjects.extract(d).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Subject })
                 }
             }
             IdKind::Predicate => {
-                self.predicates.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Predicate })
+                self.predicates.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Predicate })
             }
             IdKind::Object => {
                 if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| DictError { e, id, id_kind, sect_kind: Shared })
+                    self.shared.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Shared })
                 } else {
-                    self.objects.extract(d).map_err(|e| DictError { e, id, id_kind, sect_kind: Object })
+                    self.objects.extract(d).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Object })
                 }
             }
         }
@@ -146,11 +147,11 @@ impl FourSectDict {
     }
 
     /// read the whole dictionary section including control information
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict, DictReadError> {
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<UnvalidatedFourSectDict> {
         use SectKind::*;
         let dict_ci = ControlInfo::read(reader)?;
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
-            return Err(DictReadError::Other("Implementation only supports four section dictionaries".to_owned()));
+            return Err(Error::Other("Implementation only supports four section dictionaries".to_owned()));
         }
         let (shared, shared_crc) =
             DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
@@ -170,9 +171,7 @@ impl FourSectDict {
     /// read N-Triples and convert them to a dictionary and triple IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead>(
-        r: &mut R, block_size: usize,
-    ) -> Result<(Self, Vec<crate::triples::TripleId>), DictReadError> {
+    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use crate::triples::TripleId;
         use log::warn;
         use sophia::api::prelude::TripleSource;
@@ -208,7 +207,7 @@ impl FourSectDict {
 
                 raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
             })
-            .map_err(|e| DictReadError::Other(format!("Error reading N-Triples: {e:?}")))?;
+            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
@@ -249,7 +248,7 @@ impl FourSectDict {
     }
 
     /// write the whole Dictionary including control info and all sections
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<(), DictReadError> {
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         use SectKind::*;
         ControlInfo::four_sect_dict().write(write)?;
         self.shared.write(write).map_err(|e| DictSectError { e, sect_kind: Shared })?;
@@ -271,23 +270,18 @@ impl FourSectDict {
 /// A wrapper to ensure prevent using FourSectDict before its checksum have been validated
 pub struct UnvalidatedFourSectDict {
     four_sect_dict: FourSectDict,
-    crc_handles: [JoinHandle<bool>; 4],
+    crc_handles: [JoinHandle<dict_sect_pfc::Result<()>>; 4],
 }
 
 impl UnvalidatedFourSectDict {
     /// Validates the checksums of all dictionary sections in parallel.
     /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
     /// This function must NOT be called more than once.
-    // TODO can this be simplified?
-    pub fn validate(self) -> io::Result<FourSectDict> {
-        let names = ["shared", "subject", "predicate", "object"];
-        for (name, handle) in names.iter().zip(self.crc_handles) {
-            if !handle.join().unwrap() {
-                return Err(Error::new(
-                    ErrorKind::InvalidData,
-                    format!("CRC Error in {name} dictionary section."),
-                ));
-            }
+    pub fn validate(self) -> Result<FourSectDict> {
+        use SectKind::*;
+        let sect_kinds = [Shared, Subject, Predicate, Object];
+        for (sect_kind, handle) in sect_kinds.into_iter().zip(self.crc_handles) {
+            handle.join().unwrap().map_err(|e| DictSectError { e, sect_kind })?;
         }
         Ok(self.four_sect_dict)
     }
