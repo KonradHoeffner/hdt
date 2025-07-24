@@ -256,10 +256,7 @@ impl Sequence {
         let entries = nums.len();
         let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
         cv.extend(nums.iter().copied()).unwrap();
-        // current API of sucds does not allow moving out the internal data
-        let data = cv.bit_vector().words().to_vec();
-        // waiting for acceptance on https://github.com/kampersanda/sucds/pull/105
-        // let data = cv.into_bit_vector().into_words();
+        let data = cv.into_bit_vector().into_words();
         Sequence { entries, bits_per_entry, data, crc_handle: None }
     }
 }
