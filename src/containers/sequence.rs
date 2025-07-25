@@ -6,7 +6,6 @@ use serde::{self, Deserialize, Serialize};
 use std::fmt;
 use std::io::{BufRead, Write};
 use std::mem::size_of;
-use std::thread;
 
 const USIZE_BITS: usize = usize::BITS as usize;
 
@@ -23,9 +22,6 @@ pub struct Sequence {
     pub bits_per_entry: usize,
     /// Data in blocks.
     pub data: Vec<usize>,
-    /// whether CRC check was successful
-    #[cfg_attr(feature = "cache", serde(skip))]
-    pub crc_handle: Option<thread::JoinHandle<bool>>,
 }
 
 enum SequenceType {
@@ -54,6 +50,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
     InvalidCrc8Checksum(u8, u8),
+    #[error("Invalid CRC32C checksum {0}, expected {1}")]
+    InvalidCrc32Checksum(u32, u32),
     #[error("Failed to turn raw bytes into usize")]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("invalid LogArray type {0} != 1")]
@@ -197,22 +195,23 @@ impl Sequence {
             bits_read += size_of::<usize>();
         }
         data.push(last_value);
-        // temporarily for bug fixing
-        // return Ok(Sequence { entries, bits_per_entry, data, crc_handle: None});
         // read entry body CRC32
         let mut crc_code = [0_u8; 4];
         reader.read_exact(&mut crc_code)?;
-        let crc_handle = Some(thread::spawn(move || {
-            let crc_code = u32::from_le_bytes(crc_code);
 
-            // validate entry body CRC32
-            let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-            let mut digest = crc32.digest();
-            digest.update(&history);
-            digest.finalize() == crc_code
-        }));
+        let crc_code32 = u32::from_le_bytes(crc_code);
+        //let start = std::time::Instant::now();
+        // validate entry body CRC32
+        let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let mut digest = crc32.digest();
+        digest.update(&history);
+        let crc_calculated32 = digest.finalize();
+        //println!("Sequence of {} validated in {:?}", ByteSize(history.len() as u64), start.elapsed());
+        if crc_calculated32 != crc_code32 {
+            return Err(Error::InvalidCrc32Checksum(crc_calculated32, crc_code32));
+        }
 
-        Ok(Sequence { entries, bits_per_entry, data, crc_handle })
+        Ok(Sequence { entries, bits_per_entry, data })
     }
 
     /// save sequence per HDT spec using CRC
@@ -257,7 +256,7 @@ impl Sequence {
         let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
         cv.extend(nums.iter().copied()).unwrap();
         let data = cv.into_bit_vector().into_words();
-        Sequence { entries, bits_per_entry, data, crc_handle: None }
+        Sequence { entries, bits_per_entry, data }
     }
 }
 
@@ -279,7 +278,7 @@ mod tests {
         let mut data = Vec::<usize>::new();
         // little endian
         data.push((5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1);
-        let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone(), crc_handle: None };
+        let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone() };
         let numbers: Vec<usize> = s.into_iter().collect();
         //let expected = vec![1];
         let expected = vec![1, 2, 3, 4, 5];

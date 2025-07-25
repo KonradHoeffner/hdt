@@ -153,19 +153,8 @@ impl FourSectDict {
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
             return Err(Error::Other("Implementation only supports four section dictionaries".to_owned()));
         }
-        let (shared, shared_crc) =
-            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
-        let (subjects, subjects_crc) =
-            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Subject })?;
-        let (predicates, predicates_crc) =
-            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
-        let (objects, objects_crc) =
-            DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Object })?;
-
-        Ok(UnvalidatedFourSectDict {
-            four_sect_dict: FourSectDict { shared, subjects, predicates, objects },
-            crc_handles: [shared_crc, subjects_crc, predicates_crc, objects_crc],
-        })
+        let mut f = |sect_kind| DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind });
+        Ok(UnvalidatedFourSectDict([f(Shared)?, f(Subject)?, f(Predicate)?, f(Object)?]))
     }
 
     /// read N-Triples and convert them to a dictionary and triple IDs
@@ -267,23 +256,21 @@ impl FourSectDict {
     }
 }
 
-/// A wrapper to ensure prevent using FourSectDict before its checksum have been validated
-pub struct UnvalidatedFourSectDict {
-    four_sect_dict: FourSectDict,
-    crc_handles: [JoinHandle<dict_sect_pfc::Result<()>>; 4],
-}
+/// A wrapper to ensure prevent using FourSectDict before its checksums have been validated
+pub struct UnvalidatedFourSectDict([JoinHandle<dict_sect_pfc::Result<DictSectPFC>>; 4]);
 
 impl UnvalidatedFourSectDict {
     /// Validates the checksums of all dictionary sections in parallel.
     /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
-    /// This function must NOT be called more than once.
     pub fn validate(self) -> Result<FourSectDict> {
         use SectKind::*;
-        let sect_kinds = [Shared, Subject, Predicate, Object];
-        for (sect_kind, handle) in sect_kinds.into_iter().zip(self.crc_handles) {
-            handle.join().unwrap().map_err(|e| DictSectError { e, sect_kind })?;
-        }
-        Ok(self.four_sect_dict)
+        let r: Vec<_> = [Shared, Subject, Predicate, Object]
+            .into_iter()
+            .zip(self.0)
+            .map(|(sect_kind, handle)| handle.join().unwrap().map_err(|e| DictSectError { e, sect_kind }))
+            .collect::<std::result::Result<Vec<DictSectPFC>, DictSectError>>()?;
+        let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = r.try_into().unwrap();
+        Ok(FourSectDict { shared, subjects, predicates, objects })
     }
 }
 

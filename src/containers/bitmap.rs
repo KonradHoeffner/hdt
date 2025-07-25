@@ -187,11 +187,11 @@ impl Bitmap {
         let crc_code = u32::from_le_bytes(crc_code);
 
         // validate entry body CRC32
+        // not worth it to spawn an extra thread as our bitmaps are comparatively small
         let crc_calculated = digest.finalize();
         if crc_calculated != crc_code {
             return Err(InvalidCrc32Checksum(crc_calculated, crc_code));
         }
-
         Ok(Self::new(data))
     }
 

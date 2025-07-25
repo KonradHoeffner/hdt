@@ -447,15 +447,13 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(mut sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
+    fn build_wavelet(sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
         let mut builder =
             CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder.");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
         for x in &sequence {
             builder.push_int(x).unwrap();
         }
-        // may already be validated or be created without CRC
-        assert!(sequence.crc_handle.take().is_none_or(|h| h.join().unwrap()), "Wavelet source CRC check failed.");
         drop(sequence);
         WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
     }
@@ -483,12 +481,10 @@ impl TriplesBitmap {
 
         // read sequences
         let sequence_y = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Y, e))?;
-        let mut sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
-        let crc_handle = sequence_z.crc_handle.take().unwrap();
+        let sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
         let triples_bitmap = TriplesBitmap::new(order, sequence_y, bitmap_y, adjlist_z);
-        assert!(crc_handle.join().unwrap(), "sequence_z CRC check failed.");
         Ok(triples_bitmap)
     }
 
