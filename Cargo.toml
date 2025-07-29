@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.3.0"
+version = "0.4.0-alpha"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
