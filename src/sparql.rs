@@ -1,13 +1,8 @@
-use crate::Hdt;
-use crate::hdt;
+use crate::{Hdt, hdt};
 use oxrdf::{NamedNode, Term};
-use spareval::InternalQuad;
-use spareval::QueryEvaluationError;
-use spareval::QueryEvaluator;
-use spareval::QueryableDataset;
+use spareval::{InternalQuad, QueryEvaluationError, QueryEvaluator, QueryableDataset};
 use spargebra::Query;
-use std::io::Error;
-use std::io::ErrorKind;
+use std::io::{Error, ErrorKind};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -149,14 +144,16 @@ impl QueryableDataset for HDTDatasetView {
 }
 
 pub fn evaluate_hdt_query(
-    rq: &Path, dataset: HDTDatasetView,
+    q: &str,
+    dataset: HDTDatasetView,
+    //rq: &Path, dataset: HDTDatasetView,
 ) -> Result<
     (Result<spareval::QueryResults, QueryEvaluationError>, spareval::QueryExplanation),
     Box<dyn std::error::Error>,
 > {
-    let sparql_query_string = std::fs::read_to_string(rq).expect("error reading sparql query file");
-
-    let query = Query::parse(sparql_query_string.as_str(), None).expect("error processing query");
+    //let q = std::fs::read_to_string(rq).expect("error reading sparql query file");
+    let query = Query::parse(q, None).expect(&format!("error processing query {q}"));
+    //let query = Query::parse(q.as_str(), None).expect("error processing query");
     Ok(QueryEvaluator::new().explain(dataset, &query))
 }
 
@@ -168,22 +165,39 @@ mod tests {
     use oxrdf::Literal;
 
     #[test]
-    fn write() -> Result<()> {
+    fn select() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
-        let dataset = HDTDatasetView::new(&[filename.to_string()])?;
-        let queryfile = "tests/resources/query1.rq";
-        let (res, _explaination) =
-            evaluate_hdt_query(std::path::Path::new(queryfile), dataset).expect("failed to evaluate SPARQL query");
+        let t = [
+            "<http://www.snik.eu/ontology/meta/хобби-N-0>", "<http://www.w3.org/2000/01/rdf-schema#label>",
+            "\"ХОББИ\"@ru", "\"Anwenden einer Methode123\"", "\"Anwenden einer Methode123\"",
+        ];
+        let [s, p, o, _, _] = t;
+        let queries = [
+            format!("SELECT ?x {{?x  {p} {o}}}"),
+            format!("SELECT ?x {{{s} ?x  {o}}}"),
+            format!("SELECT ?x {{{s} {p} ?x }}"),
+            format!("SELECT (CONCAT(?y,'123') AS ?x) {{?s {p} ?y }} ORDER BY ?x LIMIT 1"),
+            format!(
+                "SELECT (CONCAT(?y,'123') AS ?x) {{ {{?s {p} ?y }} UNION {{<a> <b> ?y}} }} ORDER BY ?x LIMIT 1"
+            ),
+        ];
+        for i in 0..5 {
+            let dataset = HDTDatasetView::new(&[filename.to_string()])?;
+            let (res, _explaination) =
+            //evaluate_hdt_query(std::path::Path::new(queryfile), dataset).expect("failed to evaluate SPARQL query");
+            evaluate_hdt_query(&queries[i], dataset).expect("failed to evaluate SPARQL query");
 
-        let res = res.expect("error with SPARQL query results");
-        if let spareval::QueryResults::Solutions(solutions) = res {
-            for solution in solutions {
-                let solution = solution?;
-                assert_eq!(solution.get("o"), Some(&Literal::new_language_tagged_literal("ХОББИ", "ru")?.into()));
+            let res = res.expect("error with SPARQL query results");
+            if let spareval::QueryResults::Solutions(solutions) = res {
+                let mut solutions: Vec<_> = solutions.collect();
+                assert_eq!(1, solutions.len());
+                let solution = solutions.pop().unwrap()?;
+                //assert_eq!(solution.get("o"), Some(&Literal::new_language_tagged_literal("ХОББИ", "ru")?.into()));
+                assert_eq!(t[i], solution.get("x").unwrap().to_string());
+            } else {
+                panic!("")
             }
-        } else {
-            panic!("")
         }
         Ok(())
     }

@@ -1,6 +1,0 @@
-
-SELECT ?o
-WHERE {
-  <http://www.snik.eu/ontology/meta/хобби-N-0> <http://www.w3.org/2000/01/rdf-schema#label> ?o
-}
-
