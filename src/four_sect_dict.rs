@@ -1,10 +1,9 @@
 #![allow(missing_docs)]
 // temporary while we figure out what should be public in the end
-use crate::ControlInfo;
-use crate::DictSectPFC;
 /// Four section dictionary.
 use crate::dict_sect_pfc;
 use crate::triples::Id;
+use crate::{ControlInfo, DictSectPFC};
 use log::error;
 use std::io::BufRead;
 use std::thread::JoinHandle;

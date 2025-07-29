@@ -1,8 +1,8 @@
-use crate::FourSectDict;
 use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{self, IdKind};
+use crate::header::Header;
 use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
-use crate::{header, header::Header};
+use crate::{FourSectDict, header};
 use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
@@ -124,7 +124,8 @@ impl Hdt {
     // TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
     #[cfg(feature = "sophia")]
     fn build_header(&mut self, path: &std::path::Path, block_size: usize, num_triples: usize) {
-        use crate::containers::rdf::{Id, Literal, Term, Term::Literal as Lit, Triple};
+        use crate::containers::rdf::Term::Literal as Lit;
+        use crate::containers::rdf::{Id, Literal, Term, Triple};
         use crate::vocab::*;
         use std::collections::BTreeSet;
 

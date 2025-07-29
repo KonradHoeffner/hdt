@@ -8,11 +8,10 @@ use bytesize::ByteSize;
 use log::error;
 use std::cmp::{Ordering, min};
 use std::collections::BTreeSet;
-use std::fmt;
 use std::io::{BufRead, Write};
-use std::str;
 use std::sync::Arc;
 use std::thread::{JoinHandle, spawn};
+use std::{fmt, str};
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;

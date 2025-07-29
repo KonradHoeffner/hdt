@@ -1,5 +1,4 @@
-use crate::triples::Id;
-use crate::triples::TriplesBitmap;
+use crate::triples::{Id, TriplesBitmap};
 use std::cmp::Ordering;
 use sucds::int_vectors::Access;
 

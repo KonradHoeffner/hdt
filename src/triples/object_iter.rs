@@ -1,6 +1,4 @@
-use crate::triples::Id;
-use crate::triples::TripleId;
-use crate::triples::TriplesBitmap;
+use crate::triples::{Id, TripleId, TriplesBitmap};
 use sucds::int_vectors::Access;
 
 // see "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012

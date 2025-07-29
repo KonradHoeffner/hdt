@@ -1,7 +1,6 @@
 use io::ErrorKind::UnexpectedEof;
 use std::collections::HashMap;
-use std::io::BufRead;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::str;
 
 pub type Result<T> = core::result::Result<T, Error>;

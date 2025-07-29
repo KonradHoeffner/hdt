@@ -1,13 +1,12 @@
-use color_eyre::{Result, eyre::WrapErr};
+use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use criterion::{Criterion, criterion_group, criterion_main};
 use fs_err::File;
-use hdt::Hdt;
-use hdt::IdKind;
 use hdt::triples::*;
+use hdt::{Hdt, IdKind};
 use sophia::api::graph::Graph;
-use sophia::api::term::IriRef;
-use sophia::api::term::SimpleTerm;
 use sophia::api::term::matcher::Any;
+use sophia::api::term::{IriRef, SimpleTerm};
 
 const VINCENT: &str = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";

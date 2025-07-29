@@ -5,12 +5,10 @@ use log::error;
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
-use sucds::{
-    Serializable,
-    bit_vectors::{BitVector, Rank9Sel},
-    char_sequences::WaveletMatrix,
-    int_vectors::CompactVector,
-};
+use sucds::Serializable;
+use sucds::bit_vectors::{BitVector, Rank9Sel};
+use sucds::char_sequences::WaveletMatrix;
+use sucds::int_vectors::CompactVector;
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;

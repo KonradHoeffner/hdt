@@ -1,10 +1,10 @@
-use color_eyre::{Result, eyre::WrapErr};
+use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use fs_err::File;
 use hdt::Hdt;
 use sophia::api::graph::Graph;
-use sophia::api::term::IriRef;
-use sophia::api::term::SimpleTerm;
 use sophia::api::term::matcher::Any;
+use sophia::api::term::{IriRef, SimpleTerm};
 
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
