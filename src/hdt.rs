@@ -1,7 +1,7 @@
 use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{self, IdKind};
 use crate::header::Header;
-use crate::triples::{ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
+use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
 use crate::{FourSectDict, header};
 use bytesize::ByteSize;
 use log::{debug, error};
@@ -319,8 +319,8 @@ impl Hdt {
     /// }
     /// ```
     pub fn subjects_with_po(&self, p: &str, o: &str) -> Box<dyn Iterator<Item = String> + '_> {
-        let pid = self.dict.string_to_id(p, &IdKind::Predicate);
-        let oid = self.dict.string_to_id(o, &IdKind::Object);
+        let pid = self.dict.string_to_id(p, IdKind::Predicate);
+        let oid = self.dict.string_to_id(o, IdKind::Object);
         // predicate or object not in dictionary, iterator would interpret 0 as variable
         if pid == 0 || oid == 0 {
             return Box::new(iter::empty());
@@ -330,7 +330,7 @@ impl Hdt {
         let o_owned = o.to_owned();
         Box::new(
             PredicateObjectIter::new(&self.triples, pid, oid)
-                .map(move |sid| self.dict.id_to_string(sid, &IdKind::Subject))
+                .map(move |sid| self.dict.id_to_string(sid, IdKind::Subject))
                 .filter_map(move |r| {
                     r.map_err(|e| error!("Error on triple with property {p_owned} and object {o_owned}: {e}")).ok()
                 }),
@@ -351,109 +351,87 @@ impl Hdt {
     pub fn triples_with_pattern<'a>(
         &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
     ) -> Box<dyn Iterator<Item = StringTriple> + 'a> {
-        let xso: Option<(Arc<str>, usize)> =
-            sp.map(|s| (Arc::from(s), self.dict.string_to_id(s, &IdKind::Subject)));
-        let xpo: Option<(Arc<str>, usize)> =
-            pp.map(|p| (Arc::from(p), self.dict.string_to_id(p, &IdKind::Predicate)));
-        let xoo: Option<(Arc<str>, usize)> =
-            op.map(|o| (Arc::from(o), self.dict.string_to_id(o, &IdKind::Object)));
-        if [&xso, &xpo, &xoo].into_iter().flatten().any(|x| x.1 == 0) {
-            // at least one term does not exist in the graph
+        let pattern: [Option<(Arc<str>, usize)>; 3] = [(0, sp), (1, pp), (2, op)]
+            .map(|(i, x)| x.map(|x| (Arc::from(x), self.dict.string_to_id(x, IdKind::KINDS[i]))));
+        // at least one term does not exist in the graph
+        if pattern.iter().flatten().any(|x| x.1 == 0) {
             return Box::new(iter::empty());
         }
         // TODO: improve error handling
         let mut cache = TripleCache::new(self);
-        match (xso, xpo, xoo) {
-            (Some(s), Some(p), Some(o)) => {
-                if SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, o.1)).next().is_some() {
+        match pattern {
+            [Some(s), Some(p), Some(o)] => {
+                if SubjectIter::with_pattern(&self.triples, [s.1, p.1, o.1]).next().is_some() {
                     Box::new(iter::once([s.0, p.0, o.0]))
                 } else {
                     Box::new(iter::empty())
                 }
             }
-            (Some(s), Some(p), None) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, 0)).map(move |t| {
-                    [s.0.clone(), p.0.clone(), Arc::from(self.dict.id_to_string(t.2, &IdKind::Object).unwrap())]
+            [Some(s), Some(p), None] => {
+                Box::new(SubjectIter::with_pattern(&self.triples, [s.1, p.1, 0]).map(move |t| {
+                    [s.0.clone(), p.0.clone(), Arc::from(self.dict.id_to_string(t[2], IdKind::Object).unwrap())]
                 }))
             }
-            (Some(s), None, Some(o)) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, o.1)).map(move |t| {
-                    [s.0.clone(), Arc::from(self.dict.id_to_string(t.1, &IdKind::Predicate).unwrap()), o.0.clone()]
+            [Some(s), None, Some(o)] => {
+                Box::new(SubjectIter::with_pattern(&self.triples, [s.1, 0, o.1]).map(move |t| {
+                    [s.0.clone(), Arc::from(self.dict.id_to_string(t[1], IdKind::Predicate).unwrap()), o.0.clone()]
                 }))
             }
-            (Some(s), None, None) => {
-                Box::new(SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, 0)).map(move |t| {
-                    [s.0.clone(), cache.get_p_string(t.1).unwrap(), cache.get_o_string(t.2).unwrap()]
-                }))
-            }
-            (None, Some(p), Some(o)) => {
+            [Some(s), None, None] => Box::new(
+                SubjectIter::with_pattern(&self.triples, [s.1, 0, 0])
+                    .map(move |t| [s.0.clone(), cache.get(1, t[1]).unwrap(), cache.get(2, t[2]).unwrap()]),
+            ),
+            [None, Some(p), Some(o)] => {
                 Box::new(PredicateObjectIter::new(&self.triples, p.1, o.1).map(move |sid| {
-                    [Arc::from(self.dict.id_to_string(sid, &IdKind::Subject).unwrap()), p.0.clone(), o.0.clone()]
+                    [Arc::from(self.dict.id_to_string(sid, IdKind::Subject).unwrap()), p.0.clone(), o.0.clone()]
                 }))
             }
-            (None, Some(p), None) => {
-                Box::new(PredicateIter::new(&self.triples, p.1).map(move |t| {
-                    [cache.get_s_string(t.0).unwrap(), p.0.clone(), cache.get_o_string(t.2).unwrap()]
-                }))
-            }
-            (None, None, Some(o)) => {
-                Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
-                    [cache.get_s_string(t.0).unwrap(), cache.get_p_string(t.1).unwrap(), o.0.clone()]
-                }))
-            }
-            (None, None, None) => Box::new(self.triples_all()),
+            [None, Some(p), None] => Box::new(
+                PredicateIter::new(&self.triples, p.1)
+                    .map(move |t| [cache.get(0, t[0]).unwrap(), p.0.clone(), cache.get(2, t[2]).unwrap()]),
+            ),
+            [None, None, Some(o)] => Box::new(
+                ObjectIter::new(&self.triples, o.1)
+                    .map(move |t| [cache.get(0, t[0]).unwrap(), cache.get(1, t[1]).unwrap(), o.0.clone()]),
+            ),
+            [None, None, None] => Box::new(self.triples_all()),
         }
     }
 }
 
 /// A TripleCache stores the `Arc<str>` of the last returned triple
 #[derive(Clone, Debug)]
-pub struct TripleCache<'a> {
+struct TripleCache<'a> {
     hdt: &'a Hdt,
-    idx: [usize; 3],
+    tid: TripleId,
     arc: [Option<Arc<str>>; 3],
 }
 
 impl<'a> TripleCache<'a> {
     /// Build a new [`TripleCache`] for the given [`Hdt`]
     const fn new(hdt: &'a super::Hdt) -> Self {
-        TripleCache { hdt, idx: [0; 3], arc: [None, None, None] }
-    }
-
-    /// Get the string representation of the subject `sid`.
-    fn get_s_string(&mut self, sid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
-        self.get_x_string(sid, 0, &IdKind::Subject)
-    }
-
-    /// Get the string representation of the predicate `pid`.
-    fn get_p_string(&mut self, pid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
-        self.get_x_string(pid, 1, &IdKind::Predicate)
-    }
-
-    /// Get the string representation of the object `oid`.
-    fn get_o_string(&mut self, oid: usize) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
-        self.get_x_string(oid, 2, &IdKind::Object)
+        TripleCache { hdt, tid: [0; 3], arc: [None, None, None] }
     }
 
     /// Translate a triple of indexes into a triple of strings.
     fn translate(&mut self, t: TripleId) -> core::result::Result<StringTriple, TranslateError> {
+        // refactor when try_map for arrays becomes stable
         Ok([
-            self.get_s_string(t.0).map_err(|e| TranslateError { e, t })?,
-            self.get_p_string(t.1).map_err(|e| TranslateError { e, t })?,
-            self.get_o_string(t.2).map_err(|e| TranslateError { e, t })?,
+            self.get(0, t[0]).map_err(|e| TranslateError { e, t })?,
+            self.get(1, t[1]).map_err(|e| TranslateError { e, t })?,
+            self.get(2, t[2]).map_err(|e| TranslateError { e, t })?,
         ])
     }
 
-    fn get_x_string(
-        &mut self, i: usize, pos: usize, kind: &'static IdKind,
-    ) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
-        debug_assert!(i != 0);
-        if self.idx[pos] == i {
+    fn get(&mut self, pos: usize, id: Id) -> core::result::Result<Arc<str>, four_sect_dict::ExtractError> {
+        debug_assert!(id != 0);
+        debug_assert!(pos < 3);
+        if self.tid[pos] == id {
             Ok(self.arc[pos].as_ref().unwrap().clone())
         } else {
-            let ret: Arc<str> = self.hdt.dict.id_to_string(i, kind)?.into();
+            let ret: Arc<str> = self.hdt.dict.id_to_string(id, IdKind::KINDS[pos])?.into();
             self.arc[pos] = Some(ret.clone());
-            self.idx[pos] = i;
+            self.tid[pos] = id;
             Ok(ret)
         }
     }
@@ -492,7 +470,7 @@ pub mod tests {
         init();
         let path = std::path::Path::new("tests/resources/snikmeta.nt");
         if !path.exists() {
-            println!("Creating test resource snikmeta.nt.");
+            log::info!("Creating test resource snikmeta.nt.");
             let mut writer = std::io::BufWriter::new(File::create(path)?);
             snikmeta()?.write_nt(&mut writer)?;
         }
@@ -519,7 +497,7 @@ pub mod tests {
         assert_eq!(hdt.dict.predicates.num_strings, 23);
         assert_eq!(hdt.dict.objects.num_strings, 133);
         assert_eq!(v, hdt.triples_with_pattern(None, None, None).collect::<Vec<_>>(), "all triples not equal ???");
-        assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", &IdKind::Subject));
+        assert_ne!(0, hdt.dict.string_to_id("http://www.snik.eu/ontology/meta", IdKind::Subject));
         for uri in ["http://www.snik.eu/ontology/meta/Top", "http://www.snik.eu/ontology/meta", "doesnotexist"] {
             let filtered: Vec<_> = v.clone().into_iter().filter(|triple| triple[0].as_ref() == uri).collect();
             let with_s: Vec<_> = hdt.triples_with_pattern(Some(uri), None, None).collect();
@@ -562,8 +540,8 @@ pub mod tests {
             "S?O multiple"
         );
         let s = "http://www.snik.eu/ontology/meta/хобби-N-0";
-        assert_eq!(hdt.dict.string_to_id(s, &IdKind::Subject), 49);
-        assert_eq!(hdt.dict.id_to_string(49, &IdKind::Subject)?, s);
+        assert_eq!(hdt.dict.string_to_id(s, IdKind::Subject), 49);
+        assert_eq!(hdt.dict.id_to_string(49, IdKind::Subject)?, s);
         let o = "\"ХОББИ\"@ru";
         let triple_vec = vec![[Arc::from(s), Arc::from(p), Arc::from(o)]];
         assert_eq!(hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), triple_vec);

@@ -210,19 +210,14 @@ impl serde::Serialize for TriplesBitmap {
     {
         let mut state: <S as serde::ser::Serializer>::SerializeStruct =
             serializer.serialize_struct("TriplesBitmap", 5)?;
-
         // Extract the number of triples
         state.serialize_field("order", &self.order)?;
-
         //bitmap_y
         state.serialize_field("bitmap_y", &self.bitmap_y)?;
-
         // adjlist_z
         state.serialize_field("adjlist_z", &self.adjlist_z)?;
-
         // op_index
         state.serialize_field("op_index", &self.op_index)?;
-
         // wavelet_y
         let mut wavelet_y_buffer = Vec::new();
         self.wavelet_y.serialize_into(&mut wavelet_y_buffer).map_err(serde::ser::Error::custom)?;
@@ -324,7 +319,7 @@ impl TriplesBitmap {
         let mut last_z = 0;
 
         for (i, triple) in triples.iter().enumerate() {
-            let TripleId(x, y, z) = *triple;
+            let [x, y, z] = *triple;
 
             assert!(!(x == 0 || y == 0 || z == 0), "triple IDs should never be zero");
 
@@ -497,19 +492,19 @@ impl TriplesBitmap {
     }
 
     /// Transform the given IDs of the layers in triple section order to a triple ID.
-    /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `TripleId(x,y,z)`.
+    /// Warning: At the moment only SPO is properly supported anyways, in which case this is equivalent to `[x,y,z]`.
     /// Other orders may lead to undefined behaviour.
     pub const fn coord_to_triple(&self, x: Id, y: Id, z: Id) -> Result<TripleId> {
         if x == 0 || y == 0 || z == 0 {
             return Err(Error::TripleComponentZero(x, y, z));
         }
         match self.order {
-            Order::SPO => Ok(TripleId(x, y, z)),
-            Order::SOP => Ok(TripleId(x, z, y)),
-            Order::PSO => Ok(TripleId(y, x, z)),
-            Order::POS => Ok(TripleId(y, z, x)),
-            Order::OSP => Ok(TripleId(z, x, y)),
-            Order::OPS => Ok(TripleId(z, y, x)),
+            Order::SPO => Ok([x, y, z]),
+            Order::SOP => Ok([x, z, y]),
+            Order::PSO => Ok([y, x, z]),
+            Order::POS => Ok([y, z, x]),
+            Order::OSP => Ok([z, x, y]),
+            Order::OPS => Ok([z, y, x]),
             Order::Unknown => Err(Error::UnknownTriplesOrder),
         }
     }
@@ -539,8 +534,8 @@ pub type Id = usize;
 /// Predicate index starting at 1 in the combined shared and object section.
 /// When used as a triple, 0 values are invalid.
 /// When used as a pattern, 0 values in a position match all values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TripleId(pub Id, pub Id, pub Id);
+//#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub type TripleId = [Id; 3];
 
 #[cfg(test)]
 mod tests {
@@ -553,9 +548,7 @@ mod tests {
     use std::io::BufReader;
 
     /// Iterator over all triples with a given ID in the specified position (subject, predicate or object).
-    fn triples_with_id<'a>(
-        t: &'a TriplesBitmap, id: usize, k: &IdKind,
-    ) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+    fn triples_with_id<'a>(t: &'a TriplesBitmap, id: usize, k: IdKind) -> Box<dyn Iterator<Item = TripleId> + 'a> {
         match k {
             IdKind::Subject => Box::new(SubjectIter::with_s(t, id)),
             IdKind::Predicate => Box::new(PredicateIter::new(t, id)),
@@ -574,56 +567,48 @@ mod tests {
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         let v: Vec<TripleId> = triples.into_iter().collect::<Vec<TripleId>>();
         assert_eq!(v.len(), 328);
-        assert_eq!(v[0].0, 1);
-        assert_eq!(v[2].0, 1);
-        assert_eq!(v[3].0, 2);
-        let num_subjects = 48;
-        let num_predicates = 23;
-        let num_objects = 175;
+        assert_eq!(v[0][0], 1);
+        assert_eq!(v[2][0], 1);
+        assert_eq!(v[3][0], 2);
+        let lens = [48, 23, 175];
+        let [num_subjects, _num_predicates, _num_objects] = lens;
         let mut filtered: Vec<TripleId>;
-        let kinds = [IdKind::Subject, IdKind::Predicate, IdKind::Object];
-        let lens = [num_subjects, num_predicates, num_objects];
-        let funs = [|t: TripleId| t.0, |t: TripleId| t.1, |t: TripleId| t.2];
-        for j in 0..kinds.len() {
+        let funs = [|t: TripleId| t[0], |t: TripleId| t[1], |t: TripleId| t[2]];
+        for j in 0..IdKind::KINDS.len() {
             for i in 1..=lens[j] {
                 filtered = v.iter().filter(|tid| funs[j](**tid) == i).copied().collect();
                 filtered.sort_unstable();
-                let mut triples_with_id = triples_with_id(&triples, i, &kinds[j]).collect::<Vec<TripleId>>();
+                let mut triples_with_id =
+                    triples_with_id(&triples, i, IdKind::KINDS[j]).collect::<Vec<TripleId>>();
                 triples_with_id.sort_unstable();
-                assert_eq!(filtered, triples_with_id, "triples_with({},{:?})", i, kinds[j]);
+                assert_eq!(filtered, triples_with_id, "triples_with({},{:?})", i, IdKind::KINDS[j]);
             }
         }
 
         // SubjectIter
         assert_eq!(0, SubjectIter::empty(&triples).count());
         // SPO
-        assert_eq!(
-            vec![TripleId(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, TripleId(14, 14, 154)).collect::<Vec<_>>()
-        );
+        assert_eq!(vec![[14, 14, 154]], SubjectIter::with_pattern(&triples, [14, 14, 154]).collect::<Vec<_>>());
         // SP
-        assert_eq!(
-            vec![TripleId(14, 14, 154)],
-            SubjectIter::with_pattern(&triples, TripleId(14, 14, 0)).collect::<Vec<_>>()
-        );
+        assert_eq!(vec![[14, 14, 154]], SubjectIter::with_pattern(&triples, [14, 14, 0]).collect::<Vec<_>>());
         // S??
         for i in 1..num_subjects {
             assert_eq!(
                 SubjectIter::with_s(&triples, i).collect::<Vec<_>>(),
-                SubjectIter::with_pattern(&triples, TripleId(i, 0, 0)).collect::<Vec<_>>()
+                SubjectIter::with_pattern(&triples, [i, 0, 0]).collect::<Vec<_>>()
             );
         }
         // ??? (all triples)
-        assert_eq!(v, SubjectIter::with_pattern(&triples, TripleId(0, 0, 0)).collect::<Vec<_>>());
+        assert_eq!(v, SubjectIter::with_pattern(&triples, [0, 0, 0]).collect::<Vec<_>>());
         // SP? where S and P are in the graph, but not together
-        assert_eq!(0, SubjectIter::with_pattern(&triples, TripleId(12, 14, 154)).count());
+        assert_eq!(0, SubjectIter::with_pattern(&triples, [12, 14, 154]).count());
         Ok(())
     }
 
     /*
       #[test]
         fn from_triples() -> color_eyre::Result<()> {
-            //let triples: Vec<TripleId> = vec![TripleId(1, 2, 3), TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
+            //let triples: Vec<TripleId> = vec![[1, 2, 3], TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
             todo!("not yet implemented");
         }
     */

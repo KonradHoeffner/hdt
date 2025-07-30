@@ -14,7 +14,7 @@ const PERSON: &str = "http://dbpedia.org/ontology/Person";
 
 fn load() -> Result<Hdt> {
     color_eyre::install().unwrap();
-    let n = "tests/resources/persondata_en.hdt1";
+    let n = "tests/resources/persondata_en.hdt";
     let f = File::open(n).wrap_err(format!("Error opening {n}, did you download it? See README.md."))?;
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");
     //let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
@@ -26,9 +26,9 @@ fn query(c: &mut Criterion) {
     let triples = &hdt.triples;
     let twp = |s, p, o| hdt.triples_with_pattern(s, p, o);
 
-    let vincent_id = hdt.dict.string_to_id(VINCENT, &IdKind::Subject);
-    let type_id = hdt.dict.string_to_id(TYPE, &IdKind::Predicate);
-    let person_id = hdt.dict.string_to_id(PERSON, &IdKind::Object);
+    let vincent_id = hdt.dict.string_to_id(VINCENT, IdKind::Subject);
+    let type_id = hdt.dict.string_to_id(TYPE, IdKind::Predicate);
+    let person_id = hdt.dict.string_to_id(PERSON, IdKind::Object);
     let vincent_term = SimpleTerm::Iri(IriRef::new_unchecked(VINCENT.into()));
     let type_term = SimpleTerm::Iri(IriRef::new_unchecked(TYPE.into()));
     let person_term = SimpleTerm::Iri(IriRef::new_unchecked(PERSON.into()));
@@ -43,7 +43,7 @@ fn query(c: &mut Criterion) {
     let mut group = c.benchmark_group("S??");
     //let mut group = c.benchmark_group("query");
     group.bench_function("1.1 (vincent, ?, ?) triple IDs", |b| {
-        b.iter(|| SubjectIter::with_pattern(triples, TripleId(vincent_id, 0, 0)).count())
+        b.iter(|| SubjectIter::with_pattern(triples, [vincent_id, 0, 0]).count())
     });
     group.bench_function("1.2 (vincent, ?, ?) str triples", |b| b.iter(|| twp(Some(VINCENT), None, None).count()));
     group.bench_function("1.3 (vincent, ?, ?) Sophia triples", |b| {

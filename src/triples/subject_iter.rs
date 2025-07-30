@@ -58,7 +58,7 @@ impl<'a> SubjectIter<'a> {
     /// ```
     // Translated from <https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriplesIterators.cpp>.
     pub fn with_pattern(triples: &'a TriplesBitmap, pat: TripleId) -> Self {
-        let TripleId(pat_x, pat_y, pat_z) = pat;
+        let [pat_x, pat_y, pat_z] = pat;
         let (min_y, max_y, min_z, max_z);
         let mut x = 1;
         let mut search_z = 0;

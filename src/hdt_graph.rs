@@ -2,7 +2,7 @@
 #[cfg(feature = "sophia")]
 use crate::four_sect_dict::IdKind;
 use crate::hdt::Hdt;
-use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId};
+use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter};
 use log::debug;
 use sophia::api::graph::Graph;
 use sophia::api::term::matcher::TermMatcher;
@@ -21,7 +21,7 @@ enum HdtMatcher {
     Other,
 }
 
-fn id_term(hdt: &Hdt, id: Id, kind: &'static IdKind) -> HdtTerm {
+fn id_term(hdt: &Hdt, id: Id, kind: IdKind) -> HdtTerm {
     auto_term(&hdt.dict.id_to_string(id, kind).unwrap()).unwrap()
     // TODO: optimize by excluding cases depending on the id kind
     //IriRef::new_unchecked(MownStr::from(s)).into_term()
@@ -29,7 +29,7 @@ fn id_term(hdt: &Hdt, id: Id, kind: &'static IdKind) -> HdtTerm {
 
 /// Transforms a Sophia TermMatcher to a constant HdtTerm and Id if possible.
 /// Returns none if it matches a constant term that cannot be found.
-fn unpack_matcher<T: TermMatcher>(hdt: &Hdt, tm: &T, kind: &IdKind) -> Option<HdtMatcher> {
+fn unpack_matcher<T: TermMatcher>(hdt: &Hdt, tm: &T, kind: IdKind) -> Option<HdtMatcher> {
     match tm.constant() {
         Some(t) => match HdtTerm::try_from(t.borrow_term()) {
             Some(t) => {
@@ -145,49 +145,49 @@ impl Graph for Hdt {
         O: TermMatcher + 's,
     {
         use HdtMatcher::{Constant, Other};
-        let Some(xso) = unpack_matcher(self, &sm, &IdKind::Subject) else {
+        let Some(xso) = unpack_matcher(self, &sm, IdKind::Subject) else {
             return Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>;
         };
-        let Some(xpo) = unpack_matcher(self, &pm, &IdKind::Predicate) else { return Box::new(iter::empty()) };
-        let Some(xoo) = unpack_matcher(self, &om, &IdKind::Object) else { return Box::new(iter::empty()) };
+        let Some(xpo) = unpack_matcher(self, &pm, IdKind::Predicate) else { return Box::new(iter::empty()) };
+        let Some(xoo) = unpack_matcher(self, &om, IdKind::Object) else { return Box::new(iter::empty()) };
         // TODO: improve error handling
         match (xso, xpo, xoo) {
-            //if SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, o.1)).next().is_some() { // always true
+            //if SubjectIter::with_pattern(&self.triples, [s.1, p.1, o.1]).next().is_some() { // always true
             (Constant(s), Constant(p), Constant(o)) => Box::new(iter::once(Ok([s.0, p.0, o.0]))),
             (Constant(s), Constant(p), Other) => Box::new(
-                SubjectIter::with_pattern(&self.triples, TripleId(s.1, p.1, 0))
-                    .map(|tid| auto_term(&self.dict.id_to_string(tid.2, &IdKind::Object).unwrap()).unwrap())
+                SubjectIter::with_pattern(&self.triples, [s.1, p.1, 0])
+                    .map(|tid| auto_term(&self.dict.id_to_string(tid[2], IdKind::Object).unwrap()).unwrap())
                     .filter(move |term| om.matches(term))
                     .map(move |term| Ok([s.0.clone(), p.0.clone(), term])),
             ),
             (Constant(s), Other, Constant(o)) => Box::new(
-                SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, o.1))
-                    .map(|t| id_term(self, t.1, &IdKind::Predicate))
+                SubjectIter::with_pattern(&self.triples, [s.1, 0, o.1])
+                    .map(|t| id_term(self, t[1], IdKind::Predicate))
                     .filter(move |term| pm.matches(term))
                     .map(move |term| Ok([s.0.clone(), term, o.0.clone()])),
             ),
             (Constant(s), Other, Other) => Box::new(
-                SubjectIter::with_pattern(&self.triples, TripleId(s.1, 0, 0))
-                    .map(move |t| [id_term(self, t.1, &IdKind::Predicate), id_term(self, t.2, &IdKind::Object)])
+                SubjectIter::with_pattern(&self.triples, [s.1, 0, 0])
+                    .map(move |t| [id_term(self, t[1], IdKind::Predicate), id_term(self, t[2], IdKind::Object)])
                     .filter(move |[pt, ot]| pm.matches(pt) && om.matches(ot))
                     .map(move |[pt, ot]| Ok([s.0.clone(), pt, ot])),
             ),
             (Other, Constant(p), Constant(o)) => Box::new(
                 PredicateObjectIter::new(&self.triples, p.1, o.1)
-                    .map(|sid| id_term(self, sid, &IdKind::Subject))
+                    .map(|sid| id_term(self, sid, IdKind::Subject))
                     .filter(move |term| sm.matches(term))
                     .map(move |term| Ok([term, p.0.clone(), o.0.clone()])),
             ),
             (Other, Constant(p), Other) => Box::new(
                 PredicateIter::new(&self.triples, p.1)
-                    .map(move |t| [id_term(self, t.0, &IdKind::Subject), id_term(self, t.2, &IdKind::Object)])
+                    .map(move |t| [id_term(self, t[0], IdKind::Subject), id_term(self, t[2], IdKind::Object)])
                     .filter(move |[st, ot]| sm.matches(st) && om.matches(ot))
                     .map(move |[st, ot]| Ok([st, p.0.clone(), ot])),
             ),
             (Other, Other, Constant(o)) => Box::new(ObjectIter::new(&self.triples, o.1).map(move |t| {
                 Ok([
-                    auto_term(&Arc::from(self.dict.id_to_string(t.0, &IdKind::Subject).unwrap())).unwrap(),
-                    id_term(self, t.1, &IdKind::Predicate),
+                    auto_term(&Arc::from(self.dict.id_to_string(t[0], IdKind::Subject).unwrap())).unwrap(),
+                    id_term(self, t[1], IdKind::Predicate),
                     o.0.clone(),
                 ])
             })),

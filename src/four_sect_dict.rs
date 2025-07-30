@@ -12,7 +12,7 @@ use thiserror::Error;
 pub type Result<T> = core::result::Result<T, Error>;
 
 /// Position in an RDF triple.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum IdKind {
     /// IRI or blank node in the first position of a triple.
     Subject,
@@ -20,6 +20,10 @@ pub enum IdKind {
     Predicate,
     /// IRI, blank node or literal in the third position of a triple.
     Object,
+}
+
+impl IdKind {
+    pub const KINDS: [IdKind; 3] = [IdKind::Subject, IdKind::Predicate, IdKind::Object];
 }
 
 /// Four section dictionary with plain front coding.
@@ -59,7 +63,7 @@ pub struct ExtractError {
     #[source]
     e: dict_sect_pfc::ExtractError,
     id: Id,
-    id_kind: &'static IdKind,
+    id_kind: IdKind,
     sect_kind: SectKind,
 }
 
@@ -91,7 +95,7 @@ pub struct EncodedTripleId {
 impl FourSectDict {
     /// Get the string value of a given ID of a given type.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
-    pub fn id_to_string(&self, id: Id, id_kind: &'static IdKind) -> core::result::Result<String, ExtractError> {
+    pub fn id_to_string(&self, id: Id, id_kind: IdKind) -> core::result::Result<String, ExtractError> {
         use SectKind::*;
         let shared_size = self.shared.num_strings() as Id;
         let d = id.saturating_sub(shared_size);
@@ -118,7 +122,7 @@ impl FourSectDict {
 
     /// Get the ID for a given string or 0 if not found.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
-    pub fn string_to_id(&self, s: &str, id_kind: &IdKind) -> Id {
+    pub fn string_to_id(&self, s: &str, id_kind: IdKind) -> Id {
         let shared_size = self.shared.num_strings();
         match id_kind {
             IdKind::Subject => {
@@ -220,12 +224,12 @@ impl FourSectDict {
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
             .map(|(s, p, o)| {
-                let triple = TripleId(
-                    dict.string_to_id(&s, &IdKind::Subject),
-                    dict.string_to_id(&p, &IdKind::Predicate),
-                    dict.string_to_id(&o, &IdKind::Object),
-                );
-                if triple.0 == 0 || triple.1 == 0 || triple.2 == 0 {
+                let triple = [
+                    dict.string_to_id(&s, IdKind::Subject),
+                    dict.string_to_id(&p, IdKind::Predicate),
+                    dict.string_to_id(&o, IdKind::Object),
+                ];
+                if triple[0] == 0 || triple[1] == 0 || triple[2] == 0 {
                     error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
                 }
                 triple
@@ -295,23 +299,23 @@ mod tests {
         assert_eq!(dict.subjects.num_strings(), 6, "wrong number of strings in the subject section");
         assert_eq!(dict.predicates.num_strings(), 23, "wrong number of strings in the predicates section");
         assert_eq!(dict.objects.num_strings(), 133, "wrong number of strings in the objects section");
-        assert_eq!(dict.string_to_id("_:b1", &IdKind::Subject), 1);
-        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, &IdKind::Subject)?);
-        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, &IdKind::Subject)?);
-        assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, &IdKind::Subject)?);
+        assert_eq!(dict.string_to_id("_:b1", IdKind::Subject), 1);
+        assert_eq!("http://www.snik.eu/ontology/meta/uses", dict.id_to_string(43, IdKind::Subject)?);
+        assert_eq!("http://www.snik.eu/ontology/meta/Chapter", dict.id_to_string(3, IdKind::Subject)?);
+        assert_eq!("http://www.snik.eu/ontology/meta/DataSetType", dict.id_to_string(5, IdKind::Subject)?);
         for id in 1..dict.shared.num_strings() {
-            let s = dict.id_to_string(id, &IdKind::Subject)?;
-            let back = dict.string_to_id(&s, &IdKind::Subject);
+            let s = dict.id_to_string(id, IdKind::Subject)?;
+            let back = dict.string_to_id(&s, IdKind::Subject);
             assert_eq!(id, back, "shared id {} -> subject {} -> id {}", id, s, back);
 
-            let s = dict.id_to_string(id, &IdKind::Object)?;
-            let back = dict.string_to_id(&s, &IdKind::Object);
+            let s = dict.id_to_string(id, IdKind::Object)?;
+            let back = dict.string_to_id(&s, IdKind::Object);
             assert_eq!(id, back, "shared id {} -> object {} -> id {}", id, s, back);
         }
         for (sect, kind, name, offset) in [
-            (&dict.subjects, &IdKind::Subject, "subject", dict.shared.num_strings()),
-            (&dict.objects, &IdKind::Object, "object", dict.shared.num_strings()),
-            (&dict.predicates, &IdKind::Predicate, "predicate", 0),
+            (&dict.subjects, IdKind::Subject, "subject", dict.shared.num_strings()),
+            (&dict.objects, IdKind::Object, "object", dict.shared.num_strings()),
+            (&dict.predicates, IdKind::Predicate, "predicate", 0),
         ] {
             for id in offset + 1..offset + sect.num_strings() {
                 let s = dict.id_to_string(id, kind)?;
