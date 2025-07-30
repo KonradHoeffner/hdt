@@ -116,7 +116,7 @@ impl Graph for Hdt {
     /// ```
     fn triples(&self) -> impl Iterator<Item = Result<Self::Triple<'_>, Self::Error>> {
         debug!("Iterating through ALL triples in the HDT Graph. This can be inefficient for large graphs.");
-        self.triples_all().map(move |(s, p, o)| {
+        self.triples_all().map(move |[s, p, o]| {
             Ok([auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()])
         })
     }
@@ -193,7 +193,7 @@ impl Graph for Hdt {
             })),
             (Other, Other, Other) => Box::new(
                 self.triples_all()
-                    .map(move |(s, p, o)| {
+                    .map(move |[s, p, o]| {
                         [auto_term(&s).unwrap(), HdtTerm::Iri(IriRef::new_unchecked(p)), auto_term(&o).unwrap()]
                     })
                     .filter(move |[st, pt, ot]| sm.matches(st) && pm.matches(pt) && om.matches(ot))

@@ -275,9 +275,8 @@ mod tests {
     #[test]
     fn write_read() -> color_eyre::Result<()> {
         init();
-        let mut data = Vec::<usize>::new();
+        let data = vec![(5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1];
         // little endian
-        data.push((5 << 16) + (4 << 12) + (3 << 8) + (2 << 4) + 1);
         let s = Sequence { entries: 5, bits_per_entry: 4, data: data.clone() };
         let numbers: Vec<usize> = s.into_iter().collect();
         //let expected = vec![1];

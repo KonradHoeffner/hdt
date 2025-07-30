@@ -443,7 +443,6 @@ mod tests {
         let objects = DictSectPFC::read(&mut reader)?.join().unwrap()?;
 
         for sect in [shared, subjects, predicates, objects] {
-            println!("write section ****************************");
             let mut buf = Vec::<u8>::new();
             sect.write(&mut buf)?;
             let mut cursor = std::io::Cursor::new(buf);
@@ -459,8 +458,8 @@ mod tests {
 
     #[test]
     fn compress() -> color_eyre::Result<()> {
-        init();
         const BLOCK_SIZE: usize = 16;
+        init();
         // stand-alone small test
         let strings = [
             "http://www.snik.eu/ontology/meta", "http://www.snik.eu/ontology/meta/feature",
@@ -471,9 +470,8 @@ mod tests {
         let set: BTreeSet<&str> = BTreeSet::from(strings);
         let dict = DictSectPFC::compress(&set, BLOCK_SIZE);
         // could add this as DictSectPFC::items if required elsewhere
-        let sect_items = |ds: &DictSectPFC| -> Vec<String> {
-            (1..ds.num_strings() + 1).map(|i| ds.extract(i).unwrap()).collect()
-        };
+        let sect_items =
+            |ds: &DictSectPFC| -> Vec<String> { (1..=ds.num_strings()).map(|i| ds.extract(i).unwrap()).collect() };
         //let items: Vec<String> = (1..dict.num_strings() + 1).map(|i| dict.extract(i).unwrap()).collect();
         let items = sect_items(&dict);
         assert_eq!(string_vec, items);
