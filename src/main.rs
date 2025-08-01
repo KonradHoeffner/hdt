@@ -46,9 +46,9 @@ fn main() -> Result<(), Report> {
     let hdt = match args.hdt_input_file {
         Some(filename) => {
             let file =
-                File::open(filename.clone()).wrap_err_with(|| format!("Error opening input file {}", filename))?;
+                File::open(filename.clone()).wrap_err_with(|| format!("Error opening input file {filename}"))?;
             Hdt::read(std::io::BufReader::new(file))
-                .wrap_err_with(|| format!("Error loading HDT from {}", filename))?
+                .wrap_err_with(|| format!("Error loading HDT from {filename}"))?
         }
         None => {
             let reader = BufReader::new(stdin());
@@ -58,7 +58,7 @@ fn main() -> Result<(), Report> {
     };
     let count = hdt.triples.len();
     if args.count {
-        println!("Parsing returned {} triples", count);
+        println!("Parsing returned {count} triples");
         return Ok(());
     }
     let s = match args.turtle {
