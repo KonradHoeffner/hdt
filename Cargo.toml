@@ -21,17 +21,20 @@ langtag = "0.4"
 ntriple = "0.1"
 sophia = { version = "0.9", optional = true }
 #sucds = "0.8.3" # not released yet, use git until then
-sucds = { git = "https://github.com/kampersanda/sucds.git" }
+sucds = { git = "https://github.com/kampersanda/sucds.git", rev = "46e8cbe", version = "0.8.2" }
 thiserror = "2"
 log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
+spareval = { version = "0.1", optional = true, default-features = false }
+spargebra = { version = "0.3", optional = true, default-features = false }
 
 [features]
 default = ["sophia"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
+sparql = ["dep:spareval", "dep:spargebra"]
 
 [[bench]]
 name = "criterion"
