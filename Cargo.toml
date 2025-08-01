@@ -30,9 +30,7 @@ bincode = { version = "2", optional = true, default-features = false, features =
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.1", optional = true, default-features = false }
 spargebra = { version = "0.3", optional = true, default-features = false }
-eyre = "0.6"
-argh = "0.1.13"
-color-eyre = { version = "0.6", default-features = false }
+color-eyre = { version = "0.6", default-features = false, optional = true }
 clap = { version = "4.5", optional = true, features = ["derive"] }
 
 [features]
@@ -40,7 +38,7 @@ default = ["sophia", "cli"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
-cli = ["dep:clap"]
+cli = ["dep:clap", "dep:color-eyre"]
 
 [[bench]]
 name = "criterion"
