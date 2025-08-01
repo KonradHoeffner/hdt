@@ -7,21 +7,14 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct HDTDataset {
-    /// HDT interface.
-    hdt: Arc<Hdt>,
-}
-
-#[derive(Clone)]
 /// Boundry over a Header-Dictionary-Triplies (HDT) storage layer.
-pub struct HDTDatasetView {
-    // collection of HDT files in the dataset
-    hdts: Vec<HDTDataset>,
+pub struct HdtDataset {
+    hdts: Arc<Vec<Arc<Hdt>>>,
 }
 
-impl HDTDatasetView {
-    pub fn new(paths: &[String]) -> Result<Self, hdt::Error> {
-        let mut hdts: Vec<HDTDataset> = Vec::new();
+impl HdtDataset {
+    pub fn new(paths: &[&str]) -> Result<Self, hdt::Error> {
+        let mut hdts: Vec<Arc<Hdt>> = Vec::new();
         for path in paths {
             // TODO catch error and proceed to next file?
             #[cfg(feature = "cache")]
@@ -31,9 +24,9 @@ impl HDTDatasetView {
                 let file = std::fs::File::open(path)?;
                 Hdt::read(std::io::BufReader::new(file))?
             };
-            hdts.push(HDTDataset { hdt: Arc::new(hdt) });
+            hdts.push(Arc::new(hdt));
         }
-        Ok(Self { hdts })
+        Ok(Self { hdts: Arc::new(hdts) })
     }
 }
 
@@ -43,7 +36,7 @@ impl HDTDatasetView {
 fn hdt_bgp_str_to_term(s: &str) -> Result<Term, Error> {
     match s.chars().next() {
         None => Err(Error::new(ErrorKind::InvalidData, "empty input")),
-        // Double-quote delimters are used around the string.
+        // Double-quote delimiters are used around the string.
         Some('"') => match Term::from_str(s) {
             Ok(s) => Ok(s),
             Err(e) => Err(Error::new(ErrorKind::InvalidData, format!("literal parse error {e} for {s}"))),
@@ -56,9 +49,7 @@ fn hdt_bgp_str_to_term(s: &str) -> Result<Term, Error> {
         // Double-quote delimiters not present. Underscore prefix
         // not present. Assuming a URI.
         _ => {
-            // Note that Term::from_str() will not work for URIs
-            // (OxRDF NamedNode) when the string is not within "<"
-            // and ">" delimiters.
+            // Note that Term::from_str() will not work for URIs (OxRDF NamedNode) when the string is not within "<" and ">" delimiters.
             match NamedNode::new(s) {
                 Ok(n) => Ok(n.into()),
                 Err(e) => Err(Error::new(ErrorKind::InvalidData, format!("iri parse error {e} for {s}"))),
@@ -76,7 +67,7 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
-impl QueryableDataset for HDTDatasetView {
+impl QueryableDataset for HdtDataset {
     type InternalTerm = String;
     type Error = Error;
 
@@ -84,28 +75,17 @@ impl QueryableDataset for HDTDatasetView {
         &self, subject: Option<&String>, predicate: Option<&String>, object: Option<&String>,
         graph_name: Option<Option<&String>>,
     ) -> Box<dyn Iterator<Item = Result<InternalQuad<Self>, Error>>> {
-        if let Some(graph_name) = graph_name {
-            if graph_name.is_some() {
-                return Box::new(
-                    vec![Err(Error::new(
-                        ErrorKind::InvalidData,
-                        format!("HDT does not support named graph: {graph_name:?}"),
-                    ))]
-                    .into_iter(),
-                );
-            }
+        if let Some(Some(graph_name)) = graph_name {
+            return Box::new(std::iter::once(Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("HDT does not support named graph: {graph_name:?}"),
+            ))));
         }
-
-        // Create a vector to hold the results.
         let mut v: Vec<Result<InternalQuad<_>, Error>> = Vec::new();
-
-        for data in &self.hdts {
+        for hdt in self.hdts.iter() {
             // Query HDT for BGP by string values.
-            let results = data.hdt.triples_with_pattern(
-                subject.map(String::as_str),
-                predicate.map(String::as_str),
-                object.map(String::as_str),
-            );
+            let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
+            let results = hdt.triples_with_pattern(ps, pp, po);
             for r in results {
                 let [subject, predicate, object] = r.map(|a| a.to_string());
                 v.push(Ok(InternalQuad { subject, predicate, object, graph_name: None }));
@@ -119,18 +99,13 @@ impl QueryableDataset for HDTDatasetView {
     }
 
     fn externalize_term(&self, term: String) -> Result<Term, Error> {
-        match hdt_bgp_str_to_term(&term) {
-            Ok(s) => Ok(s),
-            Err(e) => Err(Error::new(ErrorKind::InvalidData, format!("Unexpected externalize bug {e}"))),
-        }
+        hdt_bgp_str_to_term(&term)
     }
 }
 
-pub fn evaluate_hdt_query(
-    q: &str, dataset: HDTDatasetView,
-) -> Result<spareval::QueryResults, QueryEvaluationError> {
+pub fn query(q: &str, ds: HdtDataset) -> Result<spareval::QueryResults, QueryEvaluationError> {
     let query = Query::parse(q, None).unwrap_or_else(|_| panic!("error processing query {q}"));
-    QueryEvaluator::new().execute(dataset, &query)
+    QueryEvaluator::new().execute(ds, &query)
 }
 
 #[cfg(test)]
@@ -138,12 +113,16 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
+    //use fs_err::File;
     //use oxrdf::Literal;
 
     #[test]
     fn select() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
+        //let file = File::open(filename)?;
+        //let hdt = Hdt::read(std::io::BufReader::new(file))?;
+        let ds = HdtDataset::new(&[filename])?;
         let t = [
             "<http://www.snik.eu/ontology/meta/хобби-N-0>", "<http://www.w3.org/2000/01/rdf-schema#label>",
             "\"ХОББИ\"@ru", "\"Anwenden einer Methode123\"", "\"Anwenden einer Methode\"@de",
@@ -158,9 +137,7 @@ mod tests {
             format!("{base} SELECT ?x {{ {{?s {p} ?x }} UNION {{<a> <b> ?x}} }} ORDER BY ?x LIMIT 1"),
         ];
         for i in 0..queries.len() {
-            let dataset = HDTDatasetView::new(&[filename.to_owned()])?;
-            //evaluate_hdt_query(std::path::Path::new(queryfile), dataset).expect("failed to evaluate SPARQL query");
-            let res = evaluate_hdt_query(&queries[i], dataset)?;
+            let res = query(&queries[i], ds.clone())?;
 
             match res {
                 spareval::QueryResults::Solutions(solutions) => {
