@@ -127,14 +127,10 @@ impl QueryableDataset for HDTDatasetView {
 }
 
 pub fn evaluate_hdt_query(
-    q: &str,
-    dataset: HDTDatasetView,
-    //rq: &std::path::Path, dataset: HDTDatasetView,
-) -> Result<(Result<spareval::QueryResults, QueryEvaluationError>, spareval::QueryExplanation), Error> {
-    //let q = std::fs::read_to_string(rq).expect("error reading sparql query file");
+    q: &str, dataset: HDTDatasetView,
+) -> Result<spareval::QueryResults, QueryEvaluationError> {
     let query = Query::parse(q, None).unwrap_or_else(|_| panic!("error processing query {q}"));
-    //let query = Query::parse(q.as_str(), None).expect("error processing query");
-    Ok(QueryEvaluator::new().explain(dataset, &query))
+    QueryEvaluator::new().execute(dataset, &query)
 }
 
 #[cfg(test)]
@@ -163,11 +159,9 @@ mod tests {
         ];
         for i in 0..queries.len() {
             let dataset = HDTDatasetView::new(&[filename.to_owned()])?;
-            let (res, _explaination) =
             //evaluate_hdt_query(std::path::Path::new(queryfile), dataset).expect("failed to evaluate SPARQL query");
-            evaluate_hdt_query(&queries[i], dataset)?;
+            let res = evaluate_hdt_query(&queries[i], dataset)?;
 
-            let res = res.expect("error with SPARQL query results");
             match res {
                 spareval::QueryResults::Solutions(solutions) => {
                     let mut solutions: Vec<_> = solutions.collect();
