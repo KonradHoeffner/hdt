@@ -1,34 +1,9 @@
-use crate::{Hdt, hdt};
+use crate::Hdt;
 use spareval::{InternalQuad, QueryEvaluationError, QueryEvaluator, QueryableDataset};
-use spargebra::Query;
+use spargebra::SparqlParser;
 use spargebra::term::{BlankNode, NamedNode, Term};
 use std::io::{Error, ErrorKind};
 use std::str::FromStr;
-use std::sync::Arc;
-
-#[derive(Clone)]
-/// Boundry over a Header-Dictionary-Triplies (HDT) storage layer.
-pub struct HdtDataset {
-    hdts: Arc<Vec<Arc<Hdt>>>,
-}
-
-impl HdtDataset {
-    pub fn new(paths: &[&str]) -> Result<Self, hdt::Error> {
-        let mut hdts: Vec<Arc<Hdt>> = Vec::new();
-        for path in paths {
-            // TODO catch error and proceed to next file?
-            #[cfg(feature = "cache")]
-            let hdt = Hdt::new_from_path(std::path::Path::new(&path))?;
-            #[cfg(not(feature = "cache"))]
-            let hdt = {
-                let file = std::fs::File::open(path)?;
-                Hdt::read(std::io::BufReader::new(file))?
-            };
-            hdts.push(Arc::new(hdt));
-        }
-        Ok(Self { hdts: Arc::new(hdts) })
-    }
-}
 
 /// Create the correct term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
@@ -67,31 +42,35 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
-impl QueryableDataset for HdtDataset {
+impl<'a> QueryableDataset<'a> for &'a Hdt {
     type InternalTerm = String;
     type Error = Error;
 
     fn internal_quads_for_pattern(
         &self, subject: Option<&String>, predicate: Option<&String>, object: Option<&String>,
         graph_name: Option<Option<&String>>,
-    ) -> Box<dyn Iterator<Item = Result<InternalQuad<Self>, Error>>> {
+    ) -> impl Iterator<Item = Result<InternalQuad<Self::InternalTerm>, Error>> + use<'a> {
         if let Some(Some(graph_name)) = graph_name {
-            return Box::new(std::iter::once(Err(Error::new(
+            return vec![Err(Error::new(
                 ErrorKind::InvalidData,
                 format!("HDT does not support named graph: {graph_name:?}"),
-            ))));
+            ))]
+            .into_iter();
         }
+        let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
         let mut v: Vec<Result<InternalQuad<_>, Error>> = Vec::new();
-        for hdt in self.hdts.iter() {
-            // Query HDT for BGP by string values.
-            let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
-            let results = hdt.triples_with_pattern(ps, pp, po);
-            for r in results {
-                let [subject, predicate, object] = r.map(|a| a.to_string());
-                v.push(Ok(InternalQuad { subject, predicate, object, graph_name: None }));
-            }
+        // Query HDT for BGP by string values.
+        let results = self.triples_with_pattern(ps, pp, po);
+        for r in results {
+            let [subject, predicate, object] = r.map(|a| a.to_string());
+            v.push(Ok(InternalQuad { subject, predicate, object, graph_name: None }));
         }
-        Box::new(v.into_iter())
+        let v: Vec<_> = self
+            .triples_with_pattern(ps, pp, po)
+            .map(|at| at.map(|a| a.to_string()))
+            .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))
+            .collect();
+        v.into_iter()
     }
 
     fn internalize_term(&self, term: Term) -> Result<String, Error> {
@@ -103,9 +82,9 @@ impl QueryableDataset for HdtDataset {
     }
 }
 
-pub fn query(q: &str, ds: HdtDataset) -> Result<spareval::QueryResults, QueryEvaluationError> {
-    let query = Query::parse(q, None).unwrap_or_else(|_| panic!("error processing query {q}"));
-    QueryEvaluator::new().execute(ds, &query)
+pub fn query<'a>(q: &str, hdt: &'a Hdt) -> Result<spareval::QueryResults<'a>, QueryEvaluationError> {
+    let query = SparqlParser::new().parse_query(q).unwrap_or_else(|_| panic!("error processing query {q}"));
+    QueryEvaluator::new().execute(hdt, &query)
 }
 
 #[cfg(test)]
@@ -113,15 +92,14 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
-    //use fs_err::File;
+    use fs_err::File;
 
     #[test]
     fn select() -> Result<()> {
         init();
         let filename = "tests/resources/snikmeta.hdt";
-        //let file = File::open(filename)?;
-        //let hdt = Hdt::read(std::io::BufReader::new(file))?;
-        let ds = HdtDataset::new(&[filename])?;
+        let file = File::open(filename)?;
+        let hdt = Hdt::read(std::io::BufReader::new(file))?;
         let t = [
             "<http://www.snik.eu/ontology/meta/хобби-N-0>", "<http://www.w3.org/2000/01/rdf-schema#label>",
             "\"ХОББИ\"@ru", "\"Anwenden einer Methode123\"", "\"Anwenden einer Methode\"@de",
@@ -136,7 +114,7 @@ mod tests {
             format!("{base} SELECT ?x {{ {{?s {p} ?x }} UNION {{<a> <b> ?x}} }} ORDER BY ?x LIMIT 1"),
         ];
         for i in 0..queries.len() {
-            let res = query(&queries[i], ds.clone())?;
+            let res = query(&queries[i], &hdt)?;
 
             match res {
                 spareval::QueryResults::Solutions(solutions) => {

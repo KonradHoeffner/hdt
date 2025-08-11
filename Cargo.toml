@@ -27,8 +27,9 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-spareval = { version = "0.1", optional = true, default-features = false }
-spargebra = { version = "0.3", optional = true, default-features = false }
+spareval = { git = "https://github.com/oxigraph/oxigraph", branch = "lifetime", optional = true }
+#spargebra = { version = "0.3", optional = true, default-features = false }
+spargebra = { git = "https://github.com/oxigraph/oxigraph", branch = "lifetime", optional = true, default-features = false }
 
 [features]
 default = ["sophia"]
