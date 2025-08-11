@@ -1,3 +1,4 @@
+#![cfg_attr(all(doc, feature = "cache"), doc = include_str!("../README.md"))]
 //! [![github]](https://github.com/konradhoeffner/hdt)&ensp;[![crates-io]](https://crates.io/crates/hdt)&ensp;[![docs-rs]](crate)
 //!
 //! [github]: https://img.shields.io/badge/github-8da0cb?style=for-the-badge&labelColor=555555&logo=github
