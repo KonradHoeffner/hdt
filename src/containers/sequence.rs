@@ -253,6 +253,9 @@ impl Sequence {
     pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
         use sucds::int_vectors::CompactVector;
         let entries = nums.len();
+        if entries == 0 && bits_per_entry == 0 {
+            return Sequence{entries, bits_per_entry, data: vec![]}
+        }
         let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
         cv.extend(nums.iter().copied()).unwrap();
         let data = cv.into_bit_vector().into_words();
