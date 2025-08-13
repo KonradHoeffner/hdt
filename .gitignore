@@ -1,4 +1,5 @@
 /target
+/tests/resources/generated
 Cargo.lock
 /data
 *.index.v1-rust-cache
