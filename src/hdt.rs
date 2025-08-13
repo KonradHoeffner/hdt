@@ -491,6 +491,104 @@ pub mod tests {
         Ok(())
     }
 
+    #[test]
+    #[cfg(feature = "sophia")]
+    fn convert_sparql10_tests() -> Result<()> {
+        std::fs::create_dir_all("tests/resources/generated/nt/sparql10")?;
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql10");
+        for f in &input_files {
+            let nt_file_path = format!(
+                "tests/resources/generated/nt/sparql10/{}",
+                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
+            );
+            ttl_to_nt(f, &nt_file_path)?;
+            let _ = Hdt::read_nt(std::path::Path::new(&nt_file_path))?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "sophia")]
+    fn convert_sparql11_tests() -> Result<()> {
+        std::fs::create_dir_all("tests/resources/generated/nt/sparql11")?;
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql11");
+        for f in &input_files {
+            let nt_file_path = format!(
+                "tests/resources/generated/nt/sparql11/{}",
+                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
+            );
+            ttl_to_nt(f, &nt_file_path)?;
+            match Hdt::read_nt(std::path::Path::new(&nt_file_path)) {
+                Ok(_) => {}
+                Err(e) => {
+                    // files with no triples should error out, the HDT library errors out as well
+                    if !f.contains("empty.ttl") {
+                        eprintln!("{f} failed to convert: {e}");
+                    }
+                    assert!(f.contains("empty.ttl"));
+                    continue;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "sophia")]
+    fn convert_sparql12_tests() -> Result<()> {
+        std::fs::create_dir_all("tests/resources/generated/nt/sparql12")?;
+        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql12");
+        for f in &input_files {
+            let nt_file_path = format!(
+                "tests/resources/generated/nt/sparql12/{}",
+                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
+            );
+            ttl_to_nt(f, &nt_file_path)?;
+            let _ = Hdt::read_nt(std::path::Path::new(&nt_file_path))?;
+        }
+        Ok(())
+    }
+
+    fn find_ttl_files<P: AsRef<std::path::Path>>(dir: P) -> Vec<String> {
+        walkdir::WalkDir::new(dir)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ttl"))
+            .map(|e| e.path().display().to_string())
+            .collect()
+    }
+
+    fn ttl_to_nt(source_ttl: &str, dest_nt: &str) -> Result<()> {
+        use sophia::api::parser::TripleParser;
+        use sophia::api::prelude::TripleSerializer;
+        use sophia::api::prelude::TripleSource;
+        use sophia::turtle::serializer::nt::NtSerializer;
+        use std::io::Write;
+
+        let ttl_file = std::fs::File::open(source_ttl)?;
+        let reader = std::io::BufReader::new(ttl_file);
+
+        let nt_file = std::fs::File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
+
+        let mut writer = std::io::BufWriter::new(nt_file);
+
+        let mut sophia_serializer = NtSerializer::new(writer.by_ref());
+
+        let mut graph = sophia::inmem::graph::LightGraph::default();
+        let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
+            base: Some(sophia::iri::Iri::new(format!(
+                "file://{}",
+                std::path::Path::new(source_ttl).file_name().unwrap().to_str().unwrap()
+            ))?),
+        };
+
+        ttl_parser.parse(reader).add_to_graph(&mut graph)?;
+
+        sophia_serializer.serialize_graph(&graph)?;
+        writer.flush()?;
+        Ok(())
+    }
+
     fn snikmeta_check(hdt: &Hdt) -> Result<()> {
         let triples = &hdt.triples;
         assert_eq!(triples.bitmap_y.num_ones(), 49, "{:?}", triples.bitmap_y); // one for each subjecct
