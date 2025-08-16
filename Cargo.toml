@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.4.0-alpha"
+version = "0.4.0-alpha.0"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -9,7 +9,7 @@ keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
 readme = "README.md"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 
 [package.metadata."docs.rs"]
 all-features = true
@@ -25,9 +25,8 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-spareval = { git = "https://github.com/oxigraph/oxigraph", branch = "lifetime", optional = true }
-#spargebra = { version = "0.3", optional = true, default-features = false }
-spargebra = { git = "https://github.com/oxigraph/oxigraph", branch = "lifetime", optional = true, default-features = false }
+spareval = { version = "0.2.0-beta.3" , optional = true }
+spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
 
 [features]
 default = ["sophia"]
