@@ -506,6 +506,7 @@ pub mod tests {
 
         for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {
             let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{}", sparql_test_version));
+            assert!(input_files.len() != 0);
             for f in &input_files {
                 if f.ends_with("manifest.ttl")
                     || Path::new(f).parent().unwrap().file_name().unwrap() == sparql_test_version
