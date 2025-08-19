@@ -444,6 +444,8 @@ impl<'a> TripleCache<'a> {
 
 #[cfg(test)]
 pub mod tests {
+    use std::path::Path;
+
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
@@ -498,59 +500,63 @@ pub mod tests {
 
     #[test]
     #[cfg(feature = "sophia")]
-    fn convert_sparql10_tests() -> Result<()> {
-        std::fs::create_dir_all("tests/resources/generated/nt/sparql10")?;
-        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql10");
-        for f in &input_files {
-            let nt_file_path = format!(
-                "tests/resources/generated/nt/sparql10/{}",
-                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
-            );
-            ttl_to_nt(f, &nt_file_path)?;
-            let _ = Hdt::read_nt(std::path::Path::new(&nt_file_path))?;
-        }
-        Ok(())
-    }
+    fn w3c_tests() -> Result<()> {
+        use std::fs;
+        use std::path::Path;
 
-    #[test]
-    #[cfg(feature = "sophia")]
-    fn convert_sparql11_tests() -> Result<()> {
-        std::fs::create_dir_all("tests/resources/generated/nt/sparql11")?;
-        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql11");
-        for f in &input_files {
-            let nt_file_path = format!(
-                "tests/resources/generated/nt/sparql11/{}",
-                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
-            );
-            ttl_to_nt(f, &nt_file_path)?;
-            match Hdt::read_nt(std::path::Path::new(&nt_file_path)) {
-                Ok(_) => {}
-                Err(e) => {
-                    // files with no triples should error out, the HDT library errors out as well
-                    if !f.contains("empty.ttl") {
-                        eprintln!("{f} failed to convert: {e}");
-                    }
-                    assert!(f.contains("empty.ttl"));
+        for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {
+            let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{}", sparql_test_version));
+            for f in &input_files {
+                if f.ends_with("manifest.ttl")
+                    || Path::new(f).parent().unwrap().file_name().unwrap() == sparql_test_version
+                {
                     continue;
+                }
+                let parent_folder_name = Path::new(f).parent().unwrap().file_name().unwrap();
+
+                let nt_file_name = format!(
+                    "tests/resources/generated/nt/{sparql_test_version}/{:#?}/{}",
+                    parent_folder_name,
+                    Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
+                );
+                let nt_file_path = Path::new(&nt_file_name);
+                std::fs::create_dir_all(format!(
+                    "tests/resources/generated/nt/{sparql_test_version}/{:#?}",
+                    parent_folder_name
+                ))?;
+                ttl_to_nt(f, &nt_file_path)?;
+                match Hdt::read_nt(&nt_file_path) {
+                    Ok(h) => {
+                        #[cfg(feature = "sophia")]
+                        {
+                            use std::{
+                                fs::OpenOptions,
+                                io::{BufWriter, Write},
+                            };
+
+                            let hdt_file_path = format!(
+                                "tests/resources/generated/hdt/{sparql_test_version}/{:#?}/{}",
+                                parent_folder_name,
+                                Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".hdt")
+                            );
+                            std::fs::create_dir_all(Path::new(&hdt_file_path).parent().unwrap())?;
+                            let out_file =
+                                OpenOptions::new().create(true).write(true).truncate(true).open(&hdt_file_path)?;
+                            let mut writer = BufWriter::new(out_file);
+                            h.write(&mut writer)?;
+                            writer.flush()?;
+                            assert!(Path::new(&hdt_file_path).exists());
+                        }
+                    }
+                    Err(e) => {
+                        use crate::triples;
+
+                        matches!(e, Error::Triples(triples::Error::Empty));
+                    }
                 }
             }
         }
-        Ok(())
-    }
-
-    #[test]
-    #[cfg(feature = "sophia")]
-    fn convert_sparql12_tests() -> Result<()> {
-        std::fs::create_dir_all("tests/resources/generated/nt/sparql12")?;
-        let input_files = find_ttl_files("tests/resources/rdf-tests/sparql/sparql12");
-        for f in &input_files {
-            let nt_file_path = format!(
-                "tests/resources/generated/nt/sparql12/{}",
-                std::path::Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
-            );
-            ttl_to_nt(f, &nt_file_path)?;
-            let _ = Hdt::read_nt(std::path::Path::new(&nt_file_path))?;
-        }
+        fs::remove_dir_all("tests/resources/generated")?;
         Ok(())
     }
 
@@ -563,7 +569,7 @@ pub mod tests {
             .collect()
     }
 
-    fn ttl_to_nt(source_ttl: &str, dest_nt: &str) -> Result<()> {
+    fn ttl_to_nt(source_ttl: &str, dest_nt: &Path) -> Result<()> {
         use sophia::api::parser::TripleParser;
         use sophia::api::prelude::TripleSerializer;
         use sophia::api::prelude::TripleSource;
