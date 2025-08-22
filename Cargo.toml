@@ -1,14 +1,15 @@
 [package]
 name = "hdt"
-version = "0.4.0-alpha"
+version = "0.4.0-alpha.0"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
 description = "Library for the Header Dictionary Triples (HDT) RDF compression format."
 keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
+readme = "README.md"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.87"
 
 [package.metadata."docs.rs"]
 all-features = true
@@ -16,22 +17,19 @@ all-features = true
 [dependencies]
 bytesize = "2"
 crc = "3"
-iref = "3"
-langtag = "0.4"
 ntriple = "0.1"
 sophia = { version = "0.9", optional = true }
-#sucds = "0.8.3" # not released yet, use git until then
-sucds = { git = "https://github.com/kampersanda/sucds.git", rev = "46e8cbe", version = "0.8.2" }
+sucds = "0.8.3"
 thiserror = "2"
 log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-spareval = { version = "0.1", optional = true, default-features = false }
-spargebra = { version = "0.3", optional = true, default-features = false }
+spareval = { version = "0.2.0-beta.3" , optional = true }
+spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
 
 [features]
-default = ["sophia", "sparql"]
+default = ["sophia"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]

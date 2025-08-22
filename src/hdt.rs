@@ -552,15 +552,15 @@ pub mod tests {
                     parent_folder_name
                 ))?;
                 convert_to_nt(f, &nt_file_path)?;
+
                 match Hdt::read_nt(&nt_file_path) {
                     Ok(h) => {
+                        use std::{
+                            fs::OpenOptions,
+                            io::{BufWriter, Write},
+                        };
                         #[cfg(feature = "sparql")]
                         {
-                            use std::{
-                                fs::OpenOptions,
-                                io::{BufWriter, Write},
-                            };
-
                             let hdt_file_path = format!(
                                 "tests/resources/generated/hdt/{sparql_test_version}/{}/{}.hdt",
                                 parent_folder_name,
@@ -606,15 +606,15 @@ pub mod tests {
                         case.data.file_stem().unwrap().to_str().unwrap()
                     );
 
-                    let h = sparql::HdtDataset::new(&[hdt_name.as_str()])?;
+                    let hdt_reader = BufReader::new(File::open(hdt_name.as_str())?);
+                    let h = Hdt::read(hdt_reader)?;
                     let mut query_str = String::new();
                     BufReader::new(File::open(case.query)?).read_to_string(&mut query_str)?;
-                    let _res = sparql::query(&query_str, h, Some("http://example.org/"))?;
+                    let _res = sparql::query(&query_str, &h, Some("http://example.org/"))?;
                 }
             }
         }
-        #[cfg(feature = "sparql")]
-        fs::remove_dir_all("tests/resources/generated")?;
+        let _ = fs::remove_dir_all("tests/resources/generated");
         Ok(())
     }
 

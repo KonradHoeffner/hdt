@@ -122,7 +122,7 @@ impl Sequence {
     }
 
     /// Size in bytes on the heap.
-    pub fn size_in_bytes(&self) -> usize {
+    pub const fn size_in_bytes(&self) -> usize {
         (self.data.len() * USIZE_BITS) >> 3
     }
 
