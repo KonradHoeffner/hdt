@@ -345,7 +345,9 @@ impl DictSectPFC {
             compressed_terms.push(0); // Null separator
             last_term = term;
         }
-        offsets.push(compressed_terms.len());
+        if num_terms > 0 {
+            offsets.push(compressed_terms.len());
+        }
 
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?

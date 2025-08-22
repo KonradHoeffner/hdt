@@ -82,8 +82,17 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
     }
 }
 
-pub fn query<'a>(q: &str, hdt: &'a Hdt) -> Result<spareval::QueryResults<'a>, QueryEvaluationError> {
-    let query = SparqlParser::new().parse_query(q).unwrap_or_else(|_| panic!("error processing query {q}"));
+pub fn query<'a>(
+    q: &str, hdt: &'a Hdt, base_iri: Option<&str>,
+) -> Result<spareval::QueryResults<'a>, QueryEvaluationError> {
+    let query = match base_iri {
+        Some(iri) => SparqlParser::new()
+            .with_base_iri(iri)
+            .unwrap_or_else(|e| panic!("error processing query base iri {iri}: {e}"))
+            .parse_query(q)
+            .unwrap_or_else(|e| panic!("error processing query {q}: {e}")),
+        None => SparqlParser::new().parse_query(q).unwrap_or_else(|e| panic!("error processing query {q}: {e}")),
+    };
     QueryEvaluator::new().execute(hdt, &query)
 }
 
@@ -114,7 +123,7 @@ mod tests {
             format!("{base} SELECT ?x {{ {{?s {p} ?x }} UNION {{<a> <b> ?x}} }} ORDER BY ?x LIMIT 1"),
         ];
         for i in 0..queries.len() {
-            let res = query(&queries[i], &hdt)?;
+            let res = query(&queries[i], &hdt, None)?;
 
             match res {
                 spareval::QueryResults::Solutions(solutions) => {
