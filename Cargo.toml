@@ -29,7 +29,7 @@ spareval = { version = "0.2.0-beta.3" , optional = true }
 spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
 
 [features]
-default = ["sophia"]
+default = ["sophia", "sparql"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
@@ -56,4 +56,5 @@ criterion = { version = "0.7", default-features = false, features = ["cargo_benc
 iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
 color-eyre = "0.6"
 fs-err = "3.1.0"
+sparesults = "0.2"
 walkdir = "2.5.0"

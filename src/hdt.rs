@@ -444,13 +444,39 @@ impl<'a> TripleCache<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    use std::path::Path;
+    use std::{
+        io::BufReader,
+        path::{Path, PathBuf},
+    };
 
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
+    use sophia::api::{
+        ns::{Namespace, rdf},
+        triple::Triple,
+    };
+    use sophia::{
+        api::{
+            prelude::Any,
+            term::{SimpleTerm, Term},
+        },
+        inmem::graph::FastGraph,
+    };
+
+    #[derive(Debug)]
+    struct TestCase {
+        data: PathBuf,
+        query: PathBuf,
+        _result: PathBuf,
+    }
+
+    const MF: Namespace<&str> =
+        Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#");
+    const QT: Namespace<&str> =
+        Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-query#");
 
     /// reusable test HDT read from SNIK Meta test HDT file
     pub fn snikmeta() -> Result<Hdt> {
@@ -505,30 +531,35 @@ pub mod tests {
         use std::path::Path;
 
         for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {
+            use std::collections::HashMap;
+
             let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{}", sparql_test_version));
             assert!(input_files.len() != 0);
+            let mut cases = HashMap::new();
             for f in &input_files {
-                if f.ends_with("manifest.ttl")
-                    || Path::new(f).parent().unwrap().file_name().unwrap() == sparql_test_version
-                {
+                let parent_folder_name = Path::new(f).parent().unwrap().file_name().unwrap().to_str().unwrap();
+                if f.ends_with("/manifest.ttl") && parent_folder_name != sparql_test_version {
+                    cases.insert(parent_folder_name, parse_manifest(f).expect("msg"));
                     continue;
                 }
-                let parent_folder_name = Path::new(f).parent().unwrap().file_name().unwrap();
+                if f.ends_with("/manifest.ttl") || parent_folder_name == sparql_test_version {
+                    continue;
+                }
 
                 let nt_file_name = format!(
-                    "tests/resources/generated/nt/{sparql_test_version}/{:#?}/{}",
+                    "tests/resources/generated/nt/{sparql_test_version}/{}/{}.nt",
                     parent_folder_name,
-                    Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".nt")
+                    Path::new(f).file_stem().unwrap().to_str().unwrap()
                 );
                 let nt_file_path = Path::new(&nt_file_name);
                 std::fs::create_dir_all(format!(
-                    "tests/resources/generated/nt/{sparql_test_version}/{:#?}",
+                    "tests/resources/generated/nt/{sparql_test_version}/{}",
                     parent_folder_name
                 ))?;
-                ttl_to_nt(f, &nt_file_path)?;
+                convert_to_nt(f, &nt_file_path)?;
                 match Hdt::read_nt(&nt_file_path) {
                     Ok(h) => {
-                        #[cfg(feature = "sophia")]
+                        #[cfg(feature = "sparql")]
                         {
                             use std::{
                                 fs::OpenOptions,
@@ -536,9 +567,9 @@ pub mod tests {
                             };
 
                             let hdt_file_path = format!(
-                                "tests/resources/generated/hdt/{sparql_test_version}/{:#?}/{}",
+                                "tests/resources/generated/hdt/{sparql_test_version}/{}/{}.hdt",
                                 parent_folder_name,
-                                Path::new(f).file_name().unwrap().to_str().unwrap().replace(".ttl", ".hdt")
+                                Path::new(f).file_stem().unwrap().to_str().unwrap()
                             );
                             std::fs::create_dir_all(Path::new(&hdt_file_path).parent().unwrap())?;
                             let out_file =
@@ -556,7 +587,38 @@ pub mod tests {
                     }
                 }
             }
+
+            #[cfg(feature = "sparql")]
+            for (folder, test_cases) in cases {
+                for case in test_cases {
+                    use crate::sparql;
+                    use std::io::Read;
+
+                    // currently only converting TTL -> NT -> HDT
+                    if case.data.extension().unwrap() != "ttl" {
+                        continue;
+                    }
+
+                    // empty datasets are ignored, an HDT file with no triples is invalid
+                    if case.data.ends_with("empty.ttl") {
+                        continue;
+                    }
+
+                    // println!("{folder}:  {:?}", case);
+                    let hdt_name = format!(
+                        "tests/resources/generated/hdt/{sparql_test_version}/{}/{}.hdt",
+                        folder,
+                        case.data.file_stem().unwrap().to_str().unwrap()
+                    );
+
+                    let h = sparql::HdtDataset::new(&[hdt_name.as_str()])?;
+                    let mut query_str = String::new();
+                    BufReader::new(File::open(case.query)?).read_to_string(&mut query_str)?;
+                    let _res = sparql::query(&query_str, h, Some("http://example.org/"))?;
+                }
+            }
         }
+        #[cfg(feature = "sparql")]
         fs::remove_dir_all("tests/resources/generated")?;
         Ok(())
     }
@@ -570,36 +632,174 @@ pub mod tests {
             .collect()
     }
 
-    fn ttl_to_nt(source_ttl: &str, dest_nt: &Path) -> Result<()> {
+    fn convert_to_nt(source_rdf: &str, dest_nt: &Path) -> Result<()> {
         use sophia::api::parser::TripleParser;
         use sophia::api::prelude::TripleSerializer;
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::serializer::nt::NtSerializer;
         use std::io::Write;
 
-        let ttl_file = std::fs::File::open(source_ttl)?;
-        let reader = std::io::BufReader::new(ttl_file);
+        let rdf_file = std::fs::File::open(source_rdf)?;
+        let reader = std::io::BufReader::new(rdf_file);
 
         let nt_file = std::fs::File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
 
         let mut writer = std::io::BufWriter::new(nt_file);
+        let mut graph = sophia::inmem::graph::LightGraph::default();
 
         let mut sophia_serializer = NtSerializer::new(writer.by_ref());
 
-        let mut graph = sophia::inmem::graph::LightGraph::default();
-        let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
-            base: Some(sophia::iri::Iri::new(format!(
-                "file://{}",
-                std::path::Path::new(source_ttl).file_name().unwrap().to_str().unwrap()
-            ))?),
-        };
+        if source_rdf.ends_with(".ttl") {
+            let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
+                base: Some(sophia::iri::Iri::new(format!(
+                    "file://{}",
+                    std::path::Path::new(source_rdf).file_name().unwrap().to_str().unwrap()
+                ))?),
+            };
 
-        ttl_parser.parse(reader).add_to_graph(&mut graph)?;
+            ttl_parser.parse(reader).add_to_graph(&mut graph)?;
+        }
+        // TODO .rdf file format?
 
         sophia_serializer.serialize_graph(&graph)?;
         writer.flush()?;
         Ok(())
     }
+
+    fn load_manifest(path: &str) -> Result<FastGraph, Box<dyn std::error::Error>> {
+        use sophia::api::parser::TripleParser;
+        use sophia::api::prelude::TripleSource;
+        let file = BufReader::new(File::open(path)?);
+        let mut graph = sophia::inmem::graph::FastGraph::default();
+        let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
+            base: Some(sophia::iri::Iri::new(format!(
+                "file://{}/#",
+                std::path::Path::new(path).parent().unwrap().to_str().unwrap()
+            ))?),
+        };
+
+        ttl_parser.parse(file).add_to_graph(&mut graph)?;
+        Ok(graph)
+    }
+
+    fn parse_manifest(path: &str) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
+        use sophia::api::graph::Graph;
+
+        let g = load_manifest(path)?;
+
+        let mut cases = Vec::new();
+
+        // Find the manifest node
+        let p = MF.get("entries")?;
+        let manifest_nodes: Vec<_> = g.triples_matching(Any, [&p], Any).collect();
+        if manifest_nodes.is_empty() {
+            return Ok(cases);
+        }
+
+        // The object of mf:entries is the head of an RDF list
+        let list_head = manifest_nodes[0]?.o().clone();
+
+        // Walk the RDF list
+        let mut current = list_head;
+        while !current.is_iri() || current.iri().unwrap() != rdf::nil.to_iriref() {
+            if let Some(test) = g
+                .triples_matching([&current], [&rdf::first, &MF.get("QueryEvaluationTest")?], Any)
+                .next()
+                .map(|t| t.unwrap().o().clone())
+            {
+                // find mf:action
+                if let Some(action_node) =
+                    g.triples_matching([&test], [&MF.get("action")?], Any).next().map(|t| t.unwrap().o().clone())
+                {
+                    // find qt:data
+                    let data = g.triples_matching([&action_node], [&QT.get("data")?], Any).next().map(|t| match t
+                        .unwrap()
+                        .o()
+                    {
+                        SimpleTerm::BlankNode(b) => b.to_string(),
+                        SimpleTerm::Iri(i) => i.to_string(),
+                        SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+                        SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
+                        SimpleTerm::Triple(_t) => todo!(),
+                        SimpleTerm::Variable(v) => v.to_string(),
+                    });
+
+                    // find qt:query
+                    let query =
+                        g.triples_matching([&action_node], [&QT.get("query")?], Any).next().map(|t| {
+                            match t.unwrap().o() {
+                                SimpleTerm::BlankNode(b) => b.to_string(),
+                                SimpleTerm::Iri(i) => i.to_string(),
+                                SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+                                SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
+                                SimpleTerm::Triple(_t) => todo!(),
+                                SimpleTerm::Variable(v) => v.to_string(),
+                            }
+                        });
+                    // find mf:result
+                    let result = g.triples_matching([&test], [&MF.get("result")?], Any).next().map(|t| {
+                        match t.unwrap().o() {
+                            SimpleTerm::BlankNode(b) => b.to_string(),
+                            SimpleTerm::Iri(i) => i.to_string(),
+                            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+                            SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
+                            SimpleTerm::Triple(_t) => todo!(),
+                            SimpleTerm::Variable(v) => v.to_string(),
+                        }
+                    });
+
+                    if let (Some(data), Some(query), Some(result)) = (data, query, result) {
+                        cases.push(TestCase {
+                            data: PathBuf::from(data.replace("file://", "")),
+                            query: PathBuf::from(query.replace("file://", "")),
+                            _result: PathBuf::from(result.replace("file://", "")),
+                        });
+                    }
+                }
+            }
+
+            let s = current.clone();
+            if let Some(next) = g.triples_matching([&s], [&rdf::rest], Any).next().map(|t| t.unwrap().o().clone())
+            {
+                current = next;
+            } else {
+                break;
+            };
+        }
+
+        Ok(cases)
+    }
+
+    // fn parse_srx(path: &str, actual: spareval::QueryResults) -> Result<(), Box<dyn std::error::Error>> {
+    //     let file = File::open(path)?;
+    //     let reader = BufReader::new(file);
+    //     let parser = sparesults::QueryResultsParser::from_format(sparesults::QueryResultsFormat::Xml);
+    //     let res = parser.for_reader(reader)?;
+
+    //     match (res, actual) {
+    //         (spareval::QueryResults::Solutions(mut exp), spareval::QueryResults::Solutions(mut act)) => {
+    //             // Canonicalize order, because SPARQL results are a multiset
+    //             exp.sort();
+    //             act.sort();
+
+    //             if exp == act {
+    //                 println!("✅ Results match!");
+    //             } else {
+    //                 println!("❌ Results differ:\nExpected: {:?}\nActual: {:?}", exp, act);
+    //             }
+    //         }
+    //         (spareval::QueryResults::Boolean(exp), spareval::QueryResults::Boolean(act)) => {
+    //             assert_eq!(exp, act, "Boolean results differ!");
+    //         }
+    //         (spareval::QueryResults::Graph(exp), spareval::QueryResults::Graph(act)) => {
+    //             panic!("hdt does not support named graphs")
+    //         }
+    //         _ => {
+    //             panic!("Result kinds differ between actual and expected!");
+    //         }
+    //     }
+    //     Ok(())
+    // }
 
     fn snikmeta_check(hdt: &Hdt) -> Result<()> {
         let triples = &hdt.triples;
