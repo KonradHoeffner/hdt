@@ -102,6 +102,11 @@ impl Hdt {
         let mut reader = std::io::BufReader::new(source);
         let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
+        if num_triples == 0 {
+            use crate::triples;
+
+            return Err(Error::Triples(triples::Error::Empty));
+        }
         encoded_triples.sort_unstable();
         let triples = TriplesBitmap::from_triples(&encoded_triples);
 
