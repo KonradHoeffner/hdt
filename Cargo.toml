@@ -22,17 +22,22 @@ sophia = { version = "0.9", optional = true }
 sucds = "0.8.3"
 thiserror = "2"
 log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.2.0-beta.3" , optional = true }
 spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
+eyre = "0.6"
+color-eyre = { version = "0.6", default-features = false }
+clap = { version = "4.5", optional = true, features = ["derive"] }
 
 [features]
-default = ["sophia"]
+default = ["sophia", "cli"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
+cli = ["dep:clap"]
 
 [[bench]]
 name = "criterion"
@@ -44,6 +49,10 @@ harness = false
 
 [lib]
 bench = false
+
+[[bin]]
+name = "hdt"
+required-features = ["cli", "sophia"]
 
 [profile.test]
 opt-level = 1
