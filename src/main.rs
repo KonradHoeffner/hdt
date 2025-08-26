@@ -5,11 +5,11 @@ use color_eyre::config::HookBuilder;
 use color_eyre::eyre::{Report, WrapErr};
 use hdt::Hdt;
 //use log::info;
+use fs_err::File;
 use sophia::api::prelude::{Stringifier, TripleSerializer};
 use sophia::turtle::serializer::nt::NtSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
-use std::fs::File;
-use std::io::{BufReader, stdin};
+//use std::io::{BufReader, stdin};
 
 /*enum Format {
     NTriples,
@@ -33,8 +33,9 @@ struct Args {
 
     // /// verbose output
     //verbose: bool,
-    /// the HDT file to load from, if not given it is read from stdin
-    hdt_input_file: Option<String>,
+    // disable std reading for now because of usability downside for new users when started with no parameter // the HDT file to load from, if not given it is read from stdin
+    /// the HDT file to load from
+    hdt_input_file: String,
     /// the RDF file to create, if not given it is written to stdout
     rdf_output_file: Option<String>,
 }
@@ -44,7 +45,7 @@ fn main() -> Result<(), Report> {
     //env_logger::init();
     //env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse();
-    let hdt = match args.hdt_input_file {
+    /*let hdt = match args.hdt_input_file {
         Some(filename) => {
             let file =
                 File::open(filename.clone()).wrap_err_with(|| format!("Error opening input file {}", filename))?;
@@ -57,7 +58,11 @@ fn main() -> Result<(), Report> {
             Hdt::read(reader).wrap_err("Error loading HDT from standard input")?
             //info!("Loaded from stdin {hdt:?}");
         }
-    };
+    };*/
+    let filename = args.hdt_input_file;
+    let file = File::open(filename.clone()).with_context(|| format!("Error opening input HDT file {filename}"))?;
+    let hdt = Hdt::read(std::io::BufReader::new(file))
+        .with_context(|| format!("Error loading input HDT from {}", filename))?;
     let count = hdt.triples.len();
     if args.count {
         println!("Parsing returned {} triples", count);
