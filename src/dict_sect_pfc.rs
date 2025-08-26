@@ -490,6 +490,7 @@ mod tests {
             let items2 = sect_items(&sect2);
             assert_eq!(items1, items2, "error compressing {name} section");
         }
+        assert_eq!(0, DictSectPFC::compress(&BTreeSet::new(), BLOCK_SIZE).num_strings);
         Ok(())
     }
 }
