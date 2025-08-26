@@ -483,6 +483,11 @@ pub mod tests {
         assert_eq!(nt_triples, hdt_triples);
         assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
         snikmeta_check(&snikmeta_nt)?;
+        let path = std::path::Path::new("tests/resources/empty.nt");
+        let hdt_empty = Hdt::read_nt(path)?;
+        let mut buf = Vec::<u8>::new();
+        hdt_empty.write(&mut buf)?;
+        Hdt::read(std::io::Cursor::new(buf))?;
         Ok(())
     }
 

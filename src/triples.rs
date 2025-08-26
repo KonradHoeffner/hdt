@@ -269,7 +269,7 @@ impl TriplesBitmap {
 
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
-        let max_object = adjlist_z.sequence.into_iter().max().unwrap().to_owned();
+        let max_object = adjlist_z.sequence.into_iter().max().unwrap_or(0).to_owned();
         // limited to < 2^32 objects
         let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
         // Count the indexes of appearance of each object
@@ -358,9 +358,8 @@ impl TriplesBitmap {
         }
         y_bitmap.push_bit(true);
         z_bitmap.push_bit(true);
-
-        let bits_per_entry: usize = (triples.len().ilog2() + 1).try_into().unwrap();
-
+        // at least 1 bit per entry to work around sucds lib, which doesn't support empty structures
+        let bits_per_entry: usize = (triples.len() + 1).ilog2().max(1).try_into().unwrap();
         let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
         let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
         let sequence_y = Sequence::new(&array_y, bits_per_entry);
@@ -442,10 +441,14 @@ impl TriplesBitmap {
 
     fn build_wavelet(sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
         let mut builder =
-            CompactVector::new(sequence.bits_per_entry).expect("Failed to create wavelet matrix builder.");
+            CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
         for x in &sequence {
             builder.push_int(x).unwrap();
+        }
+        // work around sucds not supporting empty WaveletMatrix
+        if sequence.entries == 0 {
+            builder.push_int(0).unwrap();
         }
         drop(sequence);
         WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")

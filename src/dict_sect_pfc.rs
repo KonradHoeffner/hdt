@@ -345,7 +345,9 @@ impl DictSectPFC {
             compressed_terms.push(0); // Null separator
             last_term = term;
         }
-        offsets.push(compressed_terms.len());
+        if num_terms > 0 {
+            offsets.push(compressed_terms.len());
+        }
 
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?
@@ -488,6 +490,7 @@ mod tests {
             let items2 = sect_items(&sect2);
             assert_eq!(items1, items2, "error compressing {name} section");
         }
+        assert_eq!(0, DictSectPFC::compress(&BTreeSet::new(), BLOCK_SIZE).num_strings);
         Ok(())
     }
 }
