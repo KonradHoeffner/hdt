@@ -31,11 +31,12 @@ spargebra = { version = "0.4", optional = true, default-features = false }
 eyre = { version = "0.6", optional = true }
 color-eyre = { version = "0.6", optional = true }
 clap = { version = "4.5", optional = true, features = ["derive"] }
+fs-err = { version = "3.1.0" , optional = true }
 
 [features]
 default = ["sophia","cli"]
 sophia = ["dep:sophia"]
-cli = ["dep:eyre", "dep:color-eyre", "dep:clap"]
+cli = ["dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
 
