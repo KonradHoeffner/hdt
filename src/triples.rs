@@ -319,11 +319,15 @@ impl TriplesBitmap {
         let mut last_x = 0;
         let mut last_y = 0;
         let mut last_z = 0;
+        let mut max_y = 1;
+        let mut max_z = 1;
 
         for (i, triple) in triples.iter().enumerate() {
             let [x, y, z] = *triple;
 
             assert!(!(x == 0 || y == 0 || z == 0), "triple IDs should never be zero");
+            max_y = max_y.max(y);
+            max_z = max_z.max(z);
 
             if i == 0 {
                 array_y.push(y);
@@ -360,12 +364,11 @@ impl TriplesBitmap {
         }
         y_bitmap.push_bit(true);
         z_bitmap.push_bit(true);
-        // at least 1 bit per entry to work around sucds lib, which doesn't support empty structures
-        let bits_per_entry: usize = (triples.len() + 1).ilog2().max(1).try_into().unwrap();
         let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
         let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
-        let sequence_y = Sequence::new(&array_y, bits_per_entry);
-        let sequence_z = Sequence::new(&array_z, bits_per_entry);
+        // bit_width() only in nightly for now
+        let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
+        let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         TriplesBitmap::new(Order::SPO, sequence_y, bitmap_y, adjlist_z)
     }
