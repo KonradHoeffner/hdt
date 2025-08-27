@@ -188,8 +188,6 @@ pub enum Error {
     TripleComponentZero(usize, usize, usize),
     #[error("unspecified external library error")]
     External(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("no triples detected in source file")]
-    Empty,
     #[error("cache decode error")]
     #[cfg(feature = "cache")]
     Decode(#[from] bincode::error::DecodeError),
