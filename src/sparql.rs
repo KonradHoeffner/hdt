@@ -165,14 +165,11 @@ mod tests {
     }
 
     fn convert_to_nt(source_rdf: &str, dest_nt: &Path) -> Result<()> {
-        let rdf_file = fs_err::File::open(source_rdf)?;
+        let rdf_file = File::open(source_rdf)?;
         let reader = BufReader::new(rdf_file);
-
-        let nt_file = fs_err::File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
-
+        let nt_file = File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
         let mut writer = std::io::BufWriter::new(nt_file);
         let mut graph = sophia::inmem::graph::LightGraph::default();
-
         let mut sophia_serializer = NtSerializer::new(writer.by_ref());
 
         if source_rdf.ends_with(".ttl") {

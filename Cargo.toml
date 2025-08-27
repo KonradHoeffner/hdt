@@ -29,7 +29,7 @@ spareval = { version = "0.2.0-beta.3" , optional = true }
 spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
 
 [features]
-default = ["sophia", "sparql"]
+default = ["sophia"]
 sophia = ["dep:sophia"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
