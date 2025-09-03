@@ -58,13 +58,7 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             .into_iter();
         }
         let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
-        let mut v: Vec<Result<InternalQuad<_>, Error>> = Vec::new();
         // Query HDT for BGP by string values.
-        let results = self.triples_with_pattern(ps, pp, po);
-        for r in results {
-            let [subject, predicate, object] = r.map(|a| a.to_string());
-            v.push(Ok(InternalQuad { subject, predicate, object, graph_name: None }));
-        }
         let v: Vec<_> = self
             .triples_with_pattern(ps, pp, po)
             .map(|at| at.map(|a| a.to_string()))
