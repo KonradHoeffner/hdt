@@ -138,10 +138,7 @@ impl OpIndex {
     }
     /// Find the last position in the object index of the given object ID.
     pub fn last(&self, o: Id) -> usize {
-        match self.bitmap.select1(o) {
-            Some(index) => index as usize - 1,
-            None => self.bitmap.len() - 1,
-        }
+        self.bitmap.select1(o).map_or_else(|| self.bitmap.len() - 1, |index| index as usize - 1)
     }
 }
 
@@ -329,32 +326,26 @@ impl TriplesBitmap {
 
             if i == 0 {
                 array_y.push(y);
-                array_z.push(z);
             } else if x != last_x {
                 assert!(x == last_x + 1, "the subjects must be correlative.");
-
                 //x unchanged
                 y_bitmap.push_bit(true);
                 array_y.push(y);
 
                 z_bitmap.push_bit(true);
-                array_z.push(z);
             } else if y != last_y {
                 assert!(y >= last_y, "the predicates must be in increasing order.");
-
                 // y unchanged
                 y_bitmap.push_bit(false);
                 array_y.push(y);
 
                 z_bitmap.push_bit(true);
-                array_z.push(z);
             } else {
                 assert!(z >= last_z, "the objects must be in increasing order");
-
                 // z changed
                 z_bitmap.push_bit(false);
-                array_z.push(z);
             }
+            array_z.push(z);
 
             last_x = x;
             last_y = y;

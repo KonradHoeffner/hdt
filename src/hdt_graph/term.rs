@@ -8,7 +8,7 @@ use std::sync::{Arc, LazyLock};
 pub static XSD_STRING: LazyLock<IriRef<Arc<str>>> =
     LazyLock::new(|| xsd::string.iri().unwrap().map_unchecked(|m| Arc::from(m.as_ref())));
 
-/// An implementation of [`sophia::api::term::Term`] for [`HdtGraph`](super::HdtGraph).
+/// An implementation of [`sophia::api::term::Term`] for HDT.
 #[derive(Clone, Debug)]
 pub enum HdtTerm {
     /// This HdtTerm is an IRI

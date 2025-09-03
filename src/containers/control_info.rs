@@ -39,7 +39,7 @@ impl TryFrom<u8> for ControlType {
 }
 
 /// <https://www.rdfhdt.org/hdt-binary-format/>: "preamble that describes a chunk of information".
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct ControlInfo {
     /// Type of control information.
     pub control_type: ControlType,

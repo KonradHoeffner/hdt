@@ -32,11 +32,10 @@ pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
 
     n |= ((buffer[0] & 127) as u128) << shift;
 
-    if let Ok(valid) = usize::try_from(n) {
-        Ok((valid, bytes_read))
-    } else {
-        Err(Error::new(InvalidData, "Tried to read a VByte that does not fit into a usize"))
-    }
+    usize::try_from(n).map_or_else(
+        |_| Err(Error::new(InvalidData, "Tried to read a VByte that does not fit into a usize")),
+        |valid| Ok((valid, bytes_read)),
+    )
 }
 
 /// decode vbyte with offset

@@ -70,14 +70,14 @@ fn auto_term(s: &str) -> io::Result<HdtTerm> {
                 // datatype
                 let mut dt_split = rest.split("^^");
                 dt_split.next(); // empty
-                match dt_split.next() {
-                    Some(dt) => {
+                dt_split.next().map_or_else(
+                    || Err(Error::new(ErrorKind::InvalidData, format!("empty datatype in {s}"))),
+                    |dt| {
                         let unquoted = &dt[1..dt.len() - 1];
                         let dt = IriRef::new_unchecked(Arc::from(unquoted));
                         Ok(HdtTerm::LiteralDatatype(lex, dt))
-                    }
-                    None => Err(Error::new(ErrorKind::InvalidData, format!("empty datatype in {s}"))),
-                }
+                    },
+                )
             }
         },
         Some('_') => Ok(HdtTerm::BlankNode(BnodeId::new_unchecked(Arc::from(&s[2..])))),

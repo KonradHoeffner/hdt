@@ -79,7 +79,7 @@ impl DictSectPFC {
     }
 
     /// translated from Java
-    /// https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java
+    /// <https://github.com/rdfhdt/hdt-java/blob/master/hdt-java-core/src/main/java/org/rdfhdt/hdt/dictionary/impl/section/PFCDictionarySection.java>>
     /// 0 means not found
     pub fn string_to_id(&self, element: &str) -> Id {
         if self.num_strings == 0 {
