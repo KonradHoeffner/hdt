@@ -203,10 +203,10 @@ impl Hdt {
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
     /// # Example
     /// ```
-    /// let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+    /// let hdt = hdt::Hdt::read_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
     /// ```
     #[cfg(feature = "cache")]
-    pub fn new_from_path(f: &std::path::Path) -> Result<Self> {
+    pub fn read_from_path(f: &std::path::Path) -> Result<Self> {
         use log::warn;
 
         let source = File::open(f)?;

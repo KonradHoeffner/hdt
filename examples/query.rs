@@ -9,7 +9,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[allow(unused_mut)]
     let mut hdts = vec![Hdt::read(std::io::BufReader::new(file))?];
     #[cfg(feature = "cache")]
-    hdts.push(Hdt::new_from_path(path)?);
+    hdts.push(Hdt::read_from_path(path)?);
     for hdt in hdts {
         // SP? pattern
         let labels = hdt.triples_with_pattern(Some(meta_top), Some(rdfs_label), None);

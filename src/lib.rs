@@ -19,7 +19,7 @@
 //! use hdt::Hdt;
 //! // Load an hdt file
 //! let file = std::fs::File::open("example.hdt").expect("error opening file");
-//! let hdt = Hdt::new(std::io::BufReader::new(file)).expect("error loading HDT");
+//! let hdt = Hdt::read(std::io::BufReader::new(file)).expect("error loading HDT");
 //! // query
 //! let majors = hdt.triples_with_pattern(Some("http://dbpedia.org/resource/Leipzig"), Some("http://dbpedia.org/ontology/major"),None);
 //! println!("{:?}", majors.collect::<Vec<_>>());
@@ -34,7 +34,7 @@ The **cache** feature is experimental and may change or be removed in future rel
 Creating and/or loading a HDT file leveraging a custom cache:
 
 ```no_run
-let hdt = hdt::Hdt::new_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+let hdt = hdt::Hdt::read_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
 ``` 
 "#
 )]
