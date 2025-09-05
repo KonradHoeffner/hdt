@@ -7,6 +7,7 @@
 [![HDT Rust @ LD Party Video](https://img.shields.io/badge/video-8A2BE2)](https://www.youtube.com/watch?v=R-S0o_UwPMk)
 [![Paper DOI](https://joss.theoj.org/papers/10.21105/joss.05114/status.svg)](https://doi.org/10.21105/joss.05114)
 [![Software DOI](https://zenodo.org/badge/541577178.svg)](https://doi.org/10.5281/zenodo.7871065)
+[![SWH](https://archive.softwareheritage.org/badge/swh:1:dir:943737774c84d8386b6f11b227ad0f085734776e/)](https://archive.softwareheritage.org/swh:1:dir:943737774c84d8386b6f11b227ad0f085734776e;origin=https://github.com/KonradHoeffner/hdt;visit=swh:1:snp:830dd996a200043fd0312ce76574d0639285cc7b;anchor=swh:1:rev:28d49a2bd3ad2cb2322bff82836ca11930a9a619)
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
