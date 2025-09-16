@@ -1,23 +1,17 @@
 ---
 cff-version: 1.2.0
-title: "hdt-rs: A Rust library
-  for the Header Dictionary Triples binary RDF compression format"
-message: If you use this software, please cite our article in the
-  Journal of Open Source Software.
+title: "hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format"
+message: If you use this software, please cite our article in the Journal of Open Source Software.
 type: software
 authors:
   - given-names: Konrad
     family-names: Höffner
     email: konrad.hoeffner@uni-leipzig.de
-    affiliation: >-
-      Institute for Medical Informatics, Statistics
-      and Epidemiology (IMISE), Leipzig, Germany
-    orcid: 'https://orcid.org/0000-0001-7358-3217'
+    affiliation: Institute for Medical Informatics, Statistics and Epidemiology (IMISE), Leipzig, Germany
+    orcid: https://orcid.org/0000-0001-7358-3217
   - given-names: Baccaert
     family-names: Tim
-    affiliation: >-
-      Independent Researcher
-      Belgium
+    affiliation: Independent Researcher, Belgium
 repository-code: 'https://github.com/konradhoeffner/hdt'
 url: 'https://crates.io/crates/hdt'
 keywords:
@@ -30,9 +24,9 @@ preferred-citation:
   authors:
     - family-names: Höffner
       given-names: Konrad
-      orcid: "https://orcid.org/0000-0000-0000-0000"
-    - family-names: "Baccaert"
-      given-names: "Tim"
+      orcid: https://orcid.org/0000-0001-7358-3217
+    - family-names: Baccaert
+      given-names: Tim
   date-published: 2023-04-29
   doi: 10.21105/joss.05114
   issn: 2475-9066
@@ -41,7 +35,6 @@ preferred-citation:
   publisher:
     name: Open Journals
   start: 5114
-  title: "hdt-rs: A Rust library
-    for the Header Dictionary Triples binary RDF compression format"
-  url: "https://joss.theoj.org/papers/10.21105/joss.05114"
+  title: "hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format"
+  url: https://joss.theoj.org/papers/10.21105/joss.05114
   volume: 8
