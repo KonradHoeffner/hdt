@@ -1,0 +1,74 @@
+{
+    "@context": "https://w3id.org/codemeta/3.0",
+    "applicationCategory": "SoftwareSourceCode",
+    "author": [
+        {
+            "familyName": "Baccaert",
+            "givenName": "Tim",
+            "@id": "https://github.com/timplication",
+            "@type": "Person"
+        },
+        {
+            "affiliation": {
+                "name": "Institut für Medizinische Informatik, Statistik und Epidemiologie (IMISE), Leipzig University",
+                "@type": "Organization"
+            },
+            "familyName": "Höffner",
+            "givenName": "Konrad",
+            "@id": "https://github.com/KonradHoeffner",
+            "@type": "Person"
+        }
+    ],
+    "codeRepository": "https://github.com/KonradHoeffner/hdt",
+    "dateCreated": "2022-09-26",
+    "datePublished": "2022-11-17",
+    "description": "Library for the Header Dictionary Triples (HDT) compression file format for RDF data. All features other than \"sophia\" are experimental and are neither guaranteed to work in all combinations nor adher to semver: they may change or be removed in future versions including minor or patch releases.\n \n A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including: \n* loading the HDT default format as created by [hdt-cpp](https://github.com/rdfhdt/hdt-cpp)\n* converting N-Triples to HDT\n* efficient querying by triple patterns\n* serializing into other formats like RDF Turtle and N-Triples using the [Sophia](https://crates.io/crates/sophia) adapter\n* running SPARQL queries (with the experimental \"sparql\" feature but HDT is not optimized for that) \n* load other HDT variants\n* swap data to disk\n* modify the RDF graph in memory \nIf you need any of the those features, consider using a SPARQL endpoint instead.\nFor acknowledgement of all the original authors, please look at the reference implementations in C++ and Java by the [https://github.com/rdfhdt](https://github.com/rdfhdt) organisation.\n \n The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.\nWhen using large HDT files, make sure to enable the release profile, such as through `cargo build --release`, as this can be much faster than using the dev profile.\n \n If you want to optimize the code, you can use a profiler.\nThe provided test data is very small in order to keep the size of the crate down; locally modifying the tests to use a large HDT file returns more meaningful results.\n \n",
+    "identifier": "10.5281/zenodo.7871065",
+    "keywords": [
+        {
+            "name": "hdt",
+            "@id": "https://dbpedia.org/resource/HDT_(data_format)",
+            "@type": "DefinedTerm"
+        },
+        {
+            "name": "rdf",
+            "@id": "http://www.w3.org/1999/02/22-rdf-syntax-ns",
+            "@type": "DefinedTerm"
+        },
+        {
+            "name": "rust",
+            "@id": "https://dbpedia.org/resource/Rust_(programming_language)",
+            "@type": "DefinedTerm"
+        }
+    ],
+    "license": "https://spdx.org/licenses/MIT",
+    "name": "hdt",
+    "programmingLanguage": "Rust",
+    "referencePublication": [
+        {
+            "author": [
+                {
+                    "familyName": "Höffner",
+                    "givenName": "Konrad",
+                    "@id": "https://orcid.org/0000-0001-7358-3217",
+                    "@type": "Person"
+                },
+                {
+                    "familyName": "Tim",
+                    "givenName": "Baccaert",
+                    "@type": "Person"
+                }
+            ],
+            "datePublished": "2023",
+            "identifier": "10.21105/joss.05114",
+            "name": "https://orcid.org/0000-0000-0000-0000",
+            "url": "https://doi.org/10.21105/joss.05114",
+            "@type": "ScholarlyArticle"
+        }
+    ],
+    "relatedLink": "https://crates.io/crates/hdt",
+    "continuousIntegration": "https://raw.githubusercontent.com/KonradHoeffner/hdt/main/.github/workflows/lint_and_test.yml",
+    "developmentStatus": "active",
+    "issueTracker": "https://github.com/KonradHoeffner/hdt/issues",
+    "@type": "SoftwareSourceCode"
+}
