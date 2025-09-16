@@ -167,6 +167,7 @@ impl FourSectDict {
     pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use crate::triples::TripleId;
         use log::warn;
+        use rayon::prelude::*;
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
         use std::collections::BTreeSet;
@@ -242,8 +243,9 @@ impl FourSectDict {
 
         let sorted_triples = sorter.join().unwrap();
         let slice: &[(String, String, String)] = &sorted_triples;
+        // encode triples using rayon's parallel iterator
         let encoded_triples: Vec<TripleId> = slice
-            .iter()
+            .par_iter()
             .map(|(s, p, o)| {
                 let triple = [
                     dict.string_to_id(s, IdKind::Subject),
