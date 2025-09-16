@@ -166,6 +166,7 @@ impl FourSectDict {
     pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use crate::triples::TripleId;
         use log::warn;
+        use rayon::prelude::*;
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
         use std::collections::BTreeSet;
@@ -217,15 +218,27 @@ impl FourSectDict {
                 .map(|t| t.join().unwrap())
             });
 
-        let dict = FourSectDict {
-            shared: DictSectPFC::compress(&shared_terms, block_size),
-            predicates: DictSectPFC::compress(&predicate_terms_ref, block_size),
-            subjects: DictSectPFC::compress(&unique_subject_terms, block_size),
-            objects: DictSectPFC::compress(&unique_object_terms, block_size),
-        };
+        // Parallelize dictionary compression using rayon
+        let ((shared, predicates), (subjects, objects)) = rayon::join(
+            || {
+                rayon::join(
+                    || DictSectPFC::compress(&shared_terms, block_size),
+                    || DictSectPFC::compress(&predicate_terms_ref, block_size),
+                )
+            },
+            || {
+                rayon::join(
+                    || DictSectPFC::compress(&unique_subject_terms, block_size),
+                    || DictSectPFC::compress(&unique_object_terms, block_size),
+                )
+            },
+        );
 
+        let dict = FourSectDict { shared, predicates, subjects, objects };
+
+        // encode triples using rayon's parallel iterator
         let encoded_triples: Vec<TripleId> = raw_triples
-            .into_iter()
+            .into_par_iter()
             .map(|(s, p, o)| {
                 let triple = [
                     dict.string_to_id(&s, IdKind::Subject),
