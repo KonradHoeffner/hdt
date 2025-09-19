@@ -53,7 +53,7 @@ impl fmt::Debug for DictSectPFC {
             ByteSize(self.size_in_bytes() as u64),
             self.num_strings,
             self.sequence,
-            self.packed_data //ByteSize(self.packed_data.len() as u64)
+            ByteSize(self.packed_data.len() as u64)
         )
     }
 }
