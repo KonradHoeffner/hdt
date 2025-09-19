@@ -25,8 +25,8 @@ log = "0.4"
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 serde = { version = "1", optional = true, features = ["derive"] }
-spareval = { version = "0.2.0-beta.3" , optional = true }
-spargebra = { version = "0.4.0-beta.2", optional = true, default-features = false }
+spareval = { version = "0.2" , optional = true }
+spargebra = { version = "0.4", optional = true, default-features = false }
 
 [features]
 default = ["sophia"]
