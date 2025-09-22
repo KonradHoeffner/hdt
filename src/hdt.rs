@@ -14,6 +14,9 @@ use std::sync::Arc;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+#[cfg(feature = "cache")]
+const CACHE_EXT: &str = "index.v1-rust-cache";
+
 /// In-memory representation of an RDF graph loaded from an HDT file.
 /// Allows queries by triple patterns.
 #[derive(Debug)]
@@ -216,7 +219,7 @@ impl Hdt {
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let mut abs_path = std::fs::canonicalize(f)?;
         let _ = abs_path.pop();
-        let index_file_name = format!("{}.index.v1-rust-cache", f.file_name().unwrap().to_str().unwrap());
+        let index_file_name = format!("{}.{CACHE_EXT}", f.file_name().unwrap().to_str().unwrap());
         let index_file_path = abs_path.join(index_file_name);
         let triples = if index_file_path.exists() {
             let pos = reader.stream_position()?;
@@ -263,7 +266,11 @@ impl Hdt {
         let index_source = File::open(index_file_path)?;
         let mut index_reader = std::io::BufReader::new(index_source);
         let triples_ci = ControlInfo::read(&mut reader)?;
-        Ok(TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?)
+        println!("{:?}", triples_ci.properties); // debug output, TODO: remove later
+        let num_triples = triples_ci.get("numTriples").expect("numTriples key missing in triples CI");
+        // TODO compare num_triples
+        let triples = TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?;
+        Ok(triples)
     }
 
     #[cfg(feature = "cache")]
@@ -442,8 +449,9 @@ pub mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
-    use fs_err::File;
+    use fs_err::{File, remove_file, rename};
     use pretty_assertions::{assert_eq, assert_ne};
+    use std::path::Path;
 
     /// reusable test HDT read from SNIK Meta test HDT file
     pub fn snikmeta() -> Result<Hdt> {
@@ -464,11 +472,52 @@ pub mod tests {
         Ok(())
     }
 
+    // make sure loading with cache works under different circumstances
+    // e.g. clear cache, prexisting cache, stale cache
+    #[test]
+    fn cache() -> Result<()> {
+        init();
+        // start with an empty cache
+        let filename = "tests/resources/snikmeta.hdt";
+        let cachename = format!("{filename}.{CACHE_EXT}");
+        let path = Path::new(filename);
+        let path_cache = Path::new(&cachename);
+        // force fresh cache
+        let _ = remove_file(path_cache);
+        let hdt1 = Hdt::read_from_path(path)?;
+        snikmeta_check(&hdt1)?;
+        // now it should be cached
+        let hdt2 = Hdt::read_from_path(path)?;
+        snikmeta_check(&hdt2)?;
+        // create a cache for an empty HDT
+        let path_empty_nt = Path::new("tests/resources/empty.nt");
+        let hdt_empty = Hdt::read_nt(path_empty_nt)?;
+        let filename_empty_hdt = "tests/resources/empty.hdt";
+        let path_empty_hdt = Path::new(filename_empty_hdt);
+        if !path_empty_hdt.exists() {
+            let file_empty_hdt = File::create(filename_empty_hdt)?;
+            let mut writer = std::io::BufWriter::new(file_empty_hdt);
+            hdt_empty.write(&mut writer)?;
+        }
+        // we don't care about the empty HDT, we just need it to create the cache
+        let filename_empty_cache = format!("{filename_empty_hdt}.{CACHE_EXT}");
+        let path_empty_cache = Path::new(&filename_empty_cache);
+        let _ = remove_file(path_empty_cache);
+        Hdt::read_from_path(path_empty_hdt)?;
+        // purposefully create a mismatch between cache and HDT file for the same name
+        rename(path_empty_cache, path_cache);
+        // mismatch should be detected and handled
+        let hdt3 = Hdt::read_from_path(path)?;
+        snikmeta_check(&hdt3)?;
+        // we could add harder checks here, e.g. wrong version, same amount of triples
+        Ok(())
+    }
+
     #[test]
     #[cfg(feature = "sophia")]
     fn read_nt() -> Result<()> {
         init();
-        let path = std::path::Path::new("tests/resources/snikmeta.nt");
+        let path = Path::new("tests/resources/snikmeta.nt");
         if !path.exists() {
             log::info!("Creating test resource snikmeta.nt.");
             let mut writer = std::io::BufWriter::new(File::create(path)?);
