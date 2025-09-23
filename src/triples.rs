@@ -505,6 +505,11 @@ impl TriplesBitmap {
             Order::Unknown => Err(Error::UnknownTriplesOrder),
         }
     }
+
+    /// Number of triples
+    pub const fn len(&self) -> usize {
+        self.adjlist_z.sequence.entries
+    }
 }
 
 impl<'a> IntoIterator for &'a TriplesBitmap {

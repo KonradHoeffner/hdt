@@ -223,16 +223,16 @@ impl Hdt {
         let index_file_path = abs_path.join(index_file_name);
         let triples = if index_file_path.exists() {
             let pos = reader.stream_position()?;
-            match Self::load_with_cache(&mut reader, &index_file_path) {
+            match Self::load_with_cache(&mut reader, &index_file_path, header.length) {
                 Ok(triples) => triples,
                 Err(e) => {
                     warn!("error loading cache, overwriting: {e}");
                     reader.seek(SeekFrom::Start(pos))?;
-                    Self::load_without_cache(&mut reader, &index_file_path)?
+                    Self::load_without_cache(&mut reader, &index_file_path, header.length)?
                 }
             }
         } else {
-            Self::load_without_cache(&mut reader, &index_file_path)?
+            Self::load_without_cache(&mut reader, &index_file_path, header.length)?
         };
 
         let dict = unvalidated_dict.validate()?;
@@ -244,14 +244,14 @@ impl Hdt {
 
     #[cfg(feature = "cache")]
     fn load_without_cache<R: std::io::BufRead>(
-        mut reader: R, index_file_path: &std::path::PathBuf,
+        mut reader: R, index_file_path: &std::path::PathBuf, header_length: usize,
     ) -> Result<TriplesBitmap> {
         use log::warn;
 
         debug!("no cache detected, generating index");
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         debug!("index generated, saving cache to {}", index_file_path.display());
-        if let Err(e) = Self::write_cache(index_file_path, &triples) {
+        if let Err(e) = Self::write_cache(index_file_path, &triples, header_length) {
             warn!("error trying to save cache to file: {e}");
         }
         Ok(triples)
@@ -259,26 +259,33 @@ impl Hdt {
 
     #[cfg(feature = "cache")]
     fn load_with_cache<R: std::io::BufRead>(
-        mut reader: R, index_file_path: &std::path::PathBuf,
+        mut reader: R, index_file_path: &std::path::PathBuf, header_length: usize,
     ) -> core::result::Result<TriplesBitmap, Box<dyn std::error::Error>> {
+        use std::io::Read;
         // load cached index
         debug!("hdt file cache detected, loading from {}", index_file_path.display());
         let index_source = File::open(index_file_path)?;
         let mut index_reader = std::io::BufReader::new(index_source);
         let triples_ci = ControlInfo::read(&mut reader)?;
-        println!("{:?}", triples_ci.properties); // debug output, TODO: remove later
-        let num_triples = triples_ci.get("numTriples").expect("numTriples key missing in triples CI");
-        // TODO compare num_triples
+        // we cannot rely on the numTriples property being present, see https://github.com/rdfhdt/hdt-cpp/issues/289
+        // let num_triples = triples_ci.get("numTriples").expect("numTriples key missing in triples CI");
+        // thus we use the number of bytes of the header data
+        let mut buf = [0u8; 8];
+        index_reader.read_exact(&mut buf)?;
+        if header_length != usize::from_le_bytes(buf) {
+            return Err("failed index validation".into());
+        }
         let triples = TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?;
         Ok(triples)
     }
 
     #[cfg(feature = "cache")]
     fn write_cache(
-        index_file_path: &std::path::PathBuf, triples: &TriplesBitmap,
+        index_file_path: &std::path::PathBuf, triples: &TriplesBitmap, header_length: usize,
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
+        writer.write_all(&header_length.to_le_bytes())?;
         bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
         writer.flush()?;
         Ok(())
@@ -449,7 +456,7 @@ pub mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
-    use fs_err::{File, remove_file, rename};
+    use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
     use std::path::Path;
 
@@ -474,8 +481,10 @@ pub mod tests {
 
     // make sure loading with cache works under different circumstances
     // e.g. clear cache, prexisting cache, stale cache
+    #[cfg(feature = "cache")]
     #[test]
     fn cache() -> Result<()> {
+        use fs_err::{remove_file, rename};
         init();
         // start with an empty cache
         let filename = "tests/resources/snikmeta.hdt";
@@ -491,6 +500,7 @@ pub mod tests {
         snikmeta_check(&hdt2)?;
         // create a cache for an empty HDT
         let path_empty_nt = Path::new("tests/resources/empty.nt");
+        // it's empty so we could just pass an empty buffer
         let hdt_empty = Hdt::read_nt(path_empty_nt)?;
         let filename_empty_hdt = "tests/resources/empty.hdt";
         let path_empty_hdt = Path::new(filename_empty_hdt);
@@ -505,11 +515,10 @@ pub mod tests {
         let _ = remove_file(path_empty_cache);
         Hdt::read_from_path(path_empty_hdt)?;
         // purposefully create a mismatch between cache and HDT file for the same name
-        rename(path_empty_cache, path_cache);
+        rename(path_empty_cache, path_cache)?;
         // mismatch should be detected and handled
         let hdt3 = Hdt::read_from_path(path)?;
         snikmeta_check(&hdt3)?;
-        // we could add harder checks here, e.g. wrong version, same amount of triples
         Ok(())
     }
 
