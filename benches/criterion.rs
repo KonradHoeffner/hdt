@@ -2,6 +2,7 @@ use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use criterion::{Criterion, criterion_group, criterion_main};
 use fs_err::File;
+use hdt::four_sect_dict::FourSectDict;
 use hdt::triples::*;
 use hdt::{Hdt, IdKind};
 use sophia::api::graph::Graph;
@@ -88,5 +89,48 @@ fn query(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(criterion, query);
+fn read_nt_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dictionary_read_nt");
+    group.sample_size(10);
+    let test_file = "tests/resources/tax.nt";
+
+    // Benchmark 1: N-Triples parsing
+    group.bench_function("nt_parsing", |b| {
+        b.iter(|| {
+            let mut reader = std::io::BufReader::new(
+                std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")),
+            );
+            FourSectDict::parse_nt_terms(&mut reader).unwrap()
+        })
+    });
+
+    // Benchmark 2: Dictionary building
+    group.bench_function("dict_building", |b| {
+        let mut reader =
+            std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
+        let (_, subject_terms, object_terms, predicate_terms) = FourSectDict::parse_nt_terms(&mut reader).unwrap();
+        b.iter(|| {
+            FourSectDict::build_dict_from_terms(
+                subject_terms.clone(),
+                object_terms.clone(),
+                predicate_terms.clone(),
+                8,
+            )
+        })
+    });
+
+    // Benchmark 3: Triple encoding
+    group.bench_function("triple_encoding", |b| {
+        let mut reader =
+            std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
+        let (raw_triples, subject_terms, object_terms, predicate_terms) =
+            FourSectDict::parse_nt_terms(&mut reader).unwrap();
+        let dict = FourSectDict::build_dict_from_terms(subject_terms, object_terms, predicate_terms, 8);
+        b.iter(|| dict.encode_triples(raw_triples.clone()))
+    });
+
+    group.finish();
+}
+
+criterion_group!(criterion, query, read_nt_benchmarks);
 criterion_main!(criterion);
