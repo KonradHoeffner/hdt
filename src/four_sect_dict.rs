@@ -4,7 +4,6 @@
 use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
-use log::error;
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
@@ -161,18 +160,14 @@ impl FourSectDict {
         Ok(UnvalidatedFourSectDict([f(Shared)?, f(Subject)?, f(Predicate)?, f(Object)?]))
     }
 
-    /// read N-Triples and convert them to a dictionary and triple IDs
+    /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
-        use crate::triples::TripleId;
-        use log::warn;
-        use rayon::prelude::*;
+    pub fn parse_nt_terms<R: BufRead>(
+        r: &mut R,
+    ) -> Result<(Vec<(String, String, String)>, HashSet<String>, HashSet<String>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
-        use std::collections::BTreeSet;
-        use std::ops::Deref;
-        use std::thread;
 
         let mut raw_triples = Vec::new(); // Store raw triples
 
@@ -201,20 +196,27 @@ impl FourSectDict {
                 predicate_terms.push(pred_str.clone());
                 object_terms.insert(obj_str.clone());
 
-                raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
+                raw_triples.push((subj_str, pred_str, obj_str));
             })
             .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+
+        Ok((raw_triples, subject_terms, object_terms, predicate_terms))
+    }
+
+    /// Build dictionary from collected terms
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn build_dict_from_terms(
+        subject_terms: HashSet<String>, object_terms: HashSet<String>, predicate_terms: Vec<String>,
+        block_size: usize,
+    ) -> Self {
+        use log::warn;
+        use std::collections::BTreeSet;
+        use std::ops::Deref;
+
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
-        let sorter = thread::Builder::new()
-            .name("sorter".to_owned())
-            .spawn(move || {
-                raw_triples.sort_unstable(); // Faster than stable sort
-                raw_triples.dedup();
-                raw_triples
-            })
-            .unwrap();
 
         let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = std::thread::scope(|s| {
             [
@@ -239,25 +241,63 @@ impl FourSectDict {
             .map(|t| t.join().unwrap())
         });
 
-        let dict = FourSectDict { shared, subjects, predicates, objects };
+        FourSectDict { shared, predicates, subjects, objects }
+    }
 
-        let sorted_triples = sorter.join().unwrap();
-        let slice: &[(String, String, String)] = &sorted_triples;
+    /// Encode raw triples to IDs using dictionary
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn encode_triples(&self, sorted_triples: &[(String, String, String)]) -> Vec<crate::triples::TripleId> {
+        use log::error;
+        use rayon::prelude::*;
+
         // encode triples using rayon's parallel iterator
-        let encoded_triples: Vec<TripleId> = slice
+        sorted_triples
             .par_iter()
             .map(|(s, p, o)| {
                 let triple = [
-                    dict.string_to_id(s, IdKind::Subject),
-                    dict.string_to_id(p, IdKind::Predicate),
-                    dict.string_to_id(o, IdKind::Object),
+                    self.string_to_id(&s, IdKind::Subject),
+                    self.string_to_id(&p, IdKind::Predicate),
+                    self.string_to_id(&o, IdKind::Object),
                 ];
                 if triple[0] == 0 || triple[1] == 0 || triple[2] == 0 {
                     error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
                 }
                 triple
             })
-            .collect();
+            .collect()
+    }
+
+    /// read N-Triples and convert them to a dictionary and triple IDs
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
+        use log::info;
+
+        // 1. Parse N-Triples and collect terms
+        let timer = std::time::Instant::now();
+        let (mut raw_triples, subject_terms, object_terms, predicate_terms) = Self::parse_nt_terms(r)?;
+        let parse_time = timer.elapsed();
+
+        let sorter = std::thread::Builder::new()
+            .name("sorter".to_owned())
+            .spawn(move || {
+                raw_triples.sort_unstable(); // Faster than stable sort
+                raw_triples.dedup();
+                raw_triples
+            })
+            .unwrap();
+
+        // 2. Build dictionary from terms
+        let timer = std::time::Instant::now();
+        let dict = Self::build_dict_from_terms(subject_terms, object_terms, predicate_terms, block_size);
+        let dict_build_time = timer.elapsed();
+
+        // 3. Encode triples to IDs using dictionary
+        let timer = std::time::Instant::now();
+        let sorted_triples = sorter.join().unwrap();
+        let encoded_triples = dict.encode_triples(&sorted_triples);
+        info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
     }
