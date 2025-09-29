@@ -1,11 +1,12 @@
 /// *This module is available only if HDT is built with the `"sophia"` feature.*
 /// Under development, parameters may change.
+use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
 use color_eyre::config::HookBuilder;
 use color_eyre::eyre::{Report, WrapErr};
 use hdt::{Hdt, containers::ControlInfo, header::Header};
 //use log::info;
-use fs_err::File;
+use fs_err::{File, metadata};
 use sophia::api::graph::Graph;
 use sophia::api::prelude::{TripleSerializer, TripleSource};
 //use sophia::api::prelude::Stringifier;
@@ -16,6 +17,7 @@ use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
 use std::ffi::OsStr;
 use std::io::{BufReader, BufWriter};
 use std::path::PathBuf;
+use std::time::Instant;
 //use std::io::{BufReader, stdin};
 
 /*enum Format {
@@ -110,6 +112,7 @@ fn main() -> Result<(), Report> {
             }
         }
         Command::Convert { input_path, output_path /* turtle*/ } => {
+            let t = Instant::now();
             let file = File::open(input_path.clone())
                 .with_context(|| format!("Error opening input HDT file {input_path:?}"))?;
             let reader = BufReader::new(file);
@@ -160,7 +163,12 @@ fn main() -> Result<(), Report> {
                     );
                 }
             };
-            println!("Successfully converted {input_path:?} to {output_path:?}");
+            let in_size = ByteSize(metadata(&input_path)?.len());
+            let out_size = ByteSize(metadata(&output_path)?.len());
+            println!(
+                "Successfully converted {input_path:?} ({in_size}) to {output_path:?} ({out_size}) in {:.2}s",
+                t.elapsed().as_secs_f32()
+            );
             // println!("{s}");
         }
     }
