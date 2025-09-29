@@ -214,12 +214,15 @@ impl FourSectDict {
         let unique_object_terms: BTreeSet<&str> =
             object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect();
 
-        let dict = FourSectDict {
-            shared: DictSectPFC::compress(&shared_terms, block_size),
-            predicates: DictSectPFC::compress(&predicate_terms_ref, block_size),
-            subjects: DictSectPFC::compress(&unique_subject_terms, block_size),
-            objects: DictSectPFC::compress(&unique_object_terms, block_size),
-        };
+        use std::thread;
+        println!("starting compression");
+        let [shared, predicates, subjects, objects] = thread::scope(|s| {
+            [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
+                .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
+                .map(|t| t.join().unwrap())
+        });
+        println!("compression finished");
+        let dict = FourSectDict { shared, predicates, subjects, objects };
 
         let encoded_triples: Vec<TripleId> = raw_triples
             .into_iter()
