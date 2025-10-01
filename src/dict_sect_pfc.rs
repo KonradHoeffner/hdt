@@ -5,7 +5,6 @@ use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
 use crate::containers::{Sequence, sequence};
 use crate::triples::Id;
 use bytesize::ByteSize;
-use log::error;
 use std::cmp::{Ordering, min};
 use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
