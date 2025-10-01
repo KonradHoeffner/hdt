@@ -1,4 +1,4 @@
-/// *This module is available only if HDT is built with the `"sophia"` feature.*
+/// *This module is available only if HDT is built with the `"cli"` feature.*
 /// Under development, parameters may change.
 use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
