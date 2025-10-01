@@ -92,7 +92,7 @@ fn query(c: &mut Criterion) {
 fn read_nt_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("dictionary_read_nt");
     group.sample_size(10);
-    let test_file = "tests/resources/tax.nt";
+    let test_file = "tests/resources/persondata_en.nt";
 
     // Benchmark 1: N-Triples parsing
     group.bench_function("nt_parsing", |b| {
