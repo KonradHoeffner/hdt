@@ -213,7 +213,6 @@ impl FourSectDict {
         block_size: usize,
     ) -> Self {
         use log::warn;
-
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
@@ -229,6 +228,14 @@ impl FourSectDict {
                 .map(|t| t.join().unwrap())
             });
 
+        let (shared, subjects, predicates, objects) = (
+            DictSectPFC::compress(&shared_terms, block_size),
+            DictSectPFC::compress(&unique_subject_terms, block_size),
+            DictSectPFC::compress(&predicate_terms_ref, block_size),
+            DictSectPFC::compress(&unique_object_terms, block_size),
+        );
+
+        /*
         // Parallelize dictionary compression using rayon
         let ((shared, predicates), (subjects, objects)) = rayon::join(
             || {
@@ -244,6 +251,15 @@ impl FourSectDict {
                 )
             },
         );
+        */
+        /*
+        use std::thread;
+        let [shared, predicates, subjects, objects] = thread::scope(|s| {
+            [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
+                .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
+                .map(|t| t.join().unwrap())
+        });
+        */
 
         FourSectDict { shared, subjects, predicates, objects }
     }
