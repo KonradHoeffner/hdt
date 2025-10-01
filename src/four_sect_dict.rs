@@ -4,7 +4,10 @@
 use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
-use log::error;
+#[cfg(feature = "sophia")]
+use std::collections::BTreeSet;
+#[cfg(feature = "sophia")]
+use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
 use thiserror::Error;
@@ -160,84 +163,144 @@ impl FourSectDict {
         Ok(UnvalidatedFourSectDict([f(Shared)?, f(Subject)?, f(Predicate)?, f(Object)?]))
     }
 
-    /// read N-Triples and convert them to a dictionary and triple IDs
+    /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
-        use crate::triples::TripleId;
-        use log::warn;
+    pub fn parse_nt_terms<R: BufRead + Send>(
+        r: &mut R,
+    ) -> Result<(Vec<(String, String, String)>, HashSet<String>, HashSet<String>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
-        use std::collections::BTreeSet;
 
-        let mut raw_triples = Vec::new(); // Store raw triples
-
-        // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
-        let mut subject_terms = BTreeSet::<String>::new();
-        let mut object_terms = BTreeSet::<String>::new();
+        let mut raw_triples = Vec::new();
+        let mut subject_terms = HashSet::<String>::new();
+        let mut object_terms = HashSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
-        nt::parse_bufread(r)
-            .for_each_triple(|q| {
-                // HDT does not have angled brackets around IRIs
-                let clean = |s: &mut String| {
-                    let mut chars = s.chars();
-                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
-                        s.remove(0);
-                        s.pop();
-                    }
-                };
-                let mut subj_str = q.subject.to_string();
-                clean(&mut subj_str);
-                let mut pred_str = q.predicate.to_string();
-                clean(&mut pred_str);
-                let mut obj_str = q.object.to_string();
-                clean(&mut obj_str);
+        let (tx, rx) = std::sync::mpsc::channel();
+        use std::thread;
+        thread::scope(|s| {
+            // move tx to drop it automatically, otherwise it will freeze
+            s.spawn(move || {
+                nt::parse_bufread(r).for_each_triple(|q| {
+                    let clean = |s: &mut String| {
+                        let mut chars = s.chars();
+                        if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                            s.remove(0);
+                            s.pop();
+                        }
+                    };
+                    let mut subj_str = q.subject.to_string();
+                    clean(&mut subj_str);
+                    let mut pred_str = q.predicate.to_string();
+                    clean(&mut pred_str);
+                    let mut obj_str = q.object.to_string();
+                    clean(&mut obj_str);
+                    tx.send((subj_str, pred_str, obj_str)).unwrap();
+                })
+            });
+            // todo: how to handle errors?
+        });
 
-                subject_terms.insert(subj_str.clone());
-                predicate_terms.push(pred_str.clone());
-                object_terms.insert(obj_str.clone());
+        for (subj_str, pred_str, obj_str) in rx {
+            // HDT does not have angled brackets around IRIs
 
-                raw_triples.push((subj_str, pred_str, obj_str)); // Store for later encoding
-            })
-            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+            subject_terms.insert(subj_str.clone());
+            predicate_terms.push(pred_str.clone());
+            object_terms.insert(obj_str.clone());
+
+            raw_triples.push((subj_str, pred_str, obj_str));
+        }
+        //)
+        //.map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+
+        Ok((raw_triples, subject_terms, object_terms, predicate_terms))
+    }
+
+    /// Build dictionary from collected terms
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn build_dict_from_terms(
+        subject_terms: &HashSet<String>, object_terms: &HashSet<String>, predicate_terms: &[String],
+        block_size: usize,
+    ) -> Self {
+        use log::warn;
+        use std::thread;
+
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
-        let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
-        raw_triples.sort_unstable(); // Faster than stable sort
-        raw_triples.dedup();
+        thread::scope(|s| {
+            let predicate_terms_handle =
+                s.spawn(move || predicate_terms.iter().map(std::ops::Deref::deref).collect());
 
-        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] =
-            std::thread::scope(|s| {
-                [
-                    s.spawn(|| subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| subject_terms.difference(&object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect()),
-                ]
-                .map(|t| t.join().unwrap())
+            let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] = [
+                s.spawn(|| subject_terms.intersection(object_terms).map(std::ops::Deref::deref).collect()),
+                s.spawn(|| subject_terms.difference(object_terms).map(std::ops::Deref::deref).collect()),
+                s.spawn(|| object_terms.difference(subject_terms).map(std::ops::Deref::deref).collect()),
+            ]
+            .map(|t| t.join().unwrap());
+            let predicate_terms_ref: BTreeSet<&str> = predicate_terms_handle.join().unwrap();
+            let [shared, predicates, subjects, objects] = thread::scope(|s| {
+                [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
+                    .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
+                    .map(|t| t.join().unwrap())
             });
 
-        let dict = FourSectDict {
-            shared: DictSectPFC::compress(&shared_terms, block_size),
-            predicates: DictSectPFC::compress(&predicate_terms_ref, block_size),
-            subjects: DictSectPFC::compress(&unique_subject_terms, block_size),
-            objects: DictSectPFC::compress(&unique_object_terms, block_size),
-        };
+            FourSectDict { shared, subjects, predicates, objects }
+        })
+    }
 
-        let encoded_triples: Vec<TripleId> = raw_triples
-            .into_iter()
+    /// Encode raw triples to IDs using dictionary
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn encode_triples(&self, raw_triples: &[(String, String, String)]) -> Vec<crate::triples::TripleId> {
+        use log::error;
+        use rayon::prelude::*;
+
+        raw_triples
+            .into_par_iter()
             .map(|(s, p, o)| {
                 let triple = [
-                    dict.string_to_id(&s, IdKind::Subject),
-                    dict.string_to_id(&p, IdKind::Predicate),
-                    dict.string_to_id(&o, IdKind::Object),
+                    self.string_to_id(&s, IdKind::Subject),
+                    self.string_to_id(&p, IdKind::Predicate),
+                    self.string_to_id(&o, IdKind::Object),
                 ];
                 if triple[0] == 0 || triple[1] == 0 || triple[2] == 0 {
                     error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
                 }
                 triple
             })
-            .collect();
+            .collect()
+    }
+
+    /// read N-Triples and convert them to a dictionary and triple IDs
+    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
+    #[cfg(feature = "sophia")]
+    pub fn read_nt<R: BufRead + Send>(
+        r: &mut R, block_size: usize,
+    ) -> Result<(Self, Vec<crate::triples::TripleId>)> {
+        use log::info;
+
+        // 1. Parse N-Triples and collect terms
+        let timer = std::time::Instant::now();
+        let (mut raw_triples, subject_terms, object_terms, predicate_terms) = Self::parse_nt_terms(r)?;
+        let parse_time = timer.elapsed();
+        let sorter = std::thread::spawn(move || {
+            raw_triples.sort_unstable();
+            raw_triples.dedup();
+            raw_triples
+        });
+
+        // 2. Build dictionary from terms
+        let timer = std::time::Instant::now();
+        let dict = Self::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, block_size);
+        let dict_build_time = timer.elapsed();
+
+        // 3. Encode triples to IDs using dictionary
+        let timer = std::time::Instant::now();
+        let sorted_triples = sorter.join().unwrap();
+        let encoded_triples = dict.encode_triples(&sorted_triples);
+        info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
     }
