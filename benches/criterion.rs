@@ -119,7 +119,7 @@ fn read_nt_benchmarks(c: &mut Criterion) {
         let (raw_triples, subject_terms, object_terms, predicate_terms) =
             FourSectDict::parse_nt_terms(&mut reader).unwrap();
         let dict = FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, 8);
-        b.iter(|| dict.encode_triples(raw_triples.clone()))
+        b.iter(|| dict.encode_triples(&raw_triples))
     });
 
     group.finish();

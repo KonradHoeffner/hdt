@@ -6,6 +6,8 @@ use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
 #[cfg(feature = "sophia")]
 use std::collections::BTreeSet;
+#[cfg(feature = "sophia")]
+use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
 use thiserror::Error;
@@ -166,13 +168,13 @@ impl FourSectDict {
     #[cfg(feature = "sophia")]
     pub fn parse_nt_terms<R: BufRead + Send>(
         r: &mut R,
-    ) -> Result<(Vec<(String, String, String)>, BTreeSet<String>, BTreeSet<String>, Vec<String>)> {
+    ) -> Result<(Vec<(String, String, String)>, HashSet<String>, HashSet<String>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
 
         let mut raw_triples = Vec::new();
-        let mut subject_terms = BTreeSet::<String>::new();
-        let mut object_terms = BTreeSet::<String>::new();
+        let mut subject_terms = HashSet::<String>::new();
+        let mut object_terms = HashSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
         let (tx, rx) = std::sync::mpsc::channel();
         use std::thread;
@@ -210,8 +212,6 @@ impl FourSectDict {
         }
         //)
         //.map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
-        raw_triples.sort_unstable();
-        raw_triples.dedup();
 
         Ok((raw_triples, subject_terms, object_terms, predicate_terms))
     }
@@ -220,7 +220,7 @@ impl FourSectDict {
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
     pub fn build_dict_from_terms(
-        subject_terms: &BTreeSet<String>, object_terms: &BTreeSet<String>, predicate_terms: &[String],
+        subject_terms: &HashSet<String>, object_terms: &HashSet<String>, predicate_terms: &[String],
         block_size: usize,
     ) -> Self {
         use log::warn;
@@ -229,24 +229,25 @@ impl FourSectDict {
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
-        let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
+        thread::scope(|s| {
+            let predicate_terms_handle =
+                s.spawn(move || predicate_terms.iter().map(std::ops::Deref::deref).collect());
 
-        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] = thread::scope(|s| {
-            [
+            let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] = [
                 s.spawn(|| subject_terms.intersection(object_terms).map(std::ops::Deref::deref).collect()),
                 s.spawn(|| subject_terms.difference(object_terms).map(std::ops::Deref::deref).collect()),
                 s.spawn(|| object_terms.difference(subject_terms).map(std::ops::Deref::deref).collect()),
             ]
-            .map(|t| t.join().unwrap())
-        });
+            .map(|t| t.join().unwrap());
+            let predicate_terms_ref: BTreeSet<&str> = predicate_terms_handle.join().unwrap();
+            let [shared, predicates, subjects, objects] = thread::scope(|s| {
+                [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
+                    .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
+                    .map(|t| t.join().unwrap())
+            });
 
-        let [shared, predicates, subjects, objects] = thread::scope(|s| {
-            [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
-                .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
-                .map(|t| t.join().unwrap())
-        });
-
-        FourSectDict { shared, subjects, predicates, objects }
+            FourSectDict { shared, subjects, predicates, objects }
+        })
     }
 
     /// Encode raw triples to IDs using dictionary
@@ -282,8 +283,13 @@ impl FourSectDict {
 
         // 1. Parse N-Triples and collect terms
         let timer = std::time::Instant::now();
-        let (raw_triples, subject_terms, object_terms, predicate_terms) = Self::parse_nt_terms(r)?;
+        let (mut raw_triples, subject_terms, object_terms, predicate_terms) = Self::parse_nt_terms(r)?;
         let parse_time = timer.elapsed();
+        let sorter = std::thread::spawn(move || {
+            raw_triples.sort_unstable();
+            raw_triples.dedup();
+            raw_triples
+        });
 
         // 2. Build dictionary from terms
         let timer = std::time::Instant::now();
@@ -292,7 +298,8 @@ impl FourSectDict {
 
         // 3. Encode triples to IDs using dictionary
         let timer = std::time::Instant::now();
-        let encoded_triples = dict.encode_triples(&raw_triples);
+        let sorted_triples = sorter.join().unwrap();
+        let encoded_triples = dict.encode_triples(&sorted_triples);
         info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
