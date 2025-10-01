@@ -164,7 +164,7 @@ impl FourSectDict {
     /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn parse_nt_terms<R: BufRead>(
+    pub fn parse_nt_terms<R: BufRead + Send>(
         r: &mut R,
     ) -> Result<(Vec<(String, String, String)>, BTreeSet<String>, BTreeSet<String>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
@@ -174,31 +174,42 @@ impl FourSectDict {
         let mut subject_terms = BTreeSet::<String>::new();
         let mut object_terms = BTreeSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
-        nt::parse_bufread(r)
-            .for_each_triple(|q| {
-                // HDT does not have angled brackets around IRIs
-                let clean = |s: &mut String| {
-                    let mut chars = s.chars();
-                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
-                        s.remove(0);
-                        s.pop();
-                    }
-                };
-                let mut subj_str = q.subject.to_string();
-                clean(&mut subj_str);
-                let mut pred_str = q.predicate.to_string();
-                clean(&mut pred_str);
-                let mut obj_str = q.object.to_string();
-                clean(&mut obj_str);
+        let (tx, rx) = std::sync::mpsc::channel();
+        use std::thread;
+        thread::scope(|s| {
+            // move tx to drop it automatically, otherwise it will freeze
+            s.spawn(move || {
+                nt::parse_bufread(r).for_each_triple(|q| {
+                    let clean = |s: &mut String| {
+                        let mut chars = s.chars();
+                        if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                            s.remove(0);
+                            s.pop();
+                        }
+                    };
+                    let mut subj_str = q.subject.to_string();
+                    clean(&mut subj_str);
+                    let mut pred_str = q.predicate.to_string();
+                    clean(&mut pred_str);
+                    let mut obj_str = q.object.to_string();
+                    clean(&mut obj_str);
+                    tx.send((subj_str, pred_str, obj_str)).unwrap();
+                })
+            });
+            // todo: how to handle errors?
+        });
 
-                subject_terms.insert(subj_str.clone());
-                predicate_terms.push(pred_str.clone());
-                object_terms.insert(obj_str.clone());
+        for (subj_str, pred_str, obj_str) in rx {
+            // HDT does not have angled brackets around IRIs
 
-                raw_triples.push((subj_str, pred_str, obj_str));
-            })
-            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+            subject_terms.insert(subj_str.clone());
+            predicate_terms.push(pred_str.clone());
+            object_terms.insert(obj_str.clone());
 
+            raw_triples.push((subj_str, pred_str, obj_str));
+        }
+        //)
+        //.map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
         raw_triples.sort_unstable();
         raw_triples.dedup();
 
@@ -213,53 +224,27 @@ impl FourSectDict {
         block_size: usize,
     ) -> Self {
         use log::warn;
+        use std::thread;
+
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
         let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
 
-        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] =
-            std::thread::scope(|s| {
-                [
-                    s.spawn(|| subject_terms.intersection(object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| subject_terms.difference(object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| object_terms.difference(subject_terms).map(std::ops::Deref::deref).collect()),
-                ]
-                .map(|t| t.join().unwrap())
-            });
+        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] = thread::scope(|s| {
+            [
+                s.spawn(|| subject_terms.intersection(object_terms).map(std::ops::Deref::deref).collect()),
+                s.spawn(|| subject_terms.difference(object_terms).map(std::ops::Deref::deref).collect()),
+                s.spawn(|| object_terms.difference(subject_terms).map(std::ops::Deref::deref).collect()),
+            ]
+            .map(|t| t.join().unwrap())
+        });
 
-        let (shared, subjects, predicates, objects) = (
-            DictSectPFC::compress(&shared_terms, block_size),
-            DictSectPFC::compress(&unique_subject_terms, block_size),
-            DictSectPFC::compress(&predicate_terms_ref, block_size),
-            DictSectPFC::compress(&unique_object_terms, block_size),
-        );
-
-        /*
-        // Parallelize dictionary compression using rayon
-        let ((shared, predicates), (subjects, objects)) = rayon::join(
-            || {
-                rayon::join(
-                    || DictSectPFC::compress(&shared_terms, block_size),
-                    || DictSectPFC::compress(&predicate_terms_ref, block_size),
-                )
-            },
-            || {
-                rayon::join(
-                    || DictSectPFC::compress(&unique_subject_terms, block_size),
-                    || DictSectPFC::compress(&unique_object_terms, block_size),
-                )
-            },
-        );
-        */
-        /*
-        use std::thread;
         let [shared, predicates, subjects, objects] = thread::scope(|s| {
             [&shared_terms, &predicate_terms_ref, &unique_subject_terms, &unique_object_terms]
                 .map(|terms| s.spawn(|| DictSectPFC::compress(terms, block_size)))
                 .map(|t| t.join().unwrap())
         });
-        */
 
         FourSectDict { shared, subjects, predicates, objects }
     }
@@ -267,7 +252,7 @@ impl FourSectDict {
     /// Encode raw triples to IDs using dictionary
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn encode_triples(&self, raw_triples: Vec<(String, String, String)>) -> Vec<crate::triples::TripleId> {
+    pub fn encode_triples(&self, raw_triples: &[(String, String, String)]) -> Vec<crate::triples::TripleId> {
         use log::error;
         use rayon::prelude::*;
 
@@ -290,7 +275,9 @@ impl FourSectDict {
     /// read N-Triples and convert them to a dictionary and triple IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
+    pub fn read_nt<R: BufRead + Send>(
+        r: &mut R, block_size: usize,
+    ) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use log::info;
 
         // 1. Parse N-Triples and collect terms
@@ -305,7 +292,7 @@ impl FourSectDict {
 
         // 3. Encode triples to IDs using dictionary
         let timer = std::time::Instant::now();
-        let encoded_triples = dict.encode_triples(raw_triples);
+        let encoded_triples = dict.encode_triples(&raw_triples);
         info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
