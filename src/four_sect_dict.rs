@@ -207,12 +207,15 @@ impl FourSectDict {
         raw_triples.sort_unstable(); // Faster than stable sort
         raw_triples.dedup();
 
-        let shared_terms: BTreeSet<&str> =
-            subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect();
-        let unique_subject_terms: BTreeSet<&str> =
-            subject_terms.difference(&object_terms).map(std::ops::Deref::deref).collect();
-        let unique_object_terms: BTreeSet<&str> =
-            object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect();
+        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] =
+            std::thread::scope(|s| {
+                [
+                    s.spawn(|| subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect()),
+                    s.spawn(|| subject_terms.difference(&object_terms).map(std::ops::Deref::deref).collect()),
+                    s.spawn(|| object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect()),
+                ]
+                .map(|t| t.join().unwrap())
+            });
 
         let dict = FourSectDict {
             shared: DictSectPFC::compress(&shared_terms, block_size),
