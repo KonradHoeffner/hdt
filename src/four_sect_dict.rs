@@ -164,7 +164,7 @@ impl FourSectDict {
     /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn parse_nt_terms<R: BufRead>(
+    pub fn parse_nt_terms<R: BufRead + Send>(
         r: &mut R,
     ) -> Result<(Vec<(String, String, String)>, HashSet<String>, HashSet<String>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
@@ -176,30 +176,40 @@ impl FourSectDict {
         let mut subject_terms = HashSet::<String>::new();
         let mut object_terms = HashSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
-        nt::parse_bufread(r)
-            .for_each_triple(|q| {
-                // HDT does not have angled brackets around IRIs
-                let clean = |s: &mut String| {
-                    let mut chars = s.chars();
-                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
-                        s.remove(0);
-                        s.pop();
-                    }
-                };
-                let mut subj_str = q.subject.to_string();
-                clean(&mut subj_str);
-                let mut pred_str = q.predicate.to_string();
-                clean(&mut pred_str);
-                let mut obj_str = q.object.to_string();
-                clean(&mut obj_str);
+        let (tx, rx) = std::sync::mpsc::channel();
+        use std::thread;
+        thread::scope(|s| {
+            // move tx to drop it automatically, otherwise it will freeze
+            s.spawn(move || {
+                nt::parse_bufread(r).for_each_triple(|q| {
+                    let clean = |s: &mut String| {
+                        let mut chars = s.chars();
+                        if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                            s.remove(0);
+                            s.pop();
+                        }
+                    };
+                    let mut subj_str = q.subject.to_string();
+                    clean(&mut subj_str);
+                    let mut pred_str = q.predicate.to_string();
+                    clean(&mut pred_str);
+                    let mut obj_str = q.object.to_string();
+                    clean(&mut obj_str);
+                    tx.send((subj_str, pred_str, obj_str)).unwrap();
+                })
+            });
+            // todo: how to handle errors?
+        });
 
-                subject_terms.insert(subj_str.clone());
-                predicate_terms.push(pred_str.clone());
-                object_terms.insert(obj_str.clone());
+        for (subj_str, pred_str, obj_str) in rx {
+            // HDT does not have angled brackets around IRIs
 
-                raw_triples.push((subj_str, pred_str, obj_str));
-            })
-            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+            subject_terms.insert(subj_str.clone());
+            predicate_terms.push(pred_str.clone());
+            object_terms.insert(obj_str.clone());
+
+            raw_triples.push((subj_str, pred_str, obj_str));
+        }
 
         Ok((raw_triples, subject_terms, object_terms, predicate_terms))
     }
@@ -272,7 +282,9 @@ impl FourSectDict {
     /// read N-Triples and convert them to a dictionary and triple IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead>(r: &mut R, block_size: usize) -> Result<(Self, Vec<crate::triples::TripleId>)> {
+    pub fn read_nt<R: BufRead + Send>(
+        r: &mut R, block_size: usize,
+    ) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use log::info;
 
         // 1. Parse N-Triples and collect terms
