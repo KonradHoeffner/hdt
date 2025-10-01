@@ -109,14 +109,7 @@ fn read_nt_benchmarks(c: &mut Criterion) {
         let mut reader =
             std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
         let (_, subject_terms, object_terms, predicate_terms) = FourSectDict::parse_nt_terms(&mut reader).unwrap();
-        b.iter(|| {
-            FourSectDict::build_dict_from_terms(
-                subject_terms.clone(),
-                object_terms.clone(),
-                predicate_terms.clone(),
-                8,
-            )
-        })
+        b.iter(|| FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, 8))
     });
 
     // Benchmark 3: Triple encoding
@@ -125,8 +118,8 @@ fn read_nt_benchmarks(c: &mut Criterion) {
             std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
         let (raw_triples, subject_terms, object_terms, predicate_terms) =
             FourSectDict::parse_nt_terms(&mut reader).unwrap();
-        let dict = FourSectDict::build_dict_from_terms(subject_terms, object_terms, predicate_terms, 8);
-        b.iter(|| dict.encode_triples(raw_triples.clone()))
+        let dict = FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, 8);
+        b.iter(|| dict.encode_triples(&raw_triples))
     });
 
     group.finish();
