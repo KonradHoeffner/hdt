@@ -251,7 +251,6 @@ impl FourSectDict {
             ]
             .map(|t| t.join().unwrap())
         });
-
         FourSectDict { shared, subjects, predicates, objects }
     }
 
