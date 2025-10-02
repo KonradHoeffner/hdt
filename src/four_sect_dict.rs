@@ -204,8 +204,11 @@ impl FourSectDict {
             warn!("no triples found in provided RDF");
         }
         let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
-        raw_triples.sort_unstable(); // Faster than stable sort
-        raw_triples.dedup();
+        let sorter = std::thread::spawn(move || {
+            raw_triples.sort_unstable(); // Faster than stable sort
+            raw_triples.dedup();
+            raw_triples
+        });
 
         let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] =
             std::thread::scope(|s| {
@@ -224,7 +227,8 @@ impl FourSectDict {
             objects: DictSectPFC::compress(&unique_object_terms, block_size),
         };
 
-        let encoded_triples: Vec<TripleId> = raw_triples
+        let sorted_triples = sorter.join().unwrap();
+        let encoded_triples: Vec<TripleId> = sorted_triples
             .into_iter()
             .map(|(s, p, o)| {
                 let triple = [
