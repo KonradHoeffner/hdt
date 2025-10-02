@@ -5,6 +5,7 @@ use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
 use log::error;
+use std::collections::HashSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
 use thiserror::Error;
@@ -169,12 +170,13 @@ impl FourSectDict {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
         use std::collections::BTreeSet;
+        use std::ops::Deref;
 
         let mut raw_triples = Vec::new(); // Store raw triples
 
         // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
-        let mut subject_terms = BTreeSet::<String>::new();
-        let mut object_terms = BTreeSet::<String>::new();
+        let mut subject_terms = HashSet::<String>::new();
+        let mut object_terms = HashSet::<String>::new();
         let mut predicate_terms = Vec::<String>::new();
         nt::parse_bufread(r)
             .for_each_triple(|q| {
@@ -203,29 +205,40 @@ impl FourSectDict {
         if predicate_terms.is_empty() {
             warn!("no triples found in provided RDF");
         }
-        let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(std::ops::Deref::deref).collect();
-        let sorter = std::thread::spawn(move || {
-            raw_triples.sort_unstable(); // Faster than stable sort
-            raw_triples.dedup();
-            raw_triples
+        use std::thread;
+        let sorter = thread::Builder::new()
+            .name("sorter".to_string())
+            .spawn(move || {
+                raw_triples.sort_unstable(); // Faster than stable sort
+                raw_triples.dedup();
+                raw_triples
+            })
+            .unwrap();
+
+        let [shared, predicates, subjects, objects]: [DictSectPFC; 4] = std::thread::scope(|s| {
+            [
+                s.spawn(|| {
+                    let shared_terms: BTreeSet<&str> =
+                        subject_terms.intersection(&object_terms).map(Deref::deref).collect();
+                    DictSectPFC::compress(&shared_terms, block_size)
+                }),
+                s.spawn(|| {
+                    let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(Deref::deref).collect();
+                    DictSectPFC::compress(&predicate_terms_ref, block_size)
+                }),
+                s.spawn(|| {
+                    let unique_subject_terms = subject_terms.difference(&object_terms).map(Deref::deref).collect();
+                    DictSectPFC::compress(&unique_subject_terms, block_size)
+                }),
+                s.spawn(|| {
+                    let unique_object_terms = object_terms.difference(&subject_terms).map(Deref::deref).collect();
+                    DictSectPFC::compress(&unique_object_terms, block_size)
+                }),
+            ]
+            .map(|t| t.join().unwrap())
         });
 
-        let [shared_terms, unique_subject_terms, unique_object_terms]: [BTreeSet<&str>; 3] =
-            std::thread::scope(|s| {
-                [
-                    s.spawn(|| subject_terms.intersection(&object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| subject_terms.difference(&object_terms).map(std::ops::Deref::deref).collect()),
-                    s.spawn(|| object_terms.difference(&subject_terms).map(std::ops::Deref::deref).collect()),
-                ]
-                .map(|t| t.join().unwrap())
-            });
-
-        let dict = FourSectDict {
-            shared: DictSectPFC::compress(&shared_terms, block_size),
-            predicates: DictSectPFC::compress(&predicate_terms_ref, block_size),
-            subjects: DictSectPFC::compress(&unique_subject_terms, block_size),
-            objects: DictSectPFC::compress(&unique_object_terms, block_size),
-        };
+        let dict = FourSectDict { shared, predicates, subjects, objects };
 
         let sorted_triples = sorter.join().unwrap();
         let encoded_triples: Vec<TripleId> = sorted_triples
