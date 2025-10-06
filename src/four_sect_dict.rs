@@ -215,7 +215,7 @@ impl FourSectDict {
             })
             .unwrap();
 
-        let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = std::thread::scope(|s| {
+        let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = thread::scope(|s| {
             [
                 s.spawn(|| {
                     let shared_terms: BTreeSet<&str> =
@@ -242,20 +242,36 @@ impl FourSectDict {
 
         let sorted_triples = sorter.join().unwrap();
         let slice: &[(String, String, String)] = &sorted_triples;
-        let encoded_triples: Vec<TripleId> = slice
-            .iter()
-            .map(|(s, p, o)| {
-                let triple = [
-                    dict.string_to_id(s, IdKind::Subject),
-                    dict.string_to_id(p, IdKind::Predicate),
-                    dict.string_to_id(o, IdKind::Object),
-                ];
-                if triple[0] == 0 || triple[1] == 0 || triple[2] == 0 {
-                    error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
-                }
-                triple
-            })
-            .collect();
+        // rayon would be more elegant but we don't want the extra dependency unless we find more uses than just one
+        //let num_chunks = thread::available_parallelism().map(std::num::NonZero::get).unwrap_or(1);
+        let num_chunks = 16;
+        let chunks = slice.chunks(slice.len().div_ceil(num_chunks).max(1));
+        println!("split into {} chunks", chunks.len());
+        let encoded_triples: Vec<TripleId> = thread::scope(|s| {
+            // intermediate step to ensure parallelism by preventing lazy execution
+            let handles: Vec<_> =
+                chunks
+                    .map(|c| {
+                        s.spawn(|| {
+                            println!("spawned chunk");
+                            c.iter().map(|(s, p, o)| {
+                        let triple = [
+                            dict.string_to_id(s, IdKind::Subject),
+                            dict.string_to_id(p, IdKind::Predicate),
+                            dict.string_to_id(o, IdKind::Object),
+                        ];
+                        if triple[0] == 0 || triple[1] == 0 || triple[2] == 0 {
+                            error!("{triple:?} contains 0, part of ({s}, {p}, {o}) not found in the dictionary");
+                        }
+                        triple
+                    })
+                        })
+                    })
+                    .collect();
+            println!("joining chunks...");
+            handles.into_iter().flat_map(|t| t.join().unwrap()).collect()
+        });
+        println!("joined chunks");
 
         Ok((dict, encoded_triples))
     }
