@@ -87,7 +87,7 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
-    use fs_err::File;
+    use fs_err::{File, OpenOptions, create_dir_all};
     use sophia::api::graph::Graph;
     use sophia::api::ns::{Namespace, rdf};
     use sophia::api::parser::TripleParser;
@@ -149,16 +149,16 @@ mod tests {
         _result: PathBuf,
     }
 
-    fn find_ttl_files<P: AsRef<std::path::Path>>(dir: P) -> Vec<String> {
+    fn find_ttl_files<P: AsRef<std::path::Path>>(dir: P) -> Vec<PathBuf> {
         walkdir::WalkDir::new(dir)
             .into_iter()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().is_some_and(|ext| ext == "ttl"))
-            .map(|e| e.path().display().to_string())
+            .filter_map(std::result::Result::ok)
+            .map(walkdir::DirEntry::into_path)
+            .filter(|e| e.extension().is_some_and(|ext| ext == "ttl"))
             .collect()
     }
 
-    fn convert_to_nt(source_rdf: &str, dest_nt: &Path) -> Result<()> {
+    fn convert_to_nt(source_rdf: &Path, dest_nt: &Path) -> Result<()> {
         let rdf_file = File::open(source_rdf)?;
         let reader = BufReader::new(rdf_file);
         let nt_file = File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
@@ -166,7 +166,7 @@ mod tests {
         let mut graph = sophia::inmem::graph::LightGraph::default();
         let mut sophia_serializer = NtSerializer::new(writer.by_ref());
 
-        if source_rdf.ends_with(".ttl") {
+        if source_rdf.extension().is_some_and(|ext| ext == ".ttl") {
             let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
                 base: Some(sophia::iri::Iri::new(format!(
                     "file://{}",
@@ -183,7 +183,7 @@ mod tests {
         Ok(())
     }
 
-    fn load_manifest(path: &str) -> Result<FastGraph, Box<dyn std::error::Error>> {
+    fn load_manifest(path: &Path) -> Result<FastGraph, Box<dyn std::error::Error>> {
         let file = BufReader::new(File::open(path)?);
         let mut graph = sophia::inmem::graph::FastGraph::default();
         let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
@@ -197,7 +197,7 @@ mod tests {
         Ok(graph)
     }
 
-    fn parse_manifest(path: &str) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
+    fn parse_manifest(path: &Path) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
         let g = load_manifest(path)?;
 
         let mut cases = Vec::new();
@@ -277,7 +277,7 @@ mod tests {
                 current = next;
             } else {
                 break;
-            };
+            }
         }
 
         Ok(cases)
@@ -317,43 +317,41 @@ mod tests {
     #[test]
     #[cfg(feature = "sophia")]
     fn w3c_tests() -> Result<()> {
+        use std::io::{BufWriter, Write};
         let mut count = 0;
         let mut skipped = 0;
         for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {
-            let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{}", sparql_test_version));
-            assert!(input_files.len() != 0, "no SPARQL test input found, is rdf-tests submodule checked out?");
+            let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{sparql_test_version}"));
+            assert!(!input_files.is_empty(), "no SPARQL test input found, is rdf-tests submodule checked out?");
             let mut cases = HashMap::new();
-            for f in &input_files {
-                let parent_folder_name = Path::new(f).parent().unwrap().file_name().unwrap().to_str().unwrap();
-                if f.ends_with("/manifest.ttl") && parent_folder_name != sparql_test_version {
-                    cases.insert(parent_folder_name, parse_manifest(f).expect("msg"));
+            for p in &input_files {
+                let parent_folder_name = p.parent().unwrap().file_name().unwrap().to_str().unwrap();
+                if p.ends_with("/manifest.ttl") && parent_folder_name != sparql_test_version {
+                    cases.insert(parent_folder_name, parse_manifest(p).expect("msg"));
                     continue;
                 }
-                if f.ends_with("/manifest.ttl") || parent_folder_name == sparql_test_version {
+                if p.ends_with("/manifest.ttl") || parent_folder_name == sparql_test_version {
                     continue;
                 }
 
                 let nt_file_name = format!(
                     "tests/resources/generated/nt/{sparql_test_version}/{}/{}.nt",
                     parent_folder_name,
-                    Path::new(f).file_stem().unwrap().to_str().unwrap()
+                    p.file_stem().unwrap().to_str().unwrap()
                 );
                 let nt_file_path = Path::new(&nt_file_name);
-                fs_err::create_dir_all(format!(
-                    "tests/resources/generated/nt/{sparql_test_version}/{}",
-                    parent_folder_name
+                create_dir_all(format!(
+                    "tests/resources/generated/nt/{sparql_test_version}/{parent_folder_name}"
                 ))?;
-                convert_to_nt(f, &nt_file_path)?;
-                let h = Hdt::read_nt(&nt_file_path)?;
-                use fs_err::OpenOptions;
-                use std::io::{BufWriter, Write};
+                convert_to_nt(p, nt_file_path)?;
+                let h = Hdt::read_nt(nt_file_path)?;
 
                 let hdt_file_path = format!(
                     "tests/resources/generated/hdt/{sparql_test_version}/{}/{}.hdt",
                     parent_folder_name,
-                    Path::new(f).file_stem().unwrap().to_str().unwrap()
+                    p.file_stem().unwrap().to_str().unwrap()
                 );
-                fs_err::create_dir_all(Path::new(&hdt_file_path).parent().unwrap())?;
+                create_dir_all(Path::new(&hdt_file_path).parent().unwrap())?;
                 let out_file = OpenOptions::new().create(true).write(true).truncate(true).open(&hdt_file_path)?;
                 let mut writer = BufWriter::new(out_file);
                 h.write(&mut writer)?;
