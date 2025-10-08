@@ -35,7 +35,7 @@ clap = { version = "4.5", optional = true, features = ["derive"] }
 fs-err = { version = "3.1.0" , optional = true }
 
 [features]
-default = ["sophia"]
+default = ["cli"]
 sophia = ["dep:sophia"]
 cli = ["sophia", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]

@@ -166,16 +166,23 @@ impl FourSectDict {
     #[cfg(feature = "sophia")]
     pub fn parse_nt_terms<R: BufRead + Send>(
         r: &mut R,
-    ) -> Result<(Vec<(String, String, String)>, HashSet<String>, HashSet<String>, Vec<String>)> {
+    ) -> Result<(Vec<[usize; 3]>, HashSet<usize>, HashSet<usize>, HashSet<usize>, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
+        use std::collections::HashMap;
 
-        let mut raw_triples = Vec::new(); // Store raw triples
+        // String pool: each unique string stored once
+        let mut string_pool = Vec::<String>::new();
+        let mut string_to_idx = HashMap::<String, usize>::new();
 
-        // TODO: compare times with Vec followed by parallel sort vs times with BTreeSet
-        let mut subject_terms = HashSet::<String>::new();
-        let mut object_terms = HashSet::<String>::new();
-        let mut predicate_terms = Vec::<String>::new();
+        // Store triple indices instead of strings
+        let mut raw_triple_indices = Vec::<[usize; 3]>::new();
+
+        // Track which indices are subjects/objects/predicates
+        let mut subject_indices = HashSet::<usize>::new();
+        let mut object_indices = HashSet::<usize>::new();
+        let mut predicate_indices = HashSet::<usize>::new();
+
         let (tx, rx) = std::sync::mpsc::channel();
         use std::thread;
         thread::scope(|s| {
@@ -201,52 +208,78 @@ impl FourSectDict {
             // todo: how to handle errors?
         });
 
+        // Helper closure to intern a string
+        let mut intern = |s: String| -> usize {
+            if let Some(&idx) = string_to_idx.get(&s) {
+                idx
+            } else {
+                let idx = string_pool.len();
+                string_to_idx.insert(s.clone(), idx);
+                string_pool.push(s);
+                idx
+            }
+        };
+
         for (subj_str, pred_str, obj_str) in rx {
-            // HDT does not have angled brackets around IRIs
+            let s_idx = intern(subj_str);
+            let p_idx = intern(pred_str);
+            let o_idx = intern(obj_str);
 
-            subject_terms.insert(subj_str.clone());
-            predicate_terms.push(pred_str.clone());
-            object_terms.insert(obj_str.clone());
+            subject_indices.insert(s_idx);
+            predicate_indices.insert(p_idx);
+            object_indices.insert(o_idx);
 
-            raw_triples.push((subj_str, pred_str, obj_str));
+            raw_triple_indices.push([s_idx, p_idx, o_idx]);
         }
 
-        Ok((raw_triples, subject_terms, object_terms, predicate_terms))
+        Ok((raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool))
     }
 
-    /// Build dictionary from collected terms
+    /// Build dictionary from collected terms using string pool indices
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
     pub fn build_dict_from_terms(
-        subject_terms: &HashSet<String>, object_terms: &HashSet<String>, predicate_terms: &[String],
-        block_size: usize,
+        subject_indices: &HashSet<usize>, object_indices: &HashSet<usize>, predicate_indices: &HashSet<usize>,
+        string_pool: &[String], block_size: usize,
     ) -> Self {
         use log::warn;
         use std::collections::BTreeSet;
-        use std::ops::Deref;
 
-        if predicate_terms.is_empty() {
+        if predicate_indices.is_empty() {
             warn!("no triples found in provided RDF");
         }
 
         let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = std::thread::scope(|s| {
             [
                 s.spawn(|| {
-                    let shared_terms: BTreeSet<&str> =
-                        subject_terms.intersection(object_terms).map(Deref::deref).collect();
-                    DictSectPFC::compress(&shared_terms, block_size)
+                    let shared_indices: BTreeSet<usize> =
+                        subject_indices.intersection(object_indices).copied().collect();
+                    DictSectPFC::compress(
+                        &shared_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
+                        block_size,
+                    )
                 }),
                 s.spawn(|| {
-                    let unique_subject_terms = subject_terms.difference(object_terms).map(Deref::deref).collect();
-                    DictSectPFC::compress(&unique_subject_terms, block_size)
+                    let unique_subject_indices: BTreeSet<usize> =
+                        subject_indices.difference(object_indices).copied().collect();
+                    DictSectPFC::compress(
+                        &unique_subject_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
+                        block_size,
+                    )
                 }),
                 s.spawn(|| {
-                    let predicate_terms_ref: BTreeSet<&str> = predicate_terms.iter().map(Deref::deref).collect();
-                    DictSectPFC::compress(&predicate_terms_ref, block_size)
+                    DictSectPFC::compress(
+                        &predicate_indices.into_iter().map(|&i| string_pool[i].as_str()).collect(),
+                        block_size,
+                    )
                 }),
                 s.spawn(|| {
-                    let unique_object_terms = object_terms.difference(subject_terms).map(Deref::deref).collect();
-                    DictSectPFC::compress(&unique_object_terms, block_size)
+                    let unique_object_indices: BTreeSet<usize> =
+                        object_indices.difference(subject_indices).copied().collect();
+                    DictSectPFC::compress(
+                        &unique_object_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
+                        block_size,
+                    )
                 }),
             ]
             .map(|t| t.join().unwrap())
@@ -254,17 +287,21 @@ impl FourSectDict {
         FourSectDict { shared, subjects, predicates, objects }
     }
 
-    /// Encode raw triples to IDs using dictionary
+    /// Encode raw triples (as indices into string pool) to dictionary IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn encode_triples(&self, sorted_triples: &[(String, String, String)]) -> Vec<crate::triples::TripleId> {
+    pub fn encode_triples(
+        &self, raw_triple_indices: &[[usize; 3]], string_pool: &[String],
+    ) -> Vec<crate::triples::TripleId> {
         use log::error;
         use rayon::prelude::*;
 
-        // encode triples using rayon's parallel iterator
-        sorted_triples
+        raw_triple_indices
             .par_iter()
-            .map(|(s, p, o)| {
+            .map(|[s_idx, p_idx, o_idx]| {
+                let s = &string_pool[*s_idx];
+                let p = &string_pool[*p_idx];
+                let o = &string_pool[*o_idx];
                 let triple = [
                     self.string_to_id(s, IdKind::Subject),
                     self.string_to_id(p, IdKind::Predicate),
@@ -286,29 +323,33 @@ impl FourSectDict {
     ) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use log::info;
 
-        // 1. Parse N-Triples and collect terms
+        // 1. Parse N-Triples and collect terms using string interning
         let timer = std::time::Instant::now();
-        let (mut raw_triples, subject_terms, object_terms, predicate_terms) = Self::parse_nt_terms(r)?;
+        let (mut raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool) =
+            Self::parse_nt_terms(r)?;
         let parse_time = timer.elapsed();
 
+        // Sort and deduplicate triples in parallel with dictionary building
         let sorter = std::thread::Builder::new()
             .name("sorter".to_owned())
             .spawn(move || {
-                raw_triples.sort_unstable(); // Faster than stable sort
-                raw_triples.dedup();
-                raw_triples
+                raw_triple_indices.sort_unstable();
+                raw_triple_indices.dedup();
+                raw_triple_indices
             })
             .unwrap();
 
-        // 2. Build dictionary from terms
+        // 2. Build dictionary from term indices
         let timer = std::time::Instant::now();
-        let dict = Self::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, block_size);
+        let dict = Self::build_dict_from_terms(
+            &subject_indices, &object_indices, &predicate_indices, &string_pool, block_size,
+        );
         let dict_build_time = timer.elapsed();
 
         // 3. Encode triples to IDs using dictionary
         let timer = std::time::Instant::now();
-        let sorted_triples = sorter.join().unwrap();
-        let encoded_triples = dict.encode_triples(&sorted_triples);
+        let sorted_triple_indices = sorter.join().unwrap();
+        let encoded_triples = dict.encode_triples(&sorted_triple_indices, &string_pool);
         info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
         Ok((dict, encoded_triples))
