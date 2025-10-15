@@ -108,18 +108,19 @@ fn read_nt_benchmarks(c: &mut Criterion) {
     group.bench_function("dict_building", |b| {
         let mut reader =
             std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
-        let (_, subject_terms, object_terms, predicate_terms) = FourSectDict::parse_nt_terms(&mut reader).unwrap();
-        b.iter(|| FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, 8))
+        let (_, subject_terms, object_terms, predicate_terms, pool) =
+            FourSectDict::parse_nt_terms(&mut reader).unwrap();
+        b.iter(|| FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, &pool, 8))
     });
 
     // Benchmark 3: Triple encoding
     group.bench_function("triple_encoding", |b| {
         let mut reader =
             std::io::BufReader::new(std::fs::File::open(test_file).expect(&format!("failed to open {test_file}")));
-        let (raw_triples, subject_terms, object_terms, predicate_terms) =
+        let (raw_triples, subject_terms, object_terms, predicate_terms, pool) =
             FourSectDict::parse_nt_terms(&mut reader).unwrap();
-        let dict = FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, 8);
-        b.iter(|| dict.encode_triples(&raw_triples))
+        let dict = FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, &pool, 8);
+        b.iter(|| dict.encode_triples(&raw_triples, &pool))
     });
 
     group.finish();
