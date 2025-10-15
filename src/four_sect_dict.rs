@@ -183,31 +183,6 @@ impl FourSectDict {
         let mut object_indices = HashSet::<usize>::new();
         let mut predicate_indices = HashSet::<usize>::new();
 
-        let (tx, rx) = std::sync::mpsc::channel();
-        use std::thread;
-        thread::scope(|s| {
-            // move tx to drop it automatically, otherwise it will freeze
-            s.spawn(move || {
-                nt::parse_bufread(r).for_each_triple(|q| {
-                    let clean = |s: &mut String| {
-                        let mut chars = s.chars();
-                        if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
-                            s.remove(0);
-                            s.pop();
-                        }
-                    };
-                    let mut subj_str = q.subject.to_string();
-                    clean(&mut subj_str);
-                    let mut pred_str = q.predicate.to_string();
-                    clean(&mut pred_str);
-                    let mut obj_str = q.object.to_string();
-                    clean(&mut obj_str);
-                    tx.send((subj_str, pred_str, obj_str)).unwrap();
-                })
-            });
-            // todo: how to handle errors?
-        });
-
         // Helper closure to intern a string
         let mut intern = |s: String| -> usize {
             if let Some(&idx) = string_to_idx.get(&s) {
@@ -220,17 +195,33 @@ impl FourSectDict {
             }
         };
 
-        for (subj_str, pred_str, obj_str) in rx {
-            let s_idx = intern(subj_str);
-            let p_idx = intern(pred_str);
-            let o_idx = intern(obj_str);
+        nt::parse_bufread(r)
+            .for_each_triple(|q| {
+                let clean = |s: &mut String| {
+                    let mut chars = s.chars();
+                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                        s.remove(0);
+                        s.pop();
+                    }
+                };
+                let mut subj_str = q.subject.to_string();
+                clean(&mut subj_str);
+                let mut pred_str = q.predicate.to_string();
+                clean(&mut pred_str);
+                let mut obj_str = q.object.to_string();
+                clean(&mut obj_str);
 
-            subject_indices.insert(s_idx);
-            predicate_indices.insert(p_idx);
-            object_indices.insert(o_idx);
+                let s_idx = intern(subj_str);
+                let p_idx = intern(pred_str);
+                let o_idx = intern(obj_str);
 
-            raw_triple_indices.push([s_idx, p_idx, o_idx]);
-        }
+                subject_indices.insert(s_idx);
+                predicate_indices.insert(p_idx);
+                object_indices.insert(o_idx);
+
+                raw_triple_indices.push([s_idx, p_idx, o_idx]);
+            })
+            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
 
         Ok((raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool))
     }
@@ -269,7 +260,7 @@ impl FourSectDict {
                 }),
                 s.spawn(|| {
                     DictSectPFC::compress(
-                        &predicate_indices.into_iter().map(|&i| string_pool[i].as_str()).collect(),
+                        &predicate_indices.iter().map(|&i| string_pool[i].as_str()).collect(),
                         block_size,
                     )
                 }),
