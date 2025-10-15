@@ -5,12 +5,15 @@ use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
 #[cfg(feature = "sophia")]
-use std::collections::HashSet;
+use bitset_core::BitSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+type Simd = [u64; 4];
+type Indices = Vec<Simd>;
 
 /// Position in an RDF triple.
 #[derive(Debug, Clone, Copy)]
@@ -166,7 +169,7 @@ impl FourSectDict {
     #[cfg(feature = "sophia")]
     pub fn parse_nt_terms<R: BufRead + Send>(
         r: &mut R,
-    ) -> Result<(Vec<[usize; 3]>, HashSet<usize>, HashSet<usize>, HashSet<usize>, Vec<String>)> {
+    ) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
         use sophia::api::prelude::TripleSource;
         use sophia::turtle::parser::nt;
         use std::collections::HashMap;
@@ -177,11 +180,6 @@ impl FourSectDict {
 
         // Store triple indices instead of strings
         let mut raw_triple_indices = Vec::<[usize; 3]>::new();
-
-        // Track which indices are subjects/objects/predicates
-        let mut subject_indices = HashSet::<usize>::new();
-        let mut object_indices = HashSet::<usize>::new();
-        let mut predicate_indices = HashSet::<usize>::new();
 
         // Helper closure to intern a string
         let mut intern = |s: String| -> usize {
@@ -215,13 +213,22 @@ impl FourSectDict {
                 let p_idx = intern(pred_str);
                 let o_idx = intern(obj_str);
 
-                subject_indices.insert(s_idx);
-                predicate_indices.insert(p_idx);
-                object_indices.insert(o_idx);
-
                 raw_triple_indices.push([s_idx, p_idx, o_idx]);
             })
             .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+
+        // Track which indices are subjects/objects/predicates
+        let block = [0u64; 4];
+        let blocks = string_pool.len().div_ceil(256);
+        let mut subject_indices = vec![block; blocks];
+        let mut object_indices = vec![block; blocks];
+        let mut predicate_indices = vec![block; blocks];
+
+        for [s, p, o] in &raw_triple_indices {
+            subject_indices.bit_set(*s);
+            predicate_indices.bit_set(*p);
+            object_indices.bit_set(*o);
+        }
 
         Ok((raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool))
     }
@@ -230,8 +237,8 @@ impl FourSectDict {
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
     pub fn build_dict_from_terms(
-        subject_indices: &HashSet<usize>, object_indices: &HashSet<usize>, predicate_indices: &HashSet<usize>,
-        string_pool: &[String], block_size: usize,
+        subject_indices: &Indices, object_indices: &Indices, predicate_indices: &Indices, string_pool: &[String],
+        block_size: usize,
     ) -> Self {
         use log::warn;
         use std::collections::BTreeSet;
@@ -239,38 +246,38 @@ impl FourSectDict {
         if predicate_indices.is_empty() {
             warn!("no triples found in provided RDF");
         }
-
+        // can this be optimized? the bitvec lib does not seem to have an iterator for 1-bits
+        let externalize = |idx: &Indices| {
+            let mut v = BTreeSet::<&str>::new();
+            for i in 0..idx.bit_len() {
+                if idx.bit_test(i) {
+                    v.insert(&string_pool[i]);
+                }
+            }
+            v
+        };
+        macro_rules! nspawn {
+            ($s:expr, $n:expr, $f:expr) => {
+                std::thread::Builder::new().name($n.to_owned()).spawn_scoped($s, $f).unwrap()
+            };
+        }
         let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = std::thread::scope(|s| {
             [
-                s.spawn(|| {
-                    let shared_indices: BTreeSet<usize> =
-                        subject_indices.intersection(object_indices).copied().collect();
-                    DictSectPFC::compress(
-                        &shared_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
-                        block_size,
-                    )
+                nspawn!(s, "shared", || {
+                    let mut shared_indices: Indices = subject_indices.clone();
+                    shared_indices.bit_and(object_indices); // intersection
+                    DictSectPFC::compress(&externalize(&shared_indices), block_size)
                 }),
-                s.spawn(|| {
-                    let unique_subject_indices: BTreeSet<usize> =
-                        subject_indices.difference(object_indices).copied().collect();
-                    DictSectPFC::compress(
-                        &unique_subject_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
-                        block_size,
-                    )
+                nspawn!(s, "unique subjects", || {
+                    let mut unique_subject_indices: Indices = subject_indices.clone();
+                    unique_subject_indices.bit_andnot(object_indices);
+                    DictSectPFC::compress(&externalize(&unique_subject_indices), block_size)
                 }),
-                s.spawn(|| {
-                    DictSectPFC::compress(
-                        &predicate_indices.iter().map(|&i| string_pool[i].as_str()).collect(),
-                        block_size,
-                    )
-                }),
-                s.spawn(|| {
-                    let unique_object_indices: BTreeSet<usize> =
-                        object_indices.difference(subject_indices).copied().collect();
-                    DictSectPFC::compress(
-                        &unique_object_indices.into_iter().map(|i| string_pool[i].as_str()).collect(),
-                        block_size,
-                    )
+                nspawn!(s, "predicates", || DictSectPFC::compress(&externalize(&predicate_indices), block_size)),
+                nspawn!(s, "unique objects", || {
+                    let mut unique_object_indices = object_indices.clone();
+                    unique_object_indices.bit_andnot(subject_indices);
+                    DictSectPFC::compress(&externalize(&unique_object_indices), block_size)
                 }),
             ]
             .map(|t| t.join().unwrap())
