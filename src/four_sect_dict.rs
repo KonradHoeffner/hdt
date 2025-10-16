@@ -167,59 +167,58 @@ impl FourSectDict {
     /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn parse_nt_terms<R: BufRead + Send>(
-        r: &mut R,
+    pub fn parse_nt_terms(
+        path: &std::path::Path,
     ) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
-        use sophia::api::prelude::TripleSource;
-        use sophia::turtle::parser::nt;
-        use std::collections::HashMap;
+        use lasso::{Key, Spur, ThreadedRodeo};
+        use oxttl::NTriplesParser;
+        use rayon::prelude::*;
 
-        // String pool: each unique string stored once
-        let mut string_pool = Vec::<String>::new();
-        let mut string_to_idx = HashMap::<String, usize>::new();
+        use std::sync::Arc;
 
+        let lasso: Arc<ThreadedRodeo<Spur>> = Arc::new(ThreadedRodeo::new());
         // Store triple indices instead of strings
-        let mut raw_triple_indices = Vec::<[usize; 3]>::new();
+        // TODO: error handling
+        let readers = NTriplesParser::new()
+            .split_file_for_parallel_parsing(path, std::thread::available_parallelism().unwrap().get())
+            .unwrap();
+        let raw_triple_indices: Vec<[usize; 3]> = readers
+            .into_par_iter()
+            .flat_map_iter(|reader| {
+                //for q in reader {
+                reader.map(|q| {
+                    let clean = |s: &mut String| {
+                        let mut chars = s.chars();
+                        if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                            s.remove(0);
+                            s.pop();
+                        }
+                    };
+                    let q = q.unwrap(); // TODO: error handling
+                    let mut subj_str = q.subject.to_string();
+                    clean(&mut subj_str);
+                    let mut pred_str = q.predicate.to_string();
+                    clean(&mut pred_str);
+                    let mut obj_str = q.object.to_string();
+                    clean(&mut obj_str);
 
-        // Helper closure to intern a string
-        let mut intern = |s: String| -> usize {
-            if let Some(&idx) = string_to_idx.get(&s) {
-                idx
-            } else {
-                let idx = string_pool.len();
-                string_to_idx.insert(s.clone(), idx);
-                string_pool.push(s);
-                idx
-            }
-        };
+                    let s_idx = lasso.get_or_intern(subj_str).into_usize();
+                    let p_idx = lasso.get_or_intern(pred_str).into_usize();
+                    let o_idx = lasso.get_or_intern(obj_str).into_usize();
 
-        nt::parse_bufread(r)
-            .for_each_triple(|q| {
-                let clean = |s: &mut String| {
-                    let mut chars = s.chars();
-                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
-                        s.remove(0);
-                        s.pop();
-                    }
-                };
-                let mut subj_str = q.subject.to_string();
-                clean(&mut subj_str);
-                let mut pred_str = q.predicate.to_string();
-                clean(&mut pred_str);
-                let mut obj_str = q.object.to_string();
-                clean(&mut obj_str);
-
-                let s_idx = intern(subj_str);
-                let p_idx = intern(pred_str);
-                let o_idx = intern(obj_str);
-
-                raw_triple_indices.push([s_idx, p_idx, o_idx]);
+                    [s_idx, p_idx, o_idx]
+                })
             })
-            .map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
-
+            .collect();
+        //raw_triple_indices.push([s_idx, p_idx, o_idx])
+        //raw_triple_indices
+        // TODO: error handling
+        //.map_err(|e| Error::Other(format!("Error reading N-Triples: {e:?}")))?;
+        let lasso = Arc::try_unwrap(lasso).unwrap(); // no parallel usage anymore
         // Track which indices are subjects/objects/predicates
         let block = [0u64; 4];
-        let blocks = string_pool.len().div_ceil(256);
+        //let blocks = string_pool.len().div_ceil(256);
+        let blocks = lasso.len().div_ceil(256);
         let mut subject_indices = vec![block; blocks];
         let mut object_indices = vec![block; blocks];
         let mut predicate_indices = vec![block; blocks];
@@ -230,6 +229,7 @@ impl FourSectDict {
             object_indices.bit_set(*o);
         }
 
+        let string_pool: Vec<String> = lasso.into_resolver().strings().map(String::from).collect();
         Ok((raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool))
     }
 
@@ -273,7 +273,7 @@ impl FourSectDict {
                     unique_subject_indices.bit_andnot(object_indices);
                     DictSectPFC::compress(&externalize(&unique_subject_indices), block_size)
                 }),
-                nspawn!(s, "predicates", || DictSectPFC::compress(&externalize(&predicate_indices), block_size)),
+                nspawn!(s, "predicates", || DictSectPFC::compress(&externalize(predicate_indices), block_size)),
                 nspawn!(s, "unique objects", || {
                     let mut unique_object_indices = object_indices.clone();
                     unique_object_indices.bit_andnot(subject_indices);
@@ -297,9 +297,9 @@ impl FourSectDict {
         raw_triple_indices
             .par_iter()
             .map(|[s_idx, p_idx, o_idx]| {
-                let s = &string_pool[*s_idx];
-                let p = &string_pool[*p_idx];
-                let o = &string_pool[*o_idx];
+                let s = &string_pool[*s_idx as usize];
+                let p = &string_pool[*p_idx as usize];
+                let o = &string_pool[*o_idx as usize];
                 let triple = [
                     self.string_to_id(s, IdKind::Subject),
                     self.string_to_id(p, IdKind::Predicate),
@@ -316,15 +316,19 @@ impl FourSectDict {
     /// read N-Triples and convert them to a dictionary and triple IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     #[cfg(feature = "sophia")]
-    pub fn read_nt<R: BufRead + Send>(
-        r: &mut R, block_size: usize,
+    pub fn read_nt(
+        path: &std::path::Path,
+        block_size: usize,
+        /*pub fn read_nt<R: BufRead + Send>(
+        r: &mut R, block_size: usize,*/
     ) -> Result<(Self, Vec<crate::triples::TripleId>)> {
         use log::info;
 
         // 1. Parse N-Triples and collect terms using string interning
         let timer = std::time::Instant::now();
         let (mut raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool) =
-            Self::parse_nt_terms(r)?;
+            Self::parse_nt_terms(path)?;
+        //Self::parse_nt_terms(r)?;
         let parse_time = timer.elapsed();
 
         // Sort and deduplicate triples in parallel with dictionary building

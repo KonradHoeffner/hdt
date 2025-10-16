@@ -101,9 +101,10 @@ impl Hdt {
 
         const BLOCK_SIZE: usize = 16;
 
-        let source = std::fs::File::open(f)?;
-        let mut reader = std::io::BufReader::new(source);
-        let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
+        //let source = std::fs::File::open(f)?;
+        //let mut reader = std::io::BufReader::new(source);
+        //let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
+        let (dict, mut encoded_triples) = FourSectDict::read_nt(f, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         encoded_triples.sort_unstable();
         let triples = TriplesBitmap::from_triples(&encoded_triples);
