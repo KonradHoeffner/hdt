@@ -4,7 +4,6 @@
 use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
-#[cfg(feature = "sophia")]
 use bitset_core::BitSet;
 use std::io::BufRead;
 use std::thread::JoinHandle;
@@ -166,7 +165,6 @@ impl FourSectDict {
 
     /// Parse N-Triples and collect terms into sets
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
-    #[cfg(feature = "sophia")]
     pub fn parse_nt_terms(
         path: &std::path::Path,
     ) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
@@ -235,7 +233,6 @@ impl FourSectDict {
 
     /// Build dictionary from collected terms using string pool indices
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
-    #[cfg(feature = "sophia")]
     pub fn build_dict_from_terms(
         subject_indices: &Indices, object_indices: &Indices, predicate_indices: &Indices, string_pool: &[String],
         block_size: usize,
@@ -286,8 +283,6 @@ impl FourSectDict {
     }
 
     /// Encode raw triples (as indices into string pool) to dictionary IDs
-    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
-    #[cfg(feature = "sophia")]
     pub fn encode_triples(
         &self, raw_triple_indices: &[[usize; 3]], string_pool: &[String],
     ) -> Vec<crate::triples::TripleId> {
@@ -315,7 +310,6 @@ impl FourSectDict {
 
     /// read N-Triples and convert them to a dictionary and triple IDs
     /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
-    #[cfg(feature = "sophia")]
     pub fn read_nt(
         path: &std::path::Path,
         block_size: usize,

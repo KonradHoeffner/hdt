@@ -85,16 +85,11 @@ impl Hdt {
     }
 
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
-    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
     /// # Example
     /// ```no_run
     /// let path = std::path::Path::new("example.nt");
     /// let hdt = hdt::Hdt::read_nt(path).unwrap();
     /// ```
-    ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
-    // TODO: I (KH) prefer to use a BufRead here, is the file IRI important? I don't mind leaving it out of the header.
-    #[cfg(feature = "sophia")]
-    //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
     pub fn read_nt(f: &std::path::Path) -> Result<Self> {
         use std::collections::BTreeSet;
         use std::io::Write;
@@ -126,7 +121,6 @@ impl Hdt {
 
     /// populated HDT header fields
     // TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
-    #[cfg(feature = "sophia")]
     fn build_header(&mut self, path: &std::path::Path, block_size: usize, num_triples: usize) {
         use crate::containers::rdf::Term::Literal as Lit;
         use crate::containers::rdf::{Id, Literal, Term, Triple};
@@ -524,7 +518,6 @@ pub mod tests {
     }
 
     #[test]
-    #[cfg(feature = "sophia")]
     fn read_nt() -> Result<()> {
         init();
         let path = Path::new("tests/resources/snikmeta.nt");
