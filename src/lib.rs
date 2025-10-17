@@ -103,6 +103,8 @@ pub use sophia;
 pub mod hdt_graph;
 /// Types for representing the header.
 pub mod header;
+/// Converting N-Triples to HDT
+pub mod nt;
 /// Types for representing and querying triples.
 pub mod triples;
 /// Constants for triple terms

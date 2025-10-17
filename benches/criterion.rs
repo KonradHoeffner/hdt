@@ -94,24 +94,7 @@ fn read_nt_benchmarks(c: &mut Criterion) {
     group.sample_size(10);
     let test_file = std::path::Path::new("tests/resources/persondata_en.nt");
 
-    // Benchmark 1: N-Triples parsing
-    group.bench_function("nt_parsing", |b| b.iter(|| FourSectDict::parse_nt_terms(test_file).unwrap()));
-
-    // Benchmark 2: Dictionary building
-    group.bench_function("dict_building", |b| {
-        let (_, subject_terms, object_terms, predicate_terms, pool) =
-            FourSectDict::parse_nt_terms(test_file).unwrap();
-        b.iter(|| FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, &pool, 8))
-    });
-
-    // Benchmark 3: Triple encoding
-    group.bench_function("triple_encoding", |b| {
-        let (raw_triples, subject_terms, object_terms, predicate_terms, pool) =
-            FourSectDict::parse_nt_terms(test_file).unwrap();
-        let dict = FourSectDict::build_dict_from_terms(&subject_terms, &object_terms, &predicate_terms, &pool, 8);
-        b.iter(|| dict.encode_triples(&raw_triples, &pool))
-    });
-
+    group.bench_function("read_nt", |b| b.iter(|| Hdt::read_nt(test_file).unwrap()));
     group.finish();
 }
 

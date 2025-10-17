@@ -96,7 +96,7 @@ impl Hdt {
 
         const BLOCK_SIZE: usize = 16;
 
-        let (dict, mut encoded_triples) = FourSectDict::read_nt(f, BLOCK_SIZE)?;
+        let (dict, mut encoded_triples) = crate::nt::read_nt(f, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         encoded_triples.sort_unstable();
         let triples = TriplesBitmap::from_triples(&encoded_triples);
