@@ -96,9 +96,6 @@ impl Hdt {
 
         const BLOCK_SIZE: usize = 16;
 
-        //let source = std::fs::File::open(f)?;
-        //let mut reader = std::io::BufReader::new(source);
-        //let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
         let (dict, mut encoded_triples) = FourSectDict::read_nt(f, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         encoded_triples.sort_unstable();
@@ -113,7 +110,6 @@ impl Hdt {
             writeln!(buf, "{triple}")?;
         }
         hdt.header.length = buf.len();
-        //println!("header length {}", hdt.header.length);
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
