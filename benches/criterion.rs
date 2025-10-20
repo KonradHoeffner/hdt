@@ -2,7 +2,6 @@ use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use criterion::{Criterion, criterion_group, criterion_main};
 use fs_err::File;
-use hdt::four_sect_dict::FourSectDict;
 use hdt::triples::*;
 use hdt::{Hdt, IdKind};
 use sophia::api::graph::Graph;
