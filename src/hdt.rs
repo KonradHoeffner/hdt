@@ -357,6 +357,7 @@ pub mod tests {
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
+    use std::path::Path;
 
     /// reusable test HDT read from SNIK Meta test HDT file
     pub fn snikmeta() -> Result<Hdt> {
