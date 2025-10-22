@@ -176,7 +176,7 @@ pub fn parse_nt_terms(path: &Path) -> Result<(Vec<[usize; 3]>, Indices, Indices,
             reader.map(|q| {
                 let clean = |s: &mut String| {
                     let mut chars = s.chars();
-                    if chars.nth(0) == Some('<') && chars.nth_back(0) == Some('>') {
+                    if chars.next() == Some('<') && chars.nth_back(0) == Some('>') {
                         s.remove(0);
                         s.pop();
                     }
@@ -231,6 +231,7 @@ pub fn build_dict_from_terms(
     // can this be optimized? the bitvec lib does not seem to have an iterator for 1-bits
     let externalize = |idx: &Indices| {
         let mut v = BTreeSet::<&str>::new();
+        #[allow(clippy::needless_range_loop)]
         for i in 0..idx.bit_len() {
             if idx.bit_test(i) {
                 v.insert(&string_pool[i]);
