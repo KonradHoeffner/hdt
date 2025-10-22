@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.4.0"
+version = "0.5.0"
 repository = "https://github.com/konradhoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner"]
 license = "MIT"
@@ -25,20 +25,25 @@ log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = "0.3"
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
+rayon = { version = "1.11.0", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.2" , optional = true }
 spargebra = { version = "0.4", optional = true, default-features = false }
 eyre = { version = "0.6", optional = true }
 color-eyre = { version = "0.6", optional = true }
 clap = { version = "4.5", optional = true, features = ["derive"] }
-fs-err = { version = "3.1.0" , optional = true }
+fs-err = { version = "3.1.0", optional = true }
+bitset-core = { version = "0.1.1", optional = true }
+oxttl = { version = "0.2.1", optional = true }
+lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
 
 [features]
 default = ["sophia"]
 sophia = ["dep:sophia"]
-cli = ["sophia", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
+cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
+nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
 
 [[bench]]
 name = "criterion"

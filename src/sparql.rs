@@ -79,7 +79,7 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
 pub fn query<'a>(q: &str, hdt: &'a Hdt) -> Result<spareval::QueryResults<'a>, QueryEvaluationError> {
     let query = SparqlParser::new().parse_query(q)?;
     //.unwrap_or_else(|_| panic!("error processing SPARQL query:\n{q}"));
-    QueryEvaluator::new().execute(hdt, &query)
+    QueryEvaluator::new().prepare(&query).execute(hdt)
 }
 
 #[cfg(test)]

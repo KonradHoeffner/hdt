@@ -16,6 +16,10 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(feature = "cache")]
 const CACHE_EXT: &str = "index.v1-rust-cache";
+#[cfg(feature = "nt")]
+#[path = "nt.rs"]
+/// Converting N-Triples to HDT, available only if HDT is built with the experimental `"nt"` feature.
+mod nt;
 
 /// In-memory representation of an RDF graph loaded from an HDT file.
 /// Allows queries by triple patterns.
@@ -82,111 +86,6 @@ impl Hdt {
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
         Ok(hdt)
-    }
-
-    /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
-    /// *This function is available only if HDT is built with the `"sophia"` feature, included by default.*
-    /// # Example
-    /// ```no_run
-    /// let path = std::path::Path::new("example.nt");
-    /// let hdt = hdt::Hdt::read_nt(path).unwrap();
-    /// ```
-    ///// let hdt = hdt::Hdt::read_nt(std::io::BufReader::new(file)).unwrap();
-    // TODO: I (KH) prefer to use a BufRead here, is the file IRI important? I don't mind leaving it out of the header.
-    #[cfg(feature = "sophia")]
-    //pub fn read_nt<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
-    pub fn read_nt(f: &std::path::Path) -> Result<Self> {
-        use std::collections::BTreeSet;
-        use std::io::Write;
-
-        const BLOCK_SIZE: usize = 16;
-
-        let source = std::fs::File::open(f)?;
-        let mut reader = std::io::BufReader::new(source);
-        let (dict, mut encoded_triples) = FourSectDict::read_nt(&mut reader, BLOCK_SIZE)?;
-        let num_triples = encoded_triples.len();
-        encoded_triples.sort_unstable();
-        let triples = TriplesBitmap::from_triples(&encoded_triples);
-
-        let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
-
-        let mut hdt = Hdt { header, dict, triples };
-        hdt.build_header(f, BLOCK_SIZE, num_triples);
-        let mut buf = Vec::<u8>::new();
-        for triple in &hdt.header.body {
-            writeln!(buf, "{triple}")?;
-        }
-        hdt.header.length = buf.len();
-        //println!("header length {}", hdt.header.length);
-        debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
-        debug!("{hdt:#?}");
-        Ok(hdt)
-    }
-
-    /// populated HDT header fields
-    // TODO are all of these headers required for HDT spec? Populating same triples as those in C++ version for now
-    #[cfg(feature = "sophia")]
-    fn build_header(&mut self, path: &std::path::Path, block_size: usize, num_triples: usize) {
-        use crate::containers::rdf::Term::Literal as Lit;
-        use crate::containers::rdf::{Id, Literal, Term, Triple};
-        use crate::vocab::*;
-        use std::collections::BTreeSet;
-
-        const ORDER: &str = "SPO";
-        let mut headers = BTreeSet::<Triple>::new();
-
-        macro_rules! literal {
-            ($s:expr, $p:expr, $o:expr) => {
-                headers.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
-            };
-        }
-        macro_rules! insert_id {
-            ($s:expr, $p:expr, $o:expr) => {
-                headers.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
-            };
-        }
-
-        let file_iri = format!("file://{}", path.canonicalize().unwrap().display());
-        let base = Id::Named(file_iri);
-
-        literal!(base, RDF_TYPE, HDT_CONTAINER);
-        literal!(base, RDF_TYPE, VOID_DATASET);
-        literal!(base, VOID_TRIPLES, num_triples);
-        literal!(base, VOID_PROPERTIES, self.dict.predicates.num_strings);
-        let [d_s, d_o] =
-            [&self.dict.subjects, &self.dict.objects].map(|s| s.num_strings + self.dict.shared.num_strings);
-        literal!(base, VOID_DISTINCT_SUBJECTS, d_s);
-        literal!(base, VOID_DISTINCT_OBJECTS, d_o);
-        // // TODO: Add more VOID Properties. E.g. void:classes
-
-        // // Structure
-        let stats_id = Id::Blank("statistics".to_owned());
-        let pub_id = Id::Blank("publicationInformation".to_owned());
-        let format_id = Id::Blank("format".to_owned());
-        let dict_id = Id::Blank("dictionary".to_owned());
-        let triples_id = Id::Blank("triples".to_owned());
-        insert_id!(base, HDT_STATISTICAL_INFORMATION, stats_id);
-        insert_id!(base, HDT_STATISTICAL_INFORMATION, pub_id);
-        insert_id!(base, HDT_FORMAT_INFORMATION, format_id);
-        insert_id!(format_id, HDT_DICTIONARY, dict_id);
-        insert_id!(format_id, HDT_TRIPLES, triples_id);
-        // DICTIONARY
-        literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
-        literal!(dict_id, HDT_DICT_MAPPING, "1");
-        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
-        literal!(dict_id, HDT_DICT_BLOCK_SIZE, block_size);
-        // TRIPLES
-        literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
-        literal!(triples_id, HDT_NUM_TRIPLES, num_triples);
-        literal!(triples_id, HDT_TRIPLES_ORDER, ORDER);
-        // // Sizes
-        let meta = std::fs::File::open(path).unwrap().metadata().unwrap();
-        literal!(stats_id, HDT_ORIGINAL_SIZE, meta.len());
-        literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
-        // exclude for now to skip dependency on chrono
-        //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
-        //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
-        self.header.body = headers;
     }
 
     /// Write as N-Triples
@@ -458,7 +357,6 @@ pub mod tests {
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
-    use std::path::Path;
 
     /// reusable test HDT read from SNIK Meta test HDT file
     pub fn snikmeta() -> Result<Hdt> {
@@ -484,7 +382,8 @@ pub mod tests {
     #[cfg(feature = "cache")]
     #[test]
     fn cache() -> Result<()> {
-        use fs_err::{remove_file, rename};
+        use fs_err::remove_file;
+        use std::path::Path;
         init();
         // start with an empty cache
         let filename = "tests/resources/snikmeta.hdt";
@@ -498,58 +397,34 @@ pub mod tests {
         // now it should be cached
         let hdt2 = Hdt::read_from_path(path)?;
         snikmeta_check(&hdt2)?;
-        // create a cache for an empty HDT
-        let path_empty_nt = Path::new("tests/resources/empty.nt");
-        // it's empty so we could just pass an empty buffer
-        let hdt_empty = Hdt::read_nt(path_empty_nt)?;
-        let filename_empty_hdt = "tests/resources/empty.hdt";
-        let path_empty_hdt = Path::new(filename_empty_hdt);
-        if !path_empty_hdt.exists() {
-            let file_empty_hdt = File::create(filename_empty_hdt)?;
-            let mut writer = std::io::BufWriter::new(file_empty_hdt);
-            hdt_empty.write(&mut writer)?;
+        #[cfg(feature = "nt")]
+        {
+            // create a cache for an empty HDT
+            let path_empty_nt = Path::new("tests/resources/empty.nt");
+            // it's empty so we could just pass an empty buffer
+            let hdt_empty = Hdt::read_nt(path_empty_nt)?;
+            let filename_empty_hdt = "tests/resources/empty.hdt";
+            let path_empty_hdt = Path::new(filename_empty_hdt);
+            if !path_empty_hdt.exists() {
+                let file_empty_hdt = File::create(filename_empty_hdt)?;
+                let mut writer = std::io::BufWriter::new(file_empty_hdt);
+                hdt_empty.write(&mut writer)?;
+            }
+            // we don't care about the empty HDT, we just need it to create the cache
+            let filename_empty_cache = format!("{filename_empty_hdt}.{CACHE_EXT}");
+            let path_empty_cache = Path::new(&filename_empty_cache);
+            let _ = remove_file(path_empty_cache);
+            Hdt::read_from_path(path_empty_hdt)?;
+            // purposefully create a mismatch between cache and HDT file for the same name
+            fs_err::rename(path_empty_cache, path_cache)?;
+            // mismatch should be detected and handled
+            let hdt3 = Hdt::read_from_path(path)?;
+            snikmeta_check(&hdt3)?;
         }
-        // we don't care about the empty HDT, we just need it to create the cache
-        let filename_empty_cache = format!("{filename_empty_hdt}.{CACHE_EXT}");
-        let path_empty_cache = Path::new(&filename_empty_cache);
-        let _ = remove_file(path_empty_cache);
-        Hdt::read_from_path(path_empty_hdt)?;
-        // purposefully create a mismatch between cache and HDT file for the same name
-        rename(path_empty_cache, path_cache)?;
-        // mismatch should be detected and handled
-        let hdt3 = Hdt::read_from_path(path)?;
-        snikmeta_check(&hdt3)?;
         Ok(())
     }
 
-    #[test]
-    #[cfg(feature = "sophia")]
-    fn read_nt() -> Result<()> {
-        init();
-        let path = Path::new("tests/resources/snikmeta.nt");
-        if !path.exists() {
-            log::info!("Creating test resource snikmeta.nt.");
-            let mut writer = std::io::BufWriter::new(File::create(path)?);
-            snikmeta()?.write_nt(&mut writer)?;
-        }
-        let snikmeta_nt = Hdt::read_nt(path)?;
-
-        let snikmeta = snikmeta()?;
-        let hdt_triples: Vec<StringTriple> = snikmeta.triples_all().collect();
-        let nt_triples: Vec<StringTriple> = snikmeta_nt.triples_all().collect();
-
-        assert_eq!(nt_triples, hdt_triples);
-        assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
-        snikmeta_check(&snikmeta_nt)?;
-        let path = std::path::Path::new("tests/resources/empty.nt");
-        let hdt_empty = Hdt::read_nt(path)?;
-        let mut buf = Vec::<u8>::new();
-        hdt_empty.write(&mut buf)?;
-        Hdt::read(std::io::Cursor::new(buf))?;
-        Ok(())
-    }
-
-    fn snikmeta_check(hdt: &Hdt) -> Result<()> {
+    pub fn snikmeta_check(hdt: &Hdt) -> Result<()> {
         let triples = &hdt.triples;
         assert_eq!(triples.bitmap_y.num_ones(), 49, "{:?}", triples.bitmap_y); // one for each subjecct
         //assert_eq!();
