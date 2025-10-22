@@ -38,12 +38,12 @@ oxttl = { version = "0.2.1", optional = true }
 lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
 
 [features]
-default = ["cli", "nt"]
+default = ["sophia"]
 sophia = ["dep:sophia"]
 cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
-nt = ["dep:lasso","dep:oxttl","dep:bitset-core"           ]
+nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
 
 [[bench]]
 name = "criterion"
