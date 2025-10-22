@@ -357,7 +357,6 @@ pub mod tests {
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::{assert_eq, assert_ne};
-    use std::path::Path;
 
     /// reusable test HDT read from SNIK Meta test HDT file
     pub fn snikmeta() -> Result<Hdt> {
@@ -383,7 +382,8 @@ pub mod tests {
     #[cfg(feature = "cache")]
     #[test]
     fn cache() -> Result<()> {
-        use fs_err::{remove_file, rename};
+        use fs_err::remove_file;
+        use std::path::Path;
         init();
         // start with an empty cache
         let filename = "tests/resources/snikmeta.hdt";
@@ -397,27 +397,30 @@ pub mod tests {
         // now it should be cached
         let hdt2 = Hdt::read_from_path(path)?;
         snikmeta_check(&hdt2)?;
-        // create a cache for an empty HDT
-        let path_empty_nt = Path::new("tests/resources/empty.nt");
-        // it's empty so we could just pass an empty buffer
-        let hdt_empty = Hdt::read_nt(path_empty_nt)?;
-        let filename_empty_hdt = "tests/resources/empty.hdt";
-        let path_empty_hdt = Path::new(filename_empty_hdt);
-        if !path_empty_hdt.exists() {
-            let file_empty_hdt = File::create(filename_empty_hdt)?;
-            let mut writer = std::io::BufWriter::new(file_empty_hdt);
-            hdt_empty.write(&mut writer)?;
+        #[cfg(feature = "nt")]
+        {
+            // create a cache for an empty HDT
+            let path_empty_nt = Path::new("tests/resources/empty.nt");
+            // it's empty so we could just pass an empty buffer
+            let hdt_empty = Hdt::read_nt(path_empty_nt)?;
+            let filename_empty_hdt = "tests/resources/empty.hdt";
+            let path_empty_hdt = Path::new(filename_empty_hdt);
+            if !path_empty_hdt.exists() {
+                let file_empty_hdt = File::create(filename_empty_hdt)?;
+                let mut writer = std::io::BufWriter::new(file_empty_hdt);
+                hdt_empty.write(&mut writer)?;
+            }
+            // we don't care about the empty HDT, we just need it to create the cache
+            let filename_empty_cache = format!("{filename_empty_hdt}.{CACHE_EXT}");
+            let path_empty_cache = Path::new(&filename_empty_cache);
+            let _ = remove_file(path_empty_cache);
+            Hdt::read_from_path(path_empty_hdt)?;
+            // purposefully create a mismatch between cache and HDT file for the same name
+            fs_err::rename(path_empty_cache, path_cache)?;
+            // mismatch should be detected and handled
+            let hdt3 = Hdt::read_from_path(path)?;
+            snikmeta_check(&hdt3)?;
         }
-        // we don't care about the empty HDT, we just need it to create the cache
-        let filename_empty_cache = format!("{filename_empty_hdt}.{CACHE_EXT}");
-        let path_empty_cache = Path::new(&filename_empty_cache);
-        let _ = remove_file(path_empty_cache);
-        Hdt::read_from_path(path_empty_hdt)?;
-        // purposefully create a mismatch between cache and HDT file for the same name
-        rename(path_empty_cache, path_cache)?;
-        // mismatch should be detected and handled
-        let hdt3 = Hdt::read_from_path(path)?;
-        snikmeta_check(&hdt3)?;
         Ok(())
     }
 

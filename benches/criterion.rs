@@ -88,6 +88,7 @@ fn query(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "nt")]
 fn read_nt_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("dictionary_read_nt");
     group.sample_size(10);
@@ -97,5 +98,8 @@ fn read_nt_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "nt")]
 criterion_group!(criterion, query, read_nt_benchmarks);
+#[cfg(not(feature = "nt"))]
+criterion_group!(criterion, query);
 criterion_main!(criterion);
