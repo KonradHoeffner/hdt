@@ -115,25 +115,32 @@ impl Hdt {
     }
 }
 
+struct IndexPool {
+    triples: Vec<[usize; 3]>,
+    subjects: Indices,
+    objects: Indices,
+    predicates: Indices,
+    strings: Vec<String>,
+}
+
 /// read N-Triples and convert them to a dictionary and triple IDs
-pub fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Vec<TripleId>)> {
+fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Vec<TripleId>)> {
     // 1. Parse N-Triples and collect terms using string interning
     let timer = Instant::now();
-    let (mut raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool) =
-        parse_nt_terms(path)?;
+    let mut pool = parse_nt_terms(path)?;
     let parse_time = timer.elapsed();
 
     // Sort and deduplicate triples in parallel with dictionary building
+    let mut triples = std::mem::take(&mut pool.triples); // not needed anymore
     let sorter = thread::Builder::new().name("sorter".to_owned()).spawn(move || {
-        raw_triple_indices.sort_unstable();
-        raw_triple_indices.dedup();
-        raw_triple_indices
+        triples.sort_unstable();
+        triples.dedup();
+        triples
     })?;
 
     // 2. Build dictionary from term indices
     let timer = Instant::now();
-    let dict =
-        build_dict_from_terms(&subject_indices, &object_indices, &predicate_indices, &string_pool, block_size);
+    let dict = build_dict_from_terms(&pool, block_size);
     let dict_build_time = timer.elapsed();
 
     // 3. Encode triples to IDs using dictionary
@@ -143,9 +150,9 @@ pub fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict
     let encoded_triples: Vec<TripleId> = refs
         .par_iter()
         .map(|[s_idx, p_idx, o_idx]| {
-            let s = &string_pool[*s_idx as usize];
-            let p = &string_pool[*p_idx as usize];
-            let o = &string_pool[*o_idx as usize];
+            let s = &pool.strings[*s_idx as usize];
+            let p = &pool.strings[*p_idx as usize];
+            let o = &pool.strings[*o_idx as usize];
             let triple = [
                 dict.string_to_id(s, IdKind::Subject),
                 dict.string_to_id(p, IdKind::Predicate),
@@ -164,12 +171,13 @@ pub fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict
 }
 
 /// Parse N-Triples and collect terms into sets
-pub fn parse_nt_terms(path: &Path) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
+//pub fn parse_nt_terms(path: &Path) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
+fn parse_nt_terms(path: &Path) -> Result<IndexPool> {
     let lasso: Arc<ThreadedRodeo<Spur>> = Arc::new(ThreadedRodeo::new());
     // Store triple indices instead of strings
     let readers =
         NTriplesParser::new().split_file_for_parallel_parsing(path, thread::available_parallelism()?.get())?;
-    let raw_triple_indices: Vec<[usize; 3]> = readers
+    let triples: Vec<[usize; 3]> = readers
         .into_par_iter()
         .flat_map_iter(|reader| {
             //for q in reader {
@@ -203,29 +211,26 @@ pub fn parse_nt_terms(path: &Path) -> Result<(Vec<[usize; 3]>, Indices, Indices,
     // Track which indices are subjects/objects/predicates
     let block = [0u64; 4];
     let blocks = lasso.len().div_ceil(256);
-    let mut subject_indices = vec![block; blocks];
-    let mut object_indices = vec![block; blocks];
-    let mut predicate_indices = vec![block; blocks];
+    let mut subjects = vec![block; blocks];
+    let mut objects = vec![block; blocks];
+    let mut predicates = vec![block; blocks];
 
-    for [s, p, o] in &raw_triple_indices {
-        subject_indices.bit_set(*s);
-        predicate_indices.bit_set(*p);
-        object_indices.bit_set(*o);
+    for [s, p, o] in &triples {
+        subjects.bit_set(*s);
+        predicates.bit_set(*p);
+        objects.bit_set(*o);
     }
 
-    let string_pool: Vec<String> = lasso.into_resolver().strings().map(String::from).collect();
-    Ok((raw_triple_indices, subject_indices, object_indices, predicate_indices, string_pool))
+    let strings: Vec<String> = lasso.into_resolver().strings().map(String::from).collect();
+    Ok(IndexPool { triples, subjects, objects, predicates, strings })
 }
 
 /// Build dictionary from collected terms using string pool indices
-pub fn build_dict_from_terms(
-    subject_indices: &Indices, object_indices: &Indices, predicate_indices: &Indices, string_pool: &[String],
-    block_size: usize,
-) -> FourSectDict {
+fn build_dict_from_terms(pool: &IndexPool, block_size: usize) -> FourSectDict {
     use log::warn;
     use std::collections::BTreeSet;
 
-    if predicate_indices.is_empty() {
+    if pool.predicates.is_empty() {
         warn!("no triples found in provided RDF");
     }
     // can this be optimized? the bitvec lib does not seem to have an iterator for 1-bits
@@ -234,7 +239,7 @@ pub fn build_dict_from_terms(
         #[allow(clippy::needless_range_loop)]
         for i in 0..idx.bit_len() {
             if idx.bit_test(i) {
-                v.insert(&string_pool[i]);
+                v.insert(&pool.strings[i]);
             }
         }
         v
@@ -247,19 +252,19 @@ pub fn build_dict_from_terms(
     let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = thread::scope(|s| {
         [
             nspawn!(s, "shared", || {
-                let mut shared_indices: Indices = subject_indices.clone();
-                shared_indices.bit_and(object_indices); // intersection
+                let mut shared_indices: Indices = pool.subjects.clone();
+                shared_indices.bit_and(&pool.objects); // intersection
                 DictSectPFC::compress(&externalize(&shared_indices), block_size)
             }),
             nspawn!(s, "unique subjects", || {
-                let mut unique_subject_indices: Indices = subject_indices.clone();
-                unique_subject_indices.bit_andnot(object_indices);
+                let mut unique_subject_indices: Indices = pool.subjects.clone();
+                unique_subject_indices.bit_andnot(&pool.objects);
                 DictSectPFC::compress(&externalize(&unique_subject_indices), block_size)
             }),
-            nspawn!(s, "predicates", || DictSectPFC::compress(&externalize(predicate_indices), block_size)),
+            nspawn!(s, "predicates", || DictSectPFC::compress(&externalize(&pool.predicates), block_size)),
             nspawn!(s, "unique objects", || {
-                let mut unique_object_indices = object_indices.clone();
-                unique_object_indices.bit_andnot(subject_indices);
+                let mut unique_object_indices = pool.objects.clone();
+                unique_object_indices.bit_andnot(&pool.subjects);
                 DictSectPFC::compress(&externalize(&unique_object_indices), block_size)
             }),
         ]
