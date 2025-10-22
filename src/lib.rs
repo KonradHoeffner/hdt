@@ -103,6 +103,9 @@ pub use sophia;
 pub mod hdt_graph;
 /// Types for representing the header.
 pub mod header;
+#[cfg(feature = "sparql")]
+/// SPARQL queries.
+pub mod sparql;
 /// Types for representing and querying triples.
 pub mod triples;
 /// Constants for triple terms
@@ -113,8 +116,6 @@ use containers::ControlInfo;
 use dict_sect_pfc::DictSectPFC;
 use four_sect_dict::FourSectDict;
 pub use four_sect_dict::IdKind;
-#[cfg(feature = "sparql")]
-pub mod sparql;
 
 #[cfg(test)]
 mod tests {

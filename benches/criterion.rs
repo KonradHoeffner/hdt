@@ -88,5 +88,18 @@ fn query(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "nt")]
+fn read_nt_benchmarks(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dictionary_read_nt");
+    group.sample_size(10);
+    let test_file = std::path::Path::new("tests/resources/persondata_en.nt");
+
+    group.bench_function("read_nt", |b| b.iter(|| Hdt::read_nt(test_file).unwrap()));
+    group.finish();
+}
+
+#[cfg(feature = "nt")]
+criterion_group!(criterion, query, read_nt_benchmarks);
+#[cfg(not(feature = "nt"))]
 criterion_group!(criterion, query);
 criterion_main!(criterion);
