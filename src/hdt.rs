@@ -67,7 +67,7 @@ impl Hdt {
     }
 
     /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
-    /// The reader must point to the beginning of the data of an HDT file as produced by hdt-cpp.
+    /// The reader must point to the beginning of the data of an HDT file.
     /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
     /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
@@ -99,7 +99,7 @@ impl Hdt {
 
     /// Creates an immutable HDT instance containing the dictionary and triples from the Path.
     /// Will utilize a custom cached TriplesBitmap file if exists or create one if it does not exist.
-    /// The file path must point to the beginning of the data of an HDT file as produced by hdt-cpp.
+    /// The file path must point to the beginning of the data of an HDT file.
     /// FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order is the only supported implementation.
     /// The format is specified at <https://www.rdfhdt.org/hdt-binary-format/>, however there are some deviations.
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
@@ -179,7 +179,9 @@ impl Hdt {
     }
 
     #[cfg(feature = "cache")]
-    fn write_cache(
+    /// Writes a custom cache file to improve load times. This cache file is usuable only by
+    /// this library and is not intended to be used with hdt-cpp or hdt-java versions of the HDT tooling
+    pub fn write_cache(
         index_file_path: &std::path::PathBuf, triples: &TriplesBitmap, header_length: usize,
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;

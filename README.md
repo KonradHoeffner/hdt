@@ -11,7 +11,7 @@
 
 A Rust library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed RDF format, including:
 
-* loading the HDT default format as created by [hdt-cpp](https://github.com/rdfhdt/hdt-cpp)
+* loading the HDT default format as created by this library or [hdt-cpp](https://github.com/rdfhdt/hdt-cpp)
 * converting N-Triples to HDT
 * efficient querying by triple patterns
 * serializing into other formats like RDF Turtle and N-Triples using the [Sophia](https://crates.io/crates/sophia) adapter
