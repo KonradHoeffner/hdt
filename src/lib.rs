@@ -9,7 +9,7 @@
 //!
 //! HDT is a loading and triple pattern querying library for the [Header Dictionary Triples](https://www.rdfhdt.org/) compressed binary RDF format.
 //!
-//! Currently this library only supports loading and querying existing HDT files as created by [hdt-cpp](https://github.com/rdfhdt/hdt-cpp).
+//! Currently this library only supports loading and querying existing HDT files as created by this library or [hdt-cpp](https://github.com/rdfhdt/hdt-cpp).
 //! For reference implementations of HDT in C++ and Java, which support conversion and serialization from and into HDT with different format options,
 //! and acknowledgement of all the original authors, please look at the <https://github.com/rdfhdt> organisation.
 //!

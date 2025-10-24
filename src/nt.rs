@@ -6,14 +6,13 @@ use crate::{DictSectPFC, FourSectDict, IdKind};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
 use lasso::{Key, Spur, ThreadedRodeo};
-use log::{debug, error, info};
+use log::{debug, error};
 use oxttl::NTriplesParser;
 use rayon::prelude::*;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
-use std::time::Instant;
 
 pub type Result<T> = std::io::Result<T>;
 type Simd = [u64; 4];
@@ -126,9 +125,7 @@ struct IndexPool {
 /// read N-Triples and convert them to a dictionary and triple IDs
 fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Vec<TripleId>)> {
     // 1. Parse N-Triples and collect terms using string interning
-    let timer = Instant::now();
     let mut pool = parse_nt_terms(path)?;
-    let parse_time = timer.elapsed();
 
     // Sort and deduplicate triples in parallel with dictionary building
     let mut triples = std::mem::take(&mut pool.triples); // not needed anymore
@@ -139,12 +136,9 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
     })?;
 
     // 2. Build dictionary from term indices
-    let timer = Instant::now();
     let dict = build_dict_from_terms(&pool, block_size);
-    let dict_build_time = timer.elapsed();
 
     // 3. Encode triples to IDs using dictionary
-    let timer = Instant::now();
     let sorted_triple_indices = sorter.join().unwrap();
     let refs: &[[usize; 3]] = &sorted_triple_indices;
     let encoded_triples: Vec<TripleId> = refs
@@ -164,8 +158,6 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
             triple
         })
         .collect();
-
-    info!("{parse_time:?},{dict_build_time:?},{:?}", timer.elapsed());
 
     Ok((dict, encoded_triples))
 }
