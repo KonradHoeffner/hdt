@@ -225,10 +225,9 @@ impl DictSectPFC {
         self.num_strings
     }
 
-    /// Returns an unverified dictionary section together with a handle to verify the checksum.
-    /// For WASM builds, returns the result directly without threading.
-    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<JoinHandle<Result<Self>>> {
+    /// Common parsing logic for reading a dictionary section.
+    /// Returns the parsed components and the CRC32 code to be verified.
+    fn read_internal<R: BufRead>(reader: &mut R) -> Result<(usize, usize, Sequence, Arc<[u8]>, [u8; 4])> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -275,61 +274,18 @@ impl DictSectPFC {
         // read packed data CRC32
         let mut crc_code = [0u8; 4];
         reader.read_exact(&mut crc_code)?;
-        let cloned_data = Arc::clone(&packed_data);
-        Ok(spawn(move || {
-            let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-            let mut digest32 = crc32.digest();
-            digest32.update(&cloned_data[..]);
-            let crc_calculated32 = digest32.finalize();
-            let crc_code32 = u32::from_le_bytes(crc_code);
-            if crc_calculated32 != crc_code32 {
-                return Err(Error::InvalidCrc32Checksum(crc_calculated32, crc_code32));
-            }
-            Ok(DictSectPFC { num_strings, block_size, sequence, packed_data })
-        }))
+
+        Ok((num_strings, block_size, sequence, packed_data, crc_code))
     }
-    
-    /// WASM-specific version that returns result directly without threading
-    #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
-        let mut preamble = [0_u8];
-        reader.read_exact(&mut preamble)?;
-        if preamble[0] != 2 {
-            return Err(Error::DictSectNotPfc(preamble[0]));
-        }
 
-        // read section meta data
-        let crc8 = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
-        let mut digest8 = crc8.digest();
-        digest8.update(&[0x02]);
-        let (num_strings, bytes_read) = read_vbyte(reader)?;
-        digest8.update(&bytes_read);
-        let (packed_length, bytes_read) = read_vbyte(reader)?;
-        digest8.update(&bytes_read);
-        let (block_size, bytes_read) = read_vbyte(reader)?;
-        digest8.update(&bytes_read);
-        
-        // read section CRC8
-        let mut crc_code8 = [0_u8];
-        reader.read_exact(&mut crc_code8)?;
-        let crc_code8 = crc_code8[0];
-
-        let crc_calculated8 = digest8.finalize();
-        if crc_calculated8 != crc_code8 {
-            return Err(Error::InvalidCrc8Checksum(crc_calculated8, crc_code8));
-        }
-
-        // read sequence log array
-        let sequence = Sequence::read(reader)?;
-
-        // read packed data
-        let mut packed_data = vec![0u8; packed_length];
-        reader.read_exact(&mut packed_data)?;
-        let packed_data = Arc::<[u8]>::from(packed_data);
-
-        // read and verify packed data CRC32 (synchronously for WASM)
-        let mut crc_code = [0u8; 4];
-        reader.read_exact(&mut crc_code)?;
+    /// Verifies the CRC32 checksum and constructs the DictSectPFC.
+    fn verify_and_construct(
+        num_strings: usize,
+        block_size: usize,
+        sequence: Sequence,
+        packed_data: Arc<[u8]>,
+        crc_code: [u8; 4],
+    ) -> Result<Self> {
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
         digest32.update(&packed_data[..]);
@@ -338,8 +294,23 @@ impl DictSectPFC {
         if crc_calculated32 != crc_code32 {
             return Err(Error::InvalidCrc32Checksum(crc_calculated32, crc_code32));
         }
-        
         Ok(DictSectPFC { num_strings, block_size, sequence, packed_data })
+    }
+
+    /// Returns an unverified dictionary section together with a handle to verify the checksum.
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<JoinHandle<Result<Self>>> {
+        let (num_strings, block_size, sequence, packed_data, crc_code) = Self::read_internal(reader)?;
+        Ok(spawn(move || {
+            Self::verify_and_construct(num_strings, block_size, sequence, packed_data, crc_code)
+        }))
+    }
+    
+    /// WASM-specific version that returns result directly without threading
+    #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
+        let (num_strings, block_size, sequence, packed_data, crc_code) = Self::read_internal(reader)?;
+        Self::verify_and_construct(num_strings, block_size, sequence, packed_data, crc_code)
     }
 
     /// counterpoint to the read method
