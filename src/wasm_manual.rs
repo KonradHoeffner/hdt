@@ -42,8 +42,8 @@ fn parse_hdt_term(term: &str) -> RdfTerm {
             let value = &term[1..at_pos];
             let language = &term[at_pos + 2..];
             return RdfTerm::Literal {
-                value: value.to_string(),
-                language: Some(language.to_string()),
+                value: value.to_owned(),
+                language: Some(language.to_owned()),
                 datatype: None,
             };
         }
@@ -55,25 +55,25 @@ fn parse_hdt_term(term: &str) -> RdfTerm {
             let value = &term[1..caret_pos];
             let datatype = &term[caret_pos + 4..term.len() - 1];
             return RdfTerm::Literal {
-                value: value.to_string(),
+                value: value.to_owned(),
                 language: None,
-                datatype: Some(datatype.to_string()),
+                datatype: Some(datatype.to_owned()),
             };
         }
     }
 
     // Simple literal: "value"
     if term.starts_with('"') && term.ends_with('"') {
-        return RdfTerm::Literal { value: term[1..term.len() - 1].to_string(), language: None, datatype: None };
+        return RdfTerm::Literal { value: term[1..term.len() - 1].to_owned(), language: None, datatype: None };
     }
 
     // Blank node: _:id
     if term.starts_with("_:") {
-        return RdfTerm::BlankNode { value: term.to_string() };
+        return RdfTerm::BlankNode { value: term.to_owned() };
     }
 
     // Named node (IRI) - default case
-    RdfTerm::NamedNode { value: term.to_string() }
+    RdfTerm::NamedNode { value: term.to_owned() }
 }
 
 // Global HDT instance storage
@@ -109,7 +109,7 @@ static LOGGER: WasmLogger = WasmLogger;
 #[unsafe(no_mangle)]
 pub extern "C" fn hdt_init_logging() -> i32 {
     match log::set_logger(&LOGGER).map(|()| log::set_max_level(log::LevelFilter::Debug)) {
-        Ok(_) => 0,
+        Ok(()) => 0,
         Err(_) => 1,
     }
 }
@@ -122,12 +122,12 @@ struct SliceBufReader<'a> {
 }
 
 impl<'a> SliceBufReader<'a> {
-    fn new(slice: &'a [u8]) -> Self {
+    const fn new(slice: &'a [u8]) -> Self {
         Self { slice, pos: 0 }
     }
 }
 
-impl<'a> Read for SliceBufReader<'a> {
+impl Read for SliceBufReader<'_> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let remaining = &self.slice[self.pos..];
         let to_read = buf.len().min(remaining.len());
@@ -137,7 +137,7 @@ impl<'a> Read for SliceBufReader<'a> {
     }
 }
 
-impl<'a> BufRead for SliceBufReader<'a> {
+impl BufRead for SliceBufReader<'_> {
     fn fill_buf(&mut self) -> io::Result<&[u8]> {
         Ok(&self.slice[self.pos..])
     }
@@ -150,20 +150,22 @@ impl<'a> BufRead for SliceBufReader<'a> {
 /// Load an HDT file from bytes
 /// Returns 0 on success, negative on error (error code = -bytes_read - 1)
 ///
+/// # Safety
 /// WASM64 Note: Instead of using from_raw_parts which doesn't work in WASM64,
-/// we directly access the linear memory through volatile reads
+/// we directly access the linear memory through volatile reads.
+/// Caller must ensure `ptr` is valid and points to at least `len` bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
+pub unsafe extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
     // Version logging to verify correct build
     const VERSION: &str = "WASM64-v2.0-NoThreading-2025-11-22";
     if let Ok(mut log) = DEBUG_LOG.lock() {
-        log.push(format!("[VERSION] {}", VERSION));
-        log.push(format!("[RUST-ENTRY] hdt_load called: ptr={:?}, len={}", ptr, len));
+        log.push(format!("[VERSION] {VERSION}"));
+        log.push(format!("[RUST-ENTRY] hdt_load called: ptr={ptr:?}, len={len}"));
     }
 
     if len < 10 {
         if let Ok(mut log) = DEBUG_LOG.lock() {
-            log.push(format!("[RUST-ERROR] Data too short: len={}", len));
+            log.push(format!("[RUST-ERROR] Data too short: len={len}"));
         }
         return -9999; // Data too short
     }
@@ -171,6 +173,7 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
     // Directly access linear memory through volatile reads to work around WASM64 pointer issues
     // This copies the data byte-by-byte from WASM linear memory into a Rust Vec
     let mut data_vec = Vec::with_capacity(len);
+    // SAFETY: Caller guarantees ptr is valid for len bytes
     unsafe {
         for i in 0..len {
             let byte_ptr = ptr.add(i);
@@ -181,15 +184,18 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
 
     // Debug: Check first bytes in Rust
     if let Ok(mut log) = DEBUG_LOG.lock() {
-        let first_20: Vec<String> = data_vec.iter().take(20).map(|b| format!("{:02x}", b)).collect();
-        log.push(format!("[RUST] data_vec length: {}", data_vec.len()));
-        log.push(format!("[RUST] First 20 bytes: {}", first_20.join(" ")));
+        let first_20: Vec<String> = data_vec.iter().take(20).map(|b| format!("{b:02x}")).collect();
+        let data_len = data_vec.len();
+        let first_20_joined = first_20.join(" ");
+        log.push(format!("[RUST] data_vec length: {data_len}"));
+        log.push(format!("[RUST] First 20 bytes: {first_20_joined}"));
     }
 
     // Verify we read the correct data
-    if data_vec.len() != len {
+    let data_len = data_vec.len();
+    if data_len != len {
         if let Ok(mut log) = DEBUG_LOG.lock() {
-            log.push(format!("[RUST-ERROR] Length mismatch: expected={}, got={}", len, data_vec.len()));
+            log.push(format!("[RUST-ERROR] Length mismatch: expected={len}, got={data_len}"));
         }
         return -9999; // Length mismatch
     }
@@ -197,22 +203,19 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
     // Verify the HDT cookie
     let cookie_check = &data_vec[0..4];
     if let Ok(mut log) = DEBUG_LOG.lock() {
-        log.push(format!("[RUST] Cookie check: {:02x?} vs b\"$HDT\" ({:02x?})", cookie_check, b"$HDT"));
+        log.push(format!("[RUST] Cookie check: {cookie_check:02x?} vs b\"$HDT\" ({:02x?})", b"$HDT"));
     }
     if cookie_check != b"$HDT" {
         // Encode what we actually read in the error
-        let b0 = data_vec[0] as i32;
-        let b1 = data_vec[1] as i32;
-        let b2 = data_vec[2] as i32;
-        let b3 = data_vec[3] as i32;
+        let b0 = i32::from(data_vec[0]);
+        let b1 = i32::from(data_vec[1]);
+        let b2 = i32::from(data_vec[2]);
+        let b3 = i32::from(data_vec[3]);
         if let Ok(mut log) = DEBUG_LOG.lock() {
-            log.push(format!(
-                "[RUST-ERROR] Cookie mismatch! Got bytes: [{:02x}, {:02x}, {:02x}, {:02x}]",
-                b0, b1, b2, b3
-            ));
+            log.push(format!("[RUST-ERROR] Cookie mismatch! Got bytes: [{b0:02x}, {b1:02x}, {b2:02x}, {b3:02x}]"));
             log.push(format!(
                 "[RUST-ERROR] As string: '{}'",
-                String::from_utf8_lossy(&[b0 as u8, b1 as u8, b2 as u8, b3 as u8])
+                String::from_utf8_lossy(&[data_vec[0], data_vec[1], data_vec[2], data_vec[3]])
             ));
         }
         // Return error with first 4 bytes encoded
@@ -233,15 +236,18 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
             // Return negative value encoding the byte position where it failed
             // This works around WASM64 static Mutex issues
             // Error code = -(bytes_read + 1), so we can distinguish from success (0)
-            -((reader.pos as i32) + 1)
+            -i32::try_from(reader.pos).unwrap_or(i32::MAX).saturating_add(1)
         }
     }
 }
 
 /// Get the last error message
 /// Returns the length of the error message written to the buffer, or 0 if no error
+///
+/// # Safety
+/// Caller must ensure `output_ptr` is valid and points to at least `output_capacity` bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_get_last_error(output_ptr: *mut u8, output_capacity: usize) -> i32 {
+pub unsafe extern "C" fn hdt_get_last_error(output_ptr: *mut u8, output_capacity: usize) -> i32 {
     let last_error = LAST_ERROR.lock().unwrap();
     match last_error.as_ref() {
         Some(error_msg) => {
@@ -249,9 +255,10 @@ pub extern "C" fn hdt_get_last_error(output_ptr: *mut u8, output_capacity: usize
             if error_bytes.len() > output_capacity {
                 return -1; // Buffer too small
             }
+            // SAFETY: Caller guarantees output_ptr is valid for output_capacity bytes
             let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, error_bytes.len()) };
             output_slice.copy_from_slice(error_bytes);
-            error_bytes.len() as i32
+            i32::try_from(error_bytes.len()).unwrap_or(i32::MAX)
         }
         None => 0, // No error
     }
@@ -259,14 +266,17 @@ pub extern "C" fn hdt_get_last_error(output_ptr: *mut u8, output_capacity: usize
 
 /// Get debug logs
 /// Returns the length of the debug log written to the buffer as JSON array
+///
+/// # Safety
+/// Caller must ensure `output_ptr` is valid and points to at least `output_capacity` bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_get_debug_log(output_ptr: *mut u8, output_capacity: usize) -> i32 {
+pub unsafe extern "C" fn hdt_get_debug_log(output_ptr: *mut u8, output_capacity: usize) -> i32 {
     let debug_log = DEBUG_LOG.lock().unwrap();
     let json = match serde_json::to_string(&*debug_log) {
         Ok(j) => j,
         Err(e) => {
             // If serialization fails, return an error array with the error message
-            format!("[\"Serialization error: {}\"]", e)
+            format!("[\"Serialization error: {e}\"]")
         }
     };
     let json_bytes = json.as_bytes();
@@ -275,9 +285,10 @@ pub extern "C" fn hdt_get_debug_log(output_ptr: *mut u8, output_capacity: usize)
         return -2; // Buffer too small
     }
 
+    // SAFETY: Caller guarantees output_ptr is valid for output_capacity bytes
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, json_bytes.len()) };
     output_slice.copy_from_slice(json_bytes);
-    json_bytes.len() as i32
+    i32::try_from(json_bytes.len()).unwrap_or(i32::MAX)
 }
 
 /// Clear debug logs
@@ -290,18 +301,19 @@ pub extern "C" fn hdt_clear_debug_log() {
 
 /// Count triples matching a pattern WITHOUT loading them into memory
 /// Returns the count, or -1 on error
+///
+/// # Safety
+/// Caller must ensure pointer arguments are valid and point to at least their respective length bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_count_triples(
+pub unsafe extern "C" fn hdt_count_triples(
     subject_ptr: *const u8, subject_len: usize, predicate_ptr: *const u8, predicate_len: usize,
     object_ptr: *const u8, object_len: usize,
 ) -> i64 {
     let instance = HDT_INSTANCE.lock().unwrap();
-    let hdt = match instance.as_ref() {
-        Some(h) => h,
-        None => return -1,
-    };
+    let Some(hdt) = instance.as_ref() else { return -1 };
 
     // Parse input strings
+    // SAFETY: Caller guarantees pointers are valid for their respective lengths
     let subject = if subject_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(subject_ptr, subject_len) };
         Some(std::str::from_utf8(bytes).unwrap())
@@ -325,23 +337,24 @@ pub extern "C" fn hdt_count_triples(
 
     // Count matching triples (doesn't load them into memory)
     let count = hdt.triples_with_pattern(subject, predicate, object).count();
-    count as i64
+    i64::try_from(count).unwrap_or(i64::MAX)
 }
 
 /// Query triples and write results to a buffer
 /// Returns the number of triples found, or -1 on error
+///
+/// # Safety
+/// Caller must ensure all pointer arguments are valid and point to at least their respective length bytes.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_query_triples(
+pub unsafe extern "C" fn hdt_query_triples(
     subject_ptr: *const u8, subject_len: usize, predicate_ptr: *const u8, predicate_len: usize,
     object_ptr: *const u8, object_len: usize, output_ptr: *mut u8, output_capacity: usize,
 ) -> i32 {
     let instance = HDT_INSTANCE.lock().unwrap();
-    let hdt = match instance.as_ref() {
-        Some(h) => h,
-        None => return -1,
-    };
+    let Some(hdt) = instance.as_ref() else { return -1 };
 
     // Parse input strings
+    // SAFETY: Caller guarantees pointers are valid for their respective lengths
     let subject = if subject_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(subject_ptr, subject_len) };
         Some(std::str::from_utf8(bytes).unwrap_or(""))
@@ -374,24 +387,25 @@ pub extern "C" fn hdt_query_triples(
         .collect();
 
     // Serialize results as JSON
-    let json = serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string());
+    let json = serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_owned());
     let json_bytes = json.as_bytes();
 
     if json_bytes.len() > output_capacity {
         return -2; // Buffer too small
     }
 
+    // SAFETY: Caller guarantees output_ptr is valid for output_capacity bytes
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, json_bytes.len()) };
     output_slice.copy_from_slice(json_bytes);
 
-    json_bytes.len() as i32
+    i32::try_from(json_bytes.len()).unwrap_or(i32::MAX)
 }
 
 /// Get the size of the HDT instance in memory
 #[unsafe(no_mangle)]
 pub extern "C" fn hdt_size_in_bytes() -> usize {
     let instance = HDT_INSTANCE.lock().unwrap();
-    instance.as_ref().map(|h| h.size_in_bytes()).unwrap_or(0)
+    instance.as_ref().map_or(0, crate::Hdt::size_in_bytes)
 }
 
 /// Allocate memory (for passing data from JS)
@@ -404,8 +418,12 @@ pub extern "C" fn hdt_alloc(size: usize) -> *mut u8 {
 }
 
 /// Free memory
+///
+/// # Safety
+/// Caller must ensure `ptr` was allocated by `hdt_alloc` with the given `size`.
 #[unsafe(no_mangle)]
-pub extern "C" fn hdt_free(ptr: *mut u8, size: usize) {
+pub unsafe extern "C" fn hdt_free(ptr: *mut u8, size: usize) {
+    // SAFETY: Caller guarantees ptr was allocated by hdt_alloc with the given size
     unsafe {
         let _ = Vec::from_raw_parts(ptr, 0, size);
     }
