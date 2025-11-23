@@ -15,6 +15,9 @@ use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Type alias for the internal read result to reduce complexity
+type ReadInternalResult = (usize, usize, Sequence, Arc<[u8]>, [u8; 4]);
+
 /// Dictionary section with plain front coding.
 //#[derive(Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -227,7 +230,7 @@ impl DictSectPFC {
 
     /// Common parsing logic for reading a dictionary section.
     /// Returns the parsed components and the CRC32 code to be verified.
-    fn read_internal<R: BufRead>(reader: &mut R) -> Result<(usize, usize, Sequence, Arc<[u8]>, [u8; 4])> {
+    fn read_internal<R: BufRead>(reader: &mut R) -> Result<ReadInternalResult> {
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -280,11 +283,7 @@ impl DictSectPFC {
 
     /// Verifies the CRC32 checksum and constructs the DictSectPFC.
     fn verify_and_construct(
-        num_strings: usize,
-        block_size: usize,
-        sequence: Sequence,
-        packed_data: Arc<[u8]>,
-        crc_code: [u8; 4],
+        num_strings: usize, block_size: usize, sequence: Sequence, packed_data: Arc<[u8]>, crc_code: [u8; 4],
     ) -> Result<Self> {
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest32 = crc32.digest();
@@ -301,11 +300,9 @@ impl DictSectPFC {
     #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     pub fn read<R: BufRead>(reader: &mut R) -> Result<JoinHandle<Result<Self>>> {
         let (num_strings, block_size, sequence, packed_data, crc_code) = Self::read_internal(reader)?;
-        Ok(spawn(move || {
-            Self::verify_and_construct(num_strings, block_size, sequence, packed_data, crc_code)
-        }))
+        Ok(spawn(move || Self::verify_and_construct(num_strings, block_size, sequence, packed_data, crc_code)))
     }
-    
+
     /// WASM-specific version that returns result directly without threading
     #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
     pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
