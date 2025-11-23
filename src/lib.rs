@@ -108,11 +108,11 @@ pub mod header;
 pub mod sparql;
 /// Types for representing and querying triples.
 pub mod triples;
+/// Constants for triple terms
+pub mod vocab;
 /// Manual WebAssembly bindings (works with wasm64).
 #[cfg(feature = "wasm")]
 pub mod wasm_manual;
-/// Constants for triple terms
-pub mod vocab;
 
 pub use crate::hdt::Hdt;
 use containers::ControlInfo;

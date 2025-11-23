@@ -1,11 +1,11 @@
 //! Manual WebAssembly bindings without wasm-bindgen
-//! 
+//!
 //! This module provides simple C-style exports that work with wasm64
 
 use crate::Hdt;
+use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Read};
 use std::sync::Mutex;
-use serde::{Serialize, Deserialize};
 
 /// Structured RDF term representation for efficient JavaScript parsing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,7 +48,7 @@ fn parse_hdt_term(term: &str) -> RdfTerm {
             };
         }
     }
-    
+
     // Literal with datatype: "value"^^<datatype>
     if let Some(caret_pos) = term.find("\"^^<") {
         if term.starts_with('"') && term.ends_with('>') {
@@ -61,27 +61,19 @@ fn parse_hdt_term(term: &str) -> RdfTerm {
             };
         }
     }
-    
+
     // Simple literal: "value"
     if term.starts_with('"') && term.ends_with('"') {
-        return RdfTerm::Literal {
-            value: term[1..term.len() - 1].to_string(),
-            language: None,
-            datatype: None,
-        };
+        return RdfTerm::Literal { value: term[1..term.len() - 1].to_string(), language: None, datatype: None };
     }
-    
+
     // Blank node: _:id
     if term.starts_with("_:") {
-        return RdfTerm::BlankNode {
-            value: term.to_string(),
-        };
+        return RdfTerm::BlankNode { value: term.to_string() };
     }
-    
+
     // Named node (IRI) - default case
-    RdfTerm::NamedNode {
-        value: term.to_string(),
-    }
+    RdfTerm::NamedNode { value: term.to_string() }
 }
 
 // Global HDT instance storage
@@ -157,7 +149,7 @@ impl<'a> BufRead for SliceBufReader<'a> {
 
 /// Load an HDT file from bytes
 /// Returns 0 on success, negative on error (error code = -bytes_read - 1)
-/// 
+///
 /// WASM64 Note: Instead of using from_raw_parts which doesn't work in WASM64,
 /// we directly access the linear memory through volatile reads
 #[unsafe(no_mangle)]
@@ -168,14 +160,14 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
         log.push(format!("[VERSION] {}", VERSION));
         log.push(format!("[RUST-ENTRY] hdt_load called: ptr={:?}, len={}", ptr, len));
     }
-    
+
     if len < 10 {
         if let Ok(mut log) = DEBUG_LOG.lock() {
             log.push(format!("[RUST-ERROR] Data too short: len={}", len));
         }
         return -9999; // Data too short
     }
-    
+
     // Directly access linear memory through volatile reads to work around WASM64 pointer issues
     // This copies the data byte-by-byte from WASM linear memory into a Rust Vec
     let mut data_vec = Vec::with_capacity(len);
@@ -186,14 +178,14 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
             data_vec.push(byte);
         }
     }
-    
+
     // Debug: Check first bytes in Rust
     if let Ok(mut log) = DEBUG_LOG.lock() {
         let first_20: Vec<String> = data_vec.iter().take(20).map(|b| format!("{:02x}", b)).collect();
         log.push(format!("[RUST] data_vec length: {}", data_vec.len()));
         log.push(format!("[RUST] First 20 bytes: {}", first_20.join(" ")));
     }
-    
+
     // Verify we read the correct data
     if data_vec.len() != len {
         if let Ok(mut log) = DEBUG_LOG.lock() {
@@ -201,7 +193,7 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
         }
         return -9999; // Length mismatch
     }
-    
+
     // Verify the HDT cookie
     let cookie_check = &data_vec[0..4];
     if let Ok(mut log) = DEBUG_LOG.lock() {
@@ -214,17 +206,23 @@ pub extern "C" fn hdt_load(ptr: *const u8, len: usize) -> i32 {
         let b2 = data_vec[2] as i32;
         let b3 = data_vec[3] as i32;
         if let Ok(mut log) = DEBUG_LOG.lock() {
-            log.push(format!("[RUST-ERROR] Cookie mismatch! Got bytes: [{:02x}, {:02x}, {:02x}, {:02x}]", b0, b1, b2, b3));
-            log.push(format!("[RUST-ERROR] As string: '{}'", String::from_utf8_lossy(&[b0 as u8, b1 as u8, b2 as u8, b3 as u8])));
+            log.push(format!(
+                "[RUST-ERROR] Cookie mismatch! Got bytes: [{:02x}, {:02x}, {:02x}, {:02x}]",
+                b0, b1, b2, b3
+            ));
+            log.push(format!(
+                "[RUST-ERROR] As string: '{}'",
+                String::from_utf8_lossy(&[b0 as u8, b1 as u8, b2 as u8, b3 as u8])
+            ));
         }
         // Return error with first 4 bytes encoded
         return -(9000 + b0 + (b1 << 8) + (b2 << 16) + (b3 << 24));
     }
-    
+
     // Use our custom SliceBufReader instead of std::io::BufReader
     // This avoids WASM64 issues with BufReader::read_until
     let mut reader = SliceBufReader::new(&data_vec);
-    
+
     match Hdt::read(&mut reader) {
         Ok(hdt) => {
             let mut instance = HDT_INSTANCE.lock().unwrap();
@@ -255,7 +253,7 @@ pub extern "C" fn hdt_get_last_error(output_ptr: *mut u8, output_capacity: usize
             output_slice.copy_from_slice(error_bytes);
             error_bytes.len() as i32
         }
-        None => 0 // No error
+        None => 0, // No error
     }
 }
 
@@ -272,11 +270,11 @@ pub extern "C" fn hdt_get_debug_log(output_ptr: *mut u8, output_capacity: usize)
         }
     };
     let json_bytes = json.as_bytes();
-    
+
     if json_bytes.len() > output_capacity {
         return -2; // Buffer too small
     }
-    
+
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, json_bytes.len()) };
     output_slice.copy_from_slice(json_bytes);
     json_bytes.len() as i32
@@ -294,16 +292,15 @@ pub extern "C" fn hdt_clear_debug_log() {
 /// Returns the count, or -1 on error
 #[unsafe(no_mangle)]
 pub extern "C" fn hdt_count_triples(
-    subject_ptr: *const u8, subject_len: usize,
-    predicate_ptr: *const u8, predicate_len: usize,
+    subject_ptr: *const u8, subject_len: usize, predicate_ptr: *const u8, predicate_len: usize,
     object_ptr: *const u8, object_len: usize,
 ) -> i64 {
     let instance = HDT_INSTANCE.lock().unwrap();
     let hdt = match instance.as_ref() {
         Some(h) => h,
-        None => return -1
+        None => return -1,
     };
-    
+
     // Parse input strings
     let subject = if subject_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(subject_ptr, subject_len) };
@@ -311,21 +308,21 @@ pub extern "C" fn hdt_count_triples(
     } else {
         None
     };
-    
+
     let predicate = if predicate_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(predicate_ptr, predicate_len) };
         Some(std::str::from_utf8(bytes).unwrap())
     } else {
         None
     };
-    
+
     let object = if object_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(object_ptr, object_len) };
         Some(std::str::from_utf8(bytes).unwrap())
     } else {
         None
     };
-    
+
     // Count matching triples (doesn't load them into memory)
     let count = hdt.triples_with_pattern(subject, predicate, object).count();
     count as i64
@@ -335,17 +332,15 @@ pub extern "C" fn hdt_count_triples(
 /// Returns the number of triples found, or -1 on error
 #[unsafe(no_mangle)]
 pub extern "C" fn hdt_query_triples(
-    subject_ptr: *const u8, subject_len: usize,
-    predicate_ptr: *const u8, predicate_len: usize,
-    object_ptr: *const u8, object_len: usize,
-    output_ptr: *mut u8, output_capacity: usize
+    subject_ptr: *const u8, subject_len: usize, predicate_ptr: *const u8, predicate_len: usize,
+    object_ptr: *const u8, object_len: usize, output_ptr: *mut u8, output_capacity: usize,
 ) -> i32 {
     let instance = HDT_INSTANCE.lock().unwrap();
     let hdt = match instance.as_ref() {
         Some(h) => h,
-        None => return -1
+        None => return -1,
     };
-    
+
     // Parse input strings
     let subject = if subject_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(subject_ptr, subject_len) };
@@ -353,21 +348,21 @@ pub extern "C" fn hdt_query_triples(
     } else {
         None
     };
-    
+
     let predicate = if predicate_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(predicate_ptr, predicate_len) };
         Some(std::str::from_utf8(bytes).unwrap_or(""))
     } else {
         None
     };
-    
+
     let object = if object_len > 0 {
         let bytes = unsafe { std::slice::from_raw_parts(object_ptr, object_len) };
         Some(std::str::from_utf8(bytes).unwrap_or(""))
     } else {
         None
     };
-    
+
     // Query and convert to structured triples
     let results: Vec<StructuredTriple> = hdt
         .triples_with_pattern(subject, predicate, object)
@@ -377,18 +372,18 @@ pub extern "C" fn hdt_query_triples(
             object: parse_hdt_term(&triple[2]),
         })
         .collect();
-    
+
     // Serialize results as JSON
     let json = serde_json::to_string(&results).unwrap_or_else(|_| "[]".to_string());
     let json_bytes = json.as_bytes();
-    
+
     if json_bytes.len() > output_capacity {
         return -2; // Buffer too small
     }
-    
+
     let output_slice = unsafe { std::slice::from_raw_parts_mut(output_ptr, json_bytes.len()) };
     output_slice.copy_from_slice(json_bytes);
-    
+
     json_bytes.len() as i32
 }
 
@@ -415,4 +410,3 @@ pub extern "C" fn hdt_free(ptr: *mut u8, size: usize) {
         let _ = Vec::from_raw_parts(ptr, 0, size);
     }
 }
-
