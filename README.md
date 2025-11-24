@@ -136,6 +136,7 @@ If have a different type of request, feel free to send an email to [Konrad](mail
 
 If you use this library in your research, please cite our paper in the Journal of Open Source Software.
 We also provide a [CITATION.cff](./CITATION.cff) file.
+If you cite the repository and mention names (which you don't have to), please do not omit Tim Baccaert as he did all the groundwork while I (Konrad) just finished his prototype and maintain it.
 
 #### BibTeX entry
 
@@ -153,9 +154,9 @@ We also provide a [CITATION.cff](./CITATION.cff) file.
 }
 ```
 
-#### Citation string
+#### Citation string (MLA)
 
-Höffner et al., (2023). hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format. Journal of Open Source Software, 8(84), 5114, https://doi.org/10.21105/joss.05114
+Höffner, Konrad, and Tim Baccaert. "hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format." *Journal of Open Source Software*, vol. 8, no. 84, 2023, p. 5114, https://doi.org/10.21105/joss.05114.
 
 ### Contribute
 We are happy to receive pull requests.
