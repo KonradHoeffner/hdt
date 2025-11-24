@@ -5,6 +5,7 @@ use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
 use std::io::BufRead;
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use std::thread::JoinHandle;
 use thiserror::Error;
 
@@ -155,25 +156,8 @@ impl FourSectDict {
         if dict_ci.format != "<http://purl.org/HDT/hdt#dictionaryFour>" {
             return Err(Error::Other("Implementation only supports four section dictionaries".to_owned()));
         }
-
-        use SectKind::*;
-
-        // WASM version - read returns Result<DictSectPFC> directly
-        #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
-        {
-            let shared = DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Shared })?;
-            let subject = DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Subject })?;
-            let predicate = DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Predicate })?;
-            let object = DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind: Object })?;
-            Ok(UnvalidatedFourSectDict([shared, subject, predicate, object]))
-        }
-
-        // Native version - read returns Result<JoinHandle<Result<DictSectPFC>>>
-        #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
-        {
-            let mut f = |sect_kind| DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind });
-            Ok(UnvalidatedFourSectDict([f(Shared)?, f(Subject)?, f(Predicate)?, f(Object)?]))
-        }
+        let mut f = |sect_kind| DictSectPFC::read(reader).map_err(|e| DictSectError { e, sect_kind });
+        Ok(UnvalidatedFourSectDict([f(Shared)?, f(Subject)?, f(Predicate)?, f(Object)?]))
     }
 
     /// write the whole Dictionary including control info and all sections
