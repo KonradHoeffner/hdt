@@ -9,6 +9,7 @@ use std::cmp::{Ordering, min};
 use std::collections::BTreeSet;
 use std::io::{BufRead, Write};
 use std::sync::Arc;
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use std::thread::{JoinHandle, spawn};
 use std::{fmt, str};
 use thiserror::Error;
