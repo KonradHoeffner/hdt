@@ -316,6 +316,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "sophia")]
+    #[cfg(feature = "nt")]
     fn w3c_tests() -> Result<()> {
         use std::io::{BufWriter, Write};
         let mut count = 0;
