@@ -76,8 +76,10 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             ))]
             .into_iter();
         }
-        //let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
-        // todo: if ID 0 but not an option throw an error
+        // no results, one of the constants does not exist
+        if [subject, predicate, object].into_iter().any(|x| x == Some(&[0, 0, 0])) {
+            return vec![].into_iter();
+        }
         let [ps, pp, po]: [Id; 3] = [subject, predicate, object]
             .iter()
             .enumerate()
@@ -102,16 +104,21 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
     }
 
     fn internalize_term(&self, term: Term) -> Result<Self::InternalTerm, Error> {
+        //let message = format!("term {term} not found in any dictionary section");
         let s = term_to_hdt_bgp_str(term);
         let ids = IdKind::KINDS.map(|kind| self.dict.string_to_id(&s, kind));
-        if ids.iter().all(|x| *x == 0) {
-            return Err(Error::new(ErrorKind::Other, "term not found in any dictionary section"));
-        }
+        /*if ids.iter().all(|x| *x == 0) {
+            return Err(Error::new(ErrorKind::Other, message));
+        }*/
         Ok(ids)
     }
 
     fn externalize_term(&self, term: Self::InternalTerm) -> Result<Term, Error> {
-        hdt_bgp_str_to_term(&term)
+        let s = match term.into_iter().enumerate().filter(|(_, id)| *id > 0).next() {
+            Some((i, id)) => self.dict.id_to_string(id, IdKind::KINDS[i]).unwrap(),
+            None => "\"*$§not found§$*\"".to_owned(), // workaround to signify invalid term
+        };
+        hdt_bgp_str_to_term(&s)
     }
 }
 
