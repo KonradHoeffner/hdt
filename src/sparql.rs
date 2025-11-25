@@ -1,4 +1,6 @@
 use crate::Hdt;
+use crate::IdKind;
+use crate::triples::Id;
 use spareval::{InternalQuad, QueryEvaluationError, QueryEvaluator, QueryableDataset};
 use spargebra::SparqlParser;
 use spargebra::term::{BlankNode, NamedNode, Term};
@@ -42,13 +44,30 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
+/*#[derive(Hash,Eq,PartialEq,Clone,Debug)]
+struct TermIds([usize; 3]);*/
+// save space using 32 bit
+//type TermIds = [u32; 3];
+type TermIds = [usize; 3];
+
+/*impl TermIds {
+
+}*/
+
+fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> TermIds {
+    // is there a more efficient way than going around strings again?
+    let s = hdt.dict.id_to_string(id, kind).expect("error wih id_to_string");
+    // for testing, later optimize for each case preventing the extra roundtrip for the given component
+    IdKind::KINDS.map(|kind| hdt.dict.string_to_id(&s, kind))
+}
+
 impl<'a> QueryableDataset<'a> for &'a Hdt {
-    type InternalTerm = String;
+    type InternalTerm = TermIds;
     type Error = Error;
 
     fn internal_quads_for_pattern(
-        &self, subject: Option<&String>, predicate: Option<&String>, object: Option<&String>,
-        graph_name: Option<Option<&String>>,
+        &self, subject: Option<&Self::InternalTerm>, predicate: Option<&Self::InternalTerm>,
+        object: Option<&Self::InternalTerm>, graph_name: Option<Option<&Self::InternalTerm>>,
     ) -> impl Iterator<Item = Result<InternalQuad<Self::InternalTerm>, Error>> + use<'a> {
         if let Some(Some(graph_name)) = graph_name {
             return vec![Err(Error::new(
@@ -57,21 +76,41 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             ))]
             .into_iter();
         }
-        let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
+        //let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
+        // todo: if ID 0 but not an option throw an error
+        let [ps, pp, po]: [Id; 3] = [subject, predicate, object]
+            .iter()
+            .enumerate()
+            .map(|(i, x)| x.map(|x| x[i] as usize))
+            .inspect(|&x| assert_ne!(x, Some(0), "Term ID invalid for that position!"))
+            // now 0 is OK because it means variable in the pattern
+            .map(|x| x.unwrap_or(0))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        /*self.triple_ids_with_id_pattern(ps,pp,po)
+        .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))*/
         // Query HDT for BGP by string values.
+        // can we avoid collecting to save memory?
         let v: Vec<_> = self
-            .triples_with_pattern(ps, pp, po)
-            .map(|at| at.map(|a| a.to_string()))
+            .triple_ids_with_id_pattern(ps, pp, po)
+            // todo: shorten with enumerate, map, ...
+            .map(|[s,p,o]| [term_ids(self,s,IdKind::Subject),term_ids(self,p,IdKind::Predicate),term_ids(self,o,IdKind::Object)])
             .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))
             .collect();
         v.into_iter()
     }
 
-    fn internalize_term(&self, term: Term) -> Result<String, Error> {
-        Ok(term_to_hdt_bgp_str(term))
+    fn internalize_term(&self, term: Term) -> Result<Self::InternalTerm, Error> {
+        let s = term_to_hdt_bgp_str(term);
+        let ids = IdKind::KINDS.map(|kind| self.dict.string_to_id(&s, kind));
+        if ids.iter().all(|x| *x == 0) {
+            return Err(Error::new(ErrorKind::Other, "term not found in any dictionary section"));
+        }
+        Ok(ids)
     }
 
-    fn externalize_term(&self, term: String) -> Result<Term, Error> {
+    fn externalize_term(&self, term: Self::InternalTerm) -> Result<Term, Error> {
         hdt_bgp_str_to_term(&term)
     }
 }
