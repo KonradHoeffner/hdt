@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>HDT WASM Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; max-width: 1240px; margin: 0 auto; }
+        pre { background: #f4f4f4; padding: 10px; border: 1px solid #ddd; overflow-x: auto; }
+        .status { padding: 8px; margin: 10px 0; border-radius: 4px; }
+        .loading { background: #fff3cd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+    </style>
+</head>
+<body>
+    <h1>HDT WASM64 Test</h1>
+    <dl>
+      <dt>1. Build</dt>
+      <dd><code>cargo build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release --features wasm --lib</code></dd>
+
+      <dt>2. Run server</dt>
+      <dd>
+        <code>python3 -m http.server 8000</code><br>
+        (<em>or:</em> <code>php -S localhost:8000</code> <em>or:</em> <code>npx http-server -p 8000</code>)
+      </dd>
+    </dl>
+    <div id="status" class="status loading">Loading...</div>
+    <div id="output"></div>
+
+    <script>
+        const decoder = new TextDecoder();
+        const encoder = new TextEncoder();
+
+        function log(message, status = 'loading') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${status}`;
+            console.log(`[${status}] ${message}`);
+        }
+
+        async function loadWasm() {
+            const wasmUrl = 'target/wasm64-unknown-unknown/release/hdt.wasm';
+            const response = await fetch(wasmUrl);
+            if (!response.ok) {
+                console.error(`[loadWasm] Failed to fetch WASM: ${response.status} ${response.statusText}`);
+                throw new Error(`Failed to fetch WASM: ${response.status} ${response.statusText}. Did you build it first?`);
+            }
+            const bytes = await response.arrayBuffer();
+            if (bytes.byteLength === 0) {
+                console.error("[loadWasm] WASM file is empty.");
+                throw new Error('WASM file is empty. Build it first.');
+            }
+            
+            // WASM module exports its own memory
+            const { instance } = await WebAssembly.instantiate(bytes, {});
+            return instance.exports;
+        }
+
+        async function loadHdtFile(path) {
+            const response = await fetch(path);
+            return new Uint8Array(await response.arrayBuffer());
+        }
+
+        function writeToMemory(wasm, data) {
+            const ptr = wasm.hdt_alloc(BigInt(data.length));
+            const ptrNum = Number(ptr);
+            const memory = new Uint8Array(wasm.memory.buffer);
+            memory.set(data, ptrNum);
+            return ptr;
+        }
+
+        function readFromMemory(wasm, ptr, len) {
+            const ptrNum = typeof ptr === 'bigint' ? Number(ptr) : ptr;
+            const lenNum = typeof len === 'bigint' ? Number(len) : len;
+            const memory = new Uint8Array(wasm.memory.buffer);
+            return memory.slice(ptrNum, ptrNum + lenNum);
+        }
+
+        function queryTriples(wasm, subject, predicate, object, limit = 1000) {
+            const s_bytes = subject ? encoder.encode(subject) : new Uint8Array(0);
+            const p_bytes = predicate ? encoder.encode(predicate) : new Uint8Array(0);
+            const o_bytes = object ? encoder.encode(object) : new Uint8Array(0);
+
+            const s_ptr = s_bytes.length > 0 ? writeToMemory(wasm, s_bytes) : 0n;
+            const p_ptr = p_bytes.length > 0 ? writeToMemory(wasm, p_bytes) : 0n;
+            const o_ptr = o_bytes.length > 0 ? writeToMemory(wasm, o_bytes) : 0n;
+
+            try {
+                // Allocate output buffer (1MB should be enough for 1000 triples)
+                const outputSize = 1024 * 1024;
+                const outputPtr = wasm.hdt_alloc(BigInt(outputSize));
+
+                const resultLen = wasm.hdt_query_triples(
+                    s_ptr, BigInt(s_bytes.length),
+                    p_ptr, BigInt(p_bytes.length),
+                    o_ptr, BigInt(o_bytes.length),
+                    outputPtr, BigInt(outputSize)
+                );
+
+                const resultLenNum = Number(resultLen);
+                if (resultLenNum < 0) {
+                    throw new Error(`Query failed with code ${resultLenNum}`);
+                }
+
+                const resultBytes = readFromMemory(wasm, outputPtr, resultLen);
+                const resultJson = decoder.decode(resultBytes);
+                const triples = JSON.parse(resultJson);
+
+                wasm.hdt_free(outputPtr, BigInt(outputSize));
+
+                return triples.slice(0, limit);
+            } finally {
+                if (s_ptr && s_ptr !== 0n) wasm.hdt_free(s_ptr, BigInt(s_bytes.length));
+                if (p_ptr && p_ptr !== 0n) wasm.hdt_free(p_ptr, BigInt(p_bytes.length));
+                if (o_ptr && o_ptr !== 0n) wasm.hdt_free(o_ptr, BigInt(o_bytes.length));
+            }
+        }
+
+        function countTriples(wasm, subject, predicate, object) {
+            const s_bytes = subject ? encoder.encode(subject) : new Uint8Array(0);
+            const p_bytes = predicate ? encoder.encode(predicate) : new Uint8Array(0);
+            const o_bytes = object ? encoder.encode(object) : new Uint8Array(0);
+
+            const s_ptr = s_bytes.length > 0 ? writeToMemory(wasm, s_bytes) : 0n;
+            const p_ptr = p_bytes.length > 0 ? writeToMemory(wasm, p_bytes) : 0n;
+            const o_ptr = o_bytes.length > 0 ? writeToMemory(wasm, o_bytes) : 0n;
+
+            try {
+                const count = wasm.hdt_count_triples(
+                    s_ptr, BigInt(s_bytes.length),
+                    p_ptr, BigInt(p_bytes.length),
+                    o_ptr, BigInt(o_bytes.length)
+                );
+                return Number(count);
+            } finally {
+                if (s_ptr && s_ptr !== 0n) wasm.hdt_free(s_ptr, BigInt(s_bytes.length));
+                if (p_ptr && p_ptr !== 0n) wasm.hdt_free(p_ptr, BigInt(p_bytes.length));
+                if (o_ptr && o_ptr !== 0n) wasm.hdt_free(o_ptr, BigInt(o_bytes.length));
+            }
+        }
+
+        async function main() {
+            const outputDiv = document.getElementById('output');
+
+            try {
+                log('Loading WASM...', 'loading');
+                const wasm = await loadWasm();
+
+                log('Loading HDT file...', 'loading');
+                const hdtData = await loadHdtFile('tests/resources/snikmeta.hdt');
+
+                log('Parsing HDT...', 'loading');
+                const hdtPtr = writeToMemory(wasm, hdtData);
+                const loadResult = wasm.hdt_load(hdtPtr, BigInt(hdtData.length));
+                wasm.hdt_free(hdtPtr, BigInt(hdtData.length));
+
+                const loadResultNum = Number(loadResult);
+                if (loadResultNum !== 0) {
+                    throw new Error(`HDT load failed with code ${loadResultNum}`);
+                }
+
+                log('Querying...', 'loading');
+
+                // Count all triples
+                const totalCount = countTriples(wasm, null, null, null);
+
+                // Get first 1000 triples
+                const triples = queryTriples(wasm, null, null, null, 1000);
+
+                // Format output
+                let output = `<h2>Results</h2>\n`;
+                output += `<pre>Total triples: ${totalCount}\n`;
+                output += `Showing: ${Math.min(triples.length, 1000)} triples\n\n`;
+                
+                triples.forEach((triple, i) => {
+                    const s = triple.subject.value;
+                    const p = triple.predicate.value;
+                    const o = triple.object.value;
+                    output += `${s} ${p} ${o}\n`;
+                });
+                
+                output += `</pre>`;
+                outputDiv.innerHTML = output;
+                log('Complete', 'success');
+
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        main();
+    </script>
+</body>
+</html>
+
