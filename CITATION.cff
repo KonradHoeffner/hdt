@@ -12,6 +12,9 @@ authors:
   - given-names: Baccaert
     family-names: Tim
     affiliation: Independent Researcher, Belgium
+  - given-names: Hanson
+    family-names: Greg
+    affiliation: DeciSym
 repository-code: 'https://github.com/konradhoeffner/hdt'
 url: 'https://crates.io/crates/hdt'
 keywords:
