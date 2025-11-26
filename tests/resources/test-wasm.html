@@ -147,7 +147,7 @@
                 const wasm = await loadWasm();
 
                 log('Loading HDT file...', 'loading');
-                const hdtData = await loadHdtFile('/tests/resources/snikmeta.hdt');
+                const hdtData = await loadHdtFile('/tests/resources/persondata_en.hdt');
 
                 log('Parsing HDT...', 'loading');
                 const hdtPtr = writeToMemory(wasm, hdtData);
