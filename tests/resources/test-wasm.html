@@ -39,7 +39,7 @@
         }
 
         async function loadWasm() {
-            const wasmUrl = 'target/wasm64-unknown-unknown/release/hdt.wasm';
+            const wasmUrl = '/target/wasm64-unknown-unknown/release/hdt.wasm';
             const response = await fetch(wasmUrl);
             if (!response.ok) {
                 console.error(`[loadWasm] Failed to fetch WASM: ${response.status} ${response.statusText}`);
@@ -147,7 +147,7 @@
                 const wasm = await loadWasm();
 
                 log('Loading HDT file...', 'loading');
-                const hdtData = await loadHdtFile('tests/resources/snikmeta.hdt');
+                const hdtData = await loadHdtFile('/tests/resources/snikmeta.hdt');
 
                 log('Parsing HDT...', 'loading');
                 const hdtPtr = writeToMemory(wasm, hdtData);
