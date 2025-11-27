@@ -44,17 +44,22 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
-/*#[derive(Hash,Eq,PartialEq,Clone,Debug)]
-struct TermIds([usize; 3]);*/
-// save space using 32 bit
-//type TermIds = [u32; 3];
-type TermIds = [usize; 3];
+// TODO: save space using 32 bit
+type DictIds = [Id; 3];
 
-/*impl TermIds {
+/// Internal term representation that can be either:
+/// - An ID-based term found in the HDT dictionary (optimized path)
+/// - A computed term not in the dictionary (fallback to Term)
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum InternalTerm {
+    /// Term found in dictionary: [subject_id, predicate_id, object_id]
+    /// Non-zero values indicate valid IDs for that position
+    DictIds([Id; 3]),
+    /// Computed term not in dictionary (e.g., CONCAT results)
+    Computed(Term),
+}
 
-}*/
-
-fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> TermIds {
+fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> DictIds {
     // is there a more efficient way than going around strings again?
     let s = hdt.dict.id_to_string(id, kind).expect("error wih id_to_string");
     // for testing, later optimize for each case preventing the extra roundtrip for the given component
@@ -62,7 +67,7 @@ fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> TermIds {
 }
 
 impl<'a> QueryableDataset<'a> for &'a Hdt {
-    type InternalTerm = TermIds;
+    type InternalTerm = InternalTerm;
     type Error = Error;
 
     fn internal_quads_for_pattern(
@@ -76,6 +81,17 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             ))]
             .into_iter();
         }
+        // computed terms should never be used for pattern queries
+        let [subject, predicate, object]: [Option<&DictIds>; 3] = [subject, predicate, object].map(|x| {
+            x.map(|y| {
+                // we can't do this, it gets actually used
+                // let InternalTerm::DictIds(v) = y else { panic!("computed term used in pattern!") };
+                let InternalTerm::DictIds(v) = y else {
+                    return &[0usize, 0, 0];
+                };
+                v
+            })
+        });
         // no results, one of the constants does not exist
         if [subject, predicate, object].into_iter().any(|x| x == Some(&[0, 0, 0])) {
             return vec![].into_iter();
@@ -98,6 +114,7 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             .triple_ids_with_id_pattern(ps, pp, po)
             // todo: shorten with enumerate, map, ...
             .map(|[s,p,o]| [term_ids(self,s,IdKind::Subject),term_ids(self,p,IdKind::Predicate),term_ids(self,o,IdKind::Object)])
+            .map(|x| x.map(InternalTerm::DictIds))
             .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))
             .collect();
         v.into_iter()
@@ -105,20 +122,25 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
 
     fn internalize_term(&self, term: Term) -> Result<Self::InternalTerm, Error> {
         //let message = format!("term {term} not found in any dictionary section");
-        let s = term_to_hdt_bgp_str(term);
+        let s = term_to_hdt_bgp_str(term.clone());
         let ids = IdKind::KINDS.map(|kind| self.dict.string_to_id(&s, kind));
-        /*if ids.iter().all(|x| *x == 0) {
-            return Err(Error::new(ErrorKind::Other, message));
-        }*/
-        Ok(ids)
+        if ids.iter().all(|x| *x == 0) {
+            return Ok(InternalTerm::Computed(term));
+        }
+        Ok(InternalTerm::DictIds(ids))
     }
 
     fn externalize_term(&self, term: Self::InternalTerm) -> Result<Term, Error> {
-        let s = match term.into_iter().enumerate().filter(|(_, id)| *id > 0).next() {
-            Some((i, id)) => self.dict.id_to_string(id, IdKind::KINDS[i]).unwrap(),
-            None => "\"*$§not found§$*\"".to_owned(), // workaround to signify invalid term
-        };
-        hdt_bgp_str_to_term(&s)
+        match term {
+            InternalTerm::Computed(term) => Ok(term),
+            InternalTerm::DictIds(term) => {
+                let s = match term.into_iter().enumerate().find(|(_, id)| *id > 0) {
+                    Some((i, id)) => self.dict.id_to_string(id, IdKind::KINDS[i]).unwrap(),
+                    None => panic!("cannot externalize invalid term"), //None => "\"*$§not found§$*\"".to_owned(), // workaround to signify invalid term
+                };
+                hdt_bgp_str_to_term(&s)
+            }
+        }
     }
 }
 
