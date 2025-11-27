@@ -312,6 +312,54 @@ impl Hdt {
             [None, None, None] => Box::new(self.triples_all()),
         }
     }
+
+    /// Get all internal triple IDs that fit the given triple patterns, where `None` stands for a variable.
+    /// Used for specific optimizations, call triples_with_pattern instead to get actual string results.
+    pub fn triple_ids_with_pattern<'a>(
+        &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
+    ) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+        let pattern: [Option<(&str, usize)>; 3] =
+            [(0, sp), (1, pp), (2, op)].map(|(i, x)| x.map(|x| (x, self.dict.string_to_id(x, IdKind::KINDS[i]))));
+        // at least one term does not exist in the graph
+        if pattern.iter().flatten().any(|x| x.1 == 0) {
+            return Box::new(iter::empty());
+        }
+        let ts = &self.triples;
+        match pattern {
+            [Some(s), Some(p), Some(o)] => Box::new(SubjectIter::with_pattern(ts, [s.1, p.1, o.1]).take(1)),
+            [Some(s), Some(p), None] => {
+                Box::new(SubjectIter::with_pattern(ts, [s.1, p.1, 0]).map(move |t| [s.1, p.1, t[2]]))
+            }
+            [Some(s), None, Some(o)] => {
+                Box::new(SubjectIter::with_pattern(ts, [s.1, 0, o.1]).map(move |t| [s.1, t[1], o.1]))
+            }
+            [Some(s), None, None] => {
+                Box::new(SubjectIter::with_pattern(ts, [s.1, 0, 0]).map(move |t| [s.1, t[1], t[2]]))
+            }
+            [None, Some(p), Some(o)] => {
+                Box::new(PredicateObjectIter::new(ts, p.1, o.1).map(move |sid| [sid, p.1, o.1]))
+            }
+            [None, Some(p), None] => Box::new(PredicateIter::new(ts, p.1).map(move |t| [t[0], p.1, t[2]])),
+            [None, None, Some(o)] => Box::new(ObjectIter::new(ts, o.1).map(move |t| [t[0], t[1], o.1])),
+            [None, None, None] => Box::new(self.triples.into_iter()),
+        }
+    }
+
+    /// Get all internal triple IDs that fit the given triple patterns, where 0 stands for a variable.
+    /// Used for specific optimizations, call triples_with_pattern instead to get actual string results.
+    pub fn triple_ids_with_id_pattern<'a>(
+        &'a self, s: Id, p: Id, o: Id,
+    ) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+        let ts = &self.triples;
+        // can't use slice: half_open_range_patterns_in_slices is still unstable, see https://github.com/rust-lang/rust/issues/67264
+        match (s, p, o) {
+            (1.., _, _) => Box::new(SubjectIter::with_pattern(ts, [s, p, o]).map(move |t| [s, t[1], t[2]])),
+            (0, 1.., 1..) => Box::new(PredicateObjectIter::new(ts, p, o).map(move |sid| [sid, p, o])),
+            (0, 1.., 0) => Box::new(PredicateIter::new(ts, p).map(move |t| [t[0], p, t[2]])),
+            (0, 0, 1..) => Box::new(ObjectIter::new(ts, o).map(move |t| [t[0], t[1], o])),
+            (0, 0, 0) => Box::new(self.triples.into_iter()),
+        }
+    }
 }
 
 /// A TripleCache stores the `Arc<str>` of the last returned triple
