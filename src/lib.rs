@@ -110,6 +110,9 @@ pub mod sparql;
 pub mod triples;
 /// Constants for triple terms
 pub mod vocab;
+/// Manual WebAssembly bindings (works with wasm64).
+#[cfg(feature = "wasm")]
+pub mod wasm_manual;
 
 pub use crate::hdt::Hdt;
 use containers::ControlInfo;
