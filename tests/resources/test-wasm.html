@@ -76,7 +76,7 @@
             return memory.slice(ptrNum, ptrNum + lenNum);
         }
 
-        function queryTriples(wasm, subject, predicate, object, limit = 1000) {
+        function queryTriples(wasm, subject, predicate, object, limit = 1000, offset = 0) {
             const s_bytes = subject ? encoder.encode(subject) : new Uint8Array(0);
             const p_bytes = predicate ? encoder.encode(predicate) : new Uint8Array(0);
             const o_bytes = object ? encoder.encode(object) : new Uint8Array(0);
@@ -94,7 +94,8 @@
                     s_ptr, BigInt(s_bytes.length),
                     p_ptr, BigInt(p_bytes.length),
                     o_ptr, BigInt(o_bytes.length),
-                    outputPtr, BigInt(outputSize)
+                    outputPtr, BigInt(outputSize),
+                    BigInt(limit), BigInt(offset)
                 );
 
                 const resultLenNum = Number(resultLen);
@@ -161,24 +162,37 @@
 
                 log('Querying...', 'loading');
 
+                const belindaTriples = queryTriples(wasm, "http://dbpedia.org/resource/Belinda_Wright_(conservationist)", null, null);
+                const southportTriples = queryTriples(wasm, null, null, "http://dbpedia.org/resource/Southport", 10);
+ 
                 // Count all triples
                 const totalCount = countTriples(wasm, null, null, null);
 
-                // Get first 1000 triples
-                const triples = queryTriples(wasm, null, null, null, 1000);
 
                 // Format output
                 let output = `<h2>Results</h2>\n`;
                 output += `<pre>Total triples: ${totalCount}\n`;
-                output += `Showing: ${Math.min(triples.length, 1000)} triples\n\n`;
                 
-                triples.forEach((triple, i) => {
+                const triplesOutput = ts => ts.forEach((triple, i) => {
                     const s = triple.subject.value;
                     const p = triple.predicate.value;
                     const o = triple.object.value;
                     output += `${s} ${p} ${o}\n`;
                 });
                 
+                output += `Belinda Wright:\n`;
+                triplesOutput(belindaTriples);
+                
+                output += `\nFirst 10 Southport\n`;
+                triplesOutput(southportTriples);
+                
+                // Get triples 1_000_000 to 1_000_999
+                const offset = 1_000_000;
+                const triples = queryTriples(wasm, null, null, null, 1000, offset);
+                
+                output += `\nShowing: ${Math.min(triples.length, 1000)} triples offset ${offset}\n\n`;
+                triplesOutput(triples);
+
                 output += `</pre>`;
                 outputDiv.innerHTML = output;
                 log('Complete', 'success');
