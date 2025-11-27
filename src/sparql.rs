@@ -61,9 +61,29 @@ pub enum InternalTerm {
 
 fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> DictIds {
     // is there a more efficient way than going around strings again?
-    let s = hdt.dict.id_to_string(id, kind).expect("error wih id_to_string");
+    //let s = hdt.dict.id_to_string(id, kind).expect("error with id_to_string");
     // for testing, later optimize for each case preventing the extra roundtrip for the given component
-    IdKind::KINDS.map(|kind| hdt.dict.string_to_id(&s, kind))
+    //IdKind::KINDS.map(|kind| hdt.dict.string_to_id(&s, kind))
+    use IdKind::*;
+    // in the unlikely case of a join involving the same variable in predicate and another position this will fail
+    // TODO: map predicates to other IDs, as they are usually not that many this can be cached
+    match kind {
+        Subject => {
+            if id <= hdt.dict.shared.num_strings {
+                [id, 0, id]
+            } else {
+                [id, 0, 0]
+            }
+        }
+        Object => {
+            if id <= hdt.dict.shared.num_strings {
+                [id, 0, id]
+            } else {
+                [0, 0, id]
+            }
+        }
+        Predicate => [0, id, 0],
+    }
 }
 
 impl<'a> QueryableDataset<'a> for &'a Hdt {
