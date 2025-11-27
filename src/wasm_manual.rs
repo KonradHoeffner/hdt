@@ -348,7 +348,8 @@ pub unsafe extern "C" fn hdt_count_triples(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn hdt_query_triples(
     subject_ptr: *const u8, subject_len: usize, predicate_ptr: *const u8, predicate_len: usize,
-    object_ptr: *const u8, object_len: usize, output_ptr: *mut u8, output_capacity: usize,
+    object_ptr: *const u8, object_len: usize, output_ptr: *mut u8, output_capacity: usize, limit: usize,
+    offset: usize,
 ) -> i32 {
     let instance = HDT_INSTANCE.lock().unwrap();
     let Some(hdt) = instance.as_ref() else { return -1 };
@@ -384,6 +385,8 @@ pub unsafe extern "C" fn hdt_query_triples(
             predicate: parse_hdt_term(&triple[1]),
             object: parse_hdt_term(&triple[2]),
         })
+        .skip(offset)
+        .take(limit)
         .collect();
 
     // Serialize results as JSON
