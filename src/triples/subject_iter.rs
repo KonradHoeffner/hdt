@@ -1,4 +1,5 @@
 use super::{Id, TripleId, TriplesBitmap};
+use qwt::AccessUnsigned;
 
 /// Iterator over triples fitting an SPO, SP? S?? or ??? triple pattern.
 //#[derive(Debug)]
@@ -114,7 +115,7 @@ impl Iterator for SubjectIter<'_> {
             return None;
         }
 
-        let y = self.triples.wavelet_y.access(self.pos_y).unwrap() as Id;
+        let y = self.triples.wavelet_y.get(self.pos_y).unwrap() as Id;
 
         if self.search_z > 0 {
             self.pos_y += 1;

@@ -1,4 +1,5 @@
 use crate::triples::{Id, TriplesBitmap};
+use qwt::AccessUnsigned;
 use std::cmp::Ordering;
 use sucds::int_vectors::Access;
 
@@ -22,7 +23,7 @@ impl<'a> PredicateObjectIter<'a> {
         let mut high = triples.op_index.last(o);
         let get_y = |pos_index| {
             let pos_y = triples.op_index.sequence.access(pos_index).unwrap();
-            triples.wavelet_y.access(pos_y).unwrap() as Id
+            triples.wavelet_y.get(pos_y).unwrap() as Id
         };
         // Binary search with a twist:
         // Each value may occur multiple times, so we search for the left and right borders.

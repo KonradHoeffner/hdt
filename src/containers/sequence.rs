@@ -250,14 +250,17 @@ impl Sequence {
     }
 
     /// Pack the given integers., which have to fit into the given number of bits.
-    pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
+    // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
+    pub fn new(nums: &[usize]) -> Sequence {
         use sucds::int_vectors::CompactVector;
         let entries = nums.len();
-        if entries == 0 && bits_per_entry == 0 {
-            return Sequence { entries, bits_per_entry, data: vec![] };
+        if entries == 0 {
+            return Sequence { entries, bits_per_entry: 0, data: vec![] };
         }
-        let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-        cv.extend(nums.iter().copied()).unwrap();
+
+        //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
+        let mut cv = CompactVector::from_slice(nums).unwrap();
+        let bits_per_entry = cv.width();
         let data = cv.into_bit_vector().into_words();
         Sequence { entries, bits_per_entry, data }
     }
@@ -301,7 +304,8 @@ mod tests {
         assert_eq!(numbers, numbers2);
         assert_eq!(cursor.position(), buf.len() as u64);
         // new and pack_bits
-        let s3 = Sequence::new(&numbers, 4);
+        let s3 = Sequence::new(&numbers);
+        //let s3 = Sequence::new(&numbers, 4);
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
         assert_eq!(s, s3);
