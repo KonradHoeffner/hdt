@@ -2,12 +2,12 @@ use crate::ControlInfo;
 use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
 use log::error;
+use qwt::QWT512;
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
 use sucds::Serializable;
 use sucds::bit_vectors::{BitVector, Rank9Sel};
-use sucds::char_sequences::WaveletMatrix;
 use sucds::int_vectors::CompactVector;
 
 mod subject_iter;
@@ -153,7 +153,7 @@ pub struct TriplesBitmap {
     /// Index for object-based access. Points to the predicate layer.
     pub op_index: OpIndex,
     /// wavelet matrix for predicate-based access
-    pub wavelet_y: WaveletMatrix<Rank9Sel>,
+    pub wavelet_y: QWT512,
 }
 
 #[derive(Debug)]
@@ -433,10 +433,11 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
+    fn build_wavelet(sequence: Sequence) -> QWT512 {
         let mut builder =
             CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
+        /*
         for x in &sequence {
             builder.push_int(x).unwrap();
         }
@@ -446,6 +447,8 @@ impl TriplesBitmap {
         }
         drop(sequence);
         WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
+        */
+        QWT512::new(sequence)
     }
 
     /*
