@@ -3,10 +3,10 @@ use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequenc
 use bytesize::ByteSize;
 use log::error;
 use qwt::QWT512;
+use qwt::{AccessUnsigned, SpaceUsage};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
-use sucds::Serializable;
 use sucds::bit_vectors::{BitVector, Rank9Sel};
 use sucds::int_vectors::CompactVector;
 
@@ -142,6 +142,8 @@ impl OpIndex {
     }
 }
 
+type WT = QWT512<usize>;
+
 /// `BitmapTriples` variant of the triples section.
 //#[derive(Clone)]
 pub struct TriplesBitmap {
@@ -153,7 +155,7 @@ pub struct TriplesBitmap {
     /// Index for object-based access. Points to the predicate layer.
     pub op_index: OpIndex,
     /// wavelet matrix for predicate-based access
-    pub wavelet_y: QWT512,
+    pub wavelet_y: WT,
 }
 
 #[derive(Debug)]
@@ -195,7 +197,7 @@ impl fmt::Debug for TriplesBitmap {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64))?;
         writeln!(f, "adjlist_z {:#?}", self.adjlist_z)?;
         writeln!(f, "op_index {:#?}", self.op_index)?;
-        write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
+        write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.space_usage_byte() as u64))
     }
 }
 
@@ -292,7 +294,7 @@ impl TriplesBitmap {
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
-            indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
+            indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize).unwrap());
             for index in indices {
                 bitmap_index_bitvector.push_bit(first);
                 first = false;
@@ -356,8 +358,10 @@ impl TriplesBitmap {
         let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
         let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
         // bit_width() only in nightly for now
-        let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
-        let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);
+        /*let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
+        let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);*/
+        let sequence_y = Sequence::new(&array_y);
+        let sequence_z = Sequence::new(&array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         TriplesBitmap::new(Order::SPO, sequence_y, bitmap_y, adjlist_z)
     }
@@ -393,7 +397,7 @@ impl TriplesBitmap {
 
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
+        self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.space_usage_byte()
     }
 
     /// Position in the wavelet index of the first predicate for the given subject ID.
@@ -419,7 +423,7 @@ impl TriplesBitmap {
 
         while low < high {
             let mid = usize::midpoint(low, high);
-            match self.wavelet_y.access(mid).unwrap().cmp(&element) {
+            match self.wavelet_y.get(mid).unwrap().cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => return Some(mid),
@@ -433,9 +437,9 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(sequence: Sequence) -> QWT512 {
-        let mut builder =
-            CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");
+    fn build_wavelet(sequence: Sequence) -> WT {
+        /*        let mut builder =
+        CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");*/
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
         /*
         for x in &sequence {
@@ -448,7 +452,7 @@ impl TriplesBitmap {
         drop(sequence);
         WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
         */
-        QWT512::new(sequence)
+        WT::from_iter(&sequence)
     }
 
     /*

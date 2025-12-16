@@ -354,7 +354,8 @@ impl DictSectPFC {
         DictSectPFC {
             num_strings: num_terms,
             block_size,
-            sequence: Sequence::new(&offsets, bits_per_entry),
+            //sequence: Sequence::new(&offsets, bits_per_entry),
+            sequence: Sequence::new(&offsets),
             packed_data: Arc::from(compressed_terms),
         }
     }
