@@ -309,6 +309,8 @@ mod tests {
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
         //assert_eq!(s, s3);
+        // while we are evaluating the QWT lib instead of sucds, we are not manually giving the bit depth
+        // thus the optimal one is determined automatically and the internal data does not match so we just compare the numbers
         assert_eq!(s.into_iter().collect::<Vec<_>>(), s3.into_iter().collect::<Vec<_>>());
         Ok(())
     }

@@ -20,6 +20,8 @@ mod object_iter;
 pub use object_iter::ObjectIter;
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
+#[cfg(feature = "cache")]
+use sucds::Serializable;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -218,10 +220,10 @@ impl serde::Serialize for TriplesBitmap {
         // op_index
         state.serialize_field("op_index", &self.op_index)?;
         // wavelet_y
-        let mut wavelet_y_buffer = Vec::new();
-        self.wavelet_y.serialize_into(&mut wavelet_y_buffer).map_err(serde::ser::Error::custom)?;
-        state.serialize_field("wavelet_y", &wavelet_y_buffer)?;
-
+        //let mut wavelet_y_buffer = Vec::new();
+        //self.wavelet_y.serialize(&mut wavelet_y_buffer).map_err(serde::ser::Error::custom)?;
+        //state.serialize_field("wavelet_y", &wavelet_y_buffer)?;
+        state.serialize_field("wavelet_y", &self.wavelet_y)?;
         state.end()
     }
 }
@@ -232,28 +234,30 @@ impl<'de> serde::Deserialize<'de> for TriplesBitmap {
     where
         D: serde::de::Deserializer<'de>,
     {
+        // TODO: simplify if we stick with QWT
         #[derive(serde::Deserialize)]
         struct TriplesBitmapData {
             order: Order,
             pub bitmap_y: Bitmap,
             pub adjlist_z: AdjList,
             pub op_index: OpIndex,
-            pub wavelet_y: Vec<u8>,
+            //pub wavelet_y: Vec<u8>,
+            pub wavelet_y: WT,
         }
 
         let data = TriplesBitmapData::deserialize(deserializer)?;
 
         // Deserialize `sucds` structures
-        let mut bitmap_reader = std::io::BufReader::new(&data.wavelet_y[..]);
-        let wavelet_y =
-            WaveletMatrix::<Rank9Sel>::deserialize_from(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
+        //let mut bitmap_reader = std::io::BufReader::new(&data.wavelet_y[..]);
+        //let wavelet_y =
+        //    WT::deserialize(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
 
         let bitmap = TriplesBitmap {
             order: data.order,
             bitmap_y: data.bitmap_y,
             adjlist_z: data.adjlist_z,
             op_index: data.op_index,
-            wavelet_y,
+            wavelet_y: data.wavelet_y,
         };
 
         Ok(bitmap)
