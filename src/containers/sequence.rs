@@ -259,7 +259,7 @@ impl Sequence {
         }
 
         //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-        let mut cv = CompactVector::from_slice(nums).unwrap();
+        let cv = CompactVector::from_slice(nums).unwrap();
         let bits_per_entry = cv.width();
         let data = cv.into_bit_vector().into_words();
         Sequence { entries, bits_per_entry, data }
@@ -308,7 +308,8 @@ mod tests {
         //let s3 = Sequence::new(&numbers, 4);
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
-        assert_eq!(s, s3);
+        //assert_eq!(s, s3);
+        assert_eq!(s.into_iter().collect::<Vec<_>>(), s3.into_iter().collect::<Vec<_>>());
         Ok(())
     }
 }

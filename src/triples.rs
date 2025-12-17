@@ -490,7 +490,8 @@ impl TriplesBitmap {
         self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
         self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
-        Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+        Sequence::new(&y).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+        //Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
         self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
         Ok(())
     }
