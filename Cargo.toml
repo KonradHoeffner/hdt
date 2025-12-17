@@ -24,7 +24,7 @@ thiserror = "2"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = "0.3"
-bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
+bincode = { version = "3", optional = true, default-features = false, features = ["std", "serde"] }
 rayon = { version = "1.11.0", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.2" , optional = true }
