@@ -19,7 +19,6 @@ bytesize = "2"
 crc = "3"
 ntriple = "0.1"
 sophia = { version = "0.9", optional = true }
-sucds = "0.8.3"
 thiserror = "2"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }

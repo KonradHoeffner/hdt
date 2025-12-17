@@ -13,6 +13,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
 /// Also called "array" in the HDT spec, only Log64 is supported.
+/// This type is not optimized for used for general integer sequences because other libraries already implement that e.g. sucds CompactVector.
+/// Instead it is meant to be read from and written to an HDT file, as such it doesn't have good interoperability.
+// Update: Now that we are evaluating switching from sucds to QWT, which does not seem to contain such a type, such helper functions could be useful.
 //#[derive(Clone)]
 #[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct Sequence {
@@ -252,16 +255,17 @@ impl Sequence {
     /// Pack the given integers., which have to fit into the given number of bits.
     // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
     pub fn new(nums: &[usize]) -> Sequence {
-        use sucds::int_vectors::CompactVector;
         let entries = nums.len();
         if entries == 0 {
             return Sequence { entries, bits_per_entry: 0, data: vec![] };
         }
-
+        let bits_per_entry = nums.max().bit_width(); // nightly only 
+        let data = Vec::<u64>::new();
+        panic!("manual bit packing not implemented yet");
         //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-        let cv = CompactVector::from_slice(nums).unwrap();
-        let bits_per_entry = cv.width();
-        let data = cv.into_bit_vector().into_words();
+        // let cv = CompactVector::from_slice(nums).unwrap();
+        // let bits_per_entry = cv.width();
+        // let data = cv.into_bit_vector().into_words();
         Sequence { entries, bits_per_entry, data }
     }
 }
