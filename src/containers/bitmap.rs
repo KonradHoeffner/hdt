@@ -1,19 +1,21 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
+use qwt::{
+    AccessBin, AccessUnsigned, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage,
+    bitvector::rs_narrow::RSNarrow,
+};
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
-use sucds::Serializable;
-use sucds::bit_vectors::{Access, BitVector, NumBits, Rank, Rank9Sel, Select};
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
 pub struct Bitmap {
     /// should be private but is needed by containers/bitmap.rs, use methods provided by Bitmap
-    pub dict: Rank9Sel,
+    pub dict: RSNarrow,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -81,28 +83,30 @@ impl fmt::Debug for Bitmap {
 
 impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
-    pub fn new(data: Vec<usize>) -> Self {
-        let mut v = BitVector::new();
+    pub fn new(data: Vec<u64>) -> Self {
+        let mut v = BitVectorMut::new();
         for d in data {
-            let _ = v.push_bits(d, std::mem::size_of::<usize>() * 8);
+            let _ = v.append_bits(d, std::mem::size_of::<usize>() * 8);
         }
-        let dict = Rank9Sel::new(v).select1_hints();
-        Bitmap { dict }
+        //let dict = Rank9Sel::new(v).select1_hints();
+        let dict: BitVector = v.into();
+        Bitmap { dict: dict.into() }
     }
 
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.dict.size_in_bytes()
+        self.dict.space_usage_byte()
     }
 
     /// Number of bits in the bitmap, multiple of 64
     pub const fn len(&self) -> usize {
-        self.dict.len()
+        self.dict.n_zeros() + self.dict.n_ones() // RSNarrow.len() is not public
+        // self.dict.bv_len() // only on RSWide
     }
 
     /// Number of bits set
     pub fn num_ones(&self) -> usize {
-        self.dict.num_ones()
+        self.dict.n_ones()
     }
 
     /// Returns the position of the k-1-th one bit or None if there aren't that many.
@@ -112,12 +116,12 @@ impl Bitmap {
 
     /// Returns the number of one bits from the 0-th bit to the k-1-th bit. Panics if self.len() < pos.
     pub fn rank(&self, k: usize) -> usize {
-        self.dict.rank1(k).unwrap_or_else(|| panic!("Out of bounds position: {} >= {}", k, self.dict.len()))
+        self.dict.rank1(k).unwrap_or_else(|| panic!("Out of bounds position: {} >= {}", k, self.len()))
     }
 
     /// Whether the node given position is the last child of its parent.
     pub fn at_last_sibling(&self, word_index: usize) -> bool {
-        self.dict.access(word_index).expect("word index out of bounds")
+        self.dict.get(word_index).expect("word index out of bounds")
     }
 
     /// Read bitmap from a suitable point within HDT file data and verify checksums.
@@ -155,12 +159,11 @@ impl Bitmap {
         let full_byte_amount = ((num_bits - 1) >> 6) * 8;
         let mut full_words = vec![0_u8; full_byte_amount];
         // div_ceil is unstable
-        let mut data: Vec<usize> =
-            Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
+        let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
 
         for word in full_words.chunks_exact(size_of::<usize>()) {
-            data.push(usize::from_le_bytes(<[u8; 8]>::try_from(word)?));
+            data.push(u64::from_le_bytes(<[u8; 8]>::try_from(word)?));
         }
 
         // initiate computation of CRC32
@@ -169,14 +172,14 @@ impl Bitmap {
         digest.update(&full_words);
 
         let mut bits_read = 0;
-        let mut last_value: usize = 0;
+        let mut last_value: u64 = 0;
         let last_word_bits = if num_bits == 0 { 0 } else { ((num_bits - 1) % 64) + 1 };
 
         while bits_read < last_word_bits {
             let mut buffer = [0u8];
             reader.read_exact(&mut buffer)?;
             digest.update(&buffer);
-            last_value |= (buffer[0] as usize) << bits_read;
+            last_value |= (buffer[0] as u64) << bits_read;
             bits_read += 8;
         }
         data.push(last_value);
@@ -203,7 +206,7 @@ impl Bitmap {
         w.write_all(&bitmap_type)?;
         hasher.update(&bitmap_type);
         // number of bits
-        let t = encode_vbyte(self.dict.len());
+        let t = encode_vbyte(self.len());
         w.write_all(&t)?;
         hasher.update(&t);
         // crc8 checksum

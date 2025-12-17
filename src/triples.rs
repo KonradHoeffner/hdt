@@ -3,12 +3,10 @@ use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequenc
 use bytesize::ByteSize;
 use log::error;
 use qwt::QWT512;
-use qwt::{AccessUnsigned, SpaceUsage};
+use qwt::{AccessUnsigned, BitVector, SpaceUsage};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
-use sucds::bit_vectors::{BitVector, Rank9Sel};
-use sucds::int_vectors::CompactVector;
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;
@@ -20,8 +18,6 @@ mod object_iter;
 pub use object_iter::ObjectIter;
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
-#[cfg(feature = "cache")]
-use sucds::Serializable;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -67,7 +63,8 @@ pub struct OpIndex {
     /// Compact integer vector of object positions.
     /// "[...] integer sequence: SoP, which stores, for each object, a sorted list of references to the predicate-subject pairs (sorted by predicate) related to it."
     // we don't use our own Sequence type because CompactVector is easier to construct step by step (should we rename it but if yes to what?)
-    pub sequence: CompactVector,
+    // update: as we replaced sucds with QWT, we need to use our own type for now.
+    pub sequence: Sequence,
     /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
 }
@@ -290,9 +287,11 @@ impl TriplesBitmap {
         }
         // reduce memory consumption of index by using adjacency list
         let mut bitmap_index_bitvector = BitVector::new();
-        #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
-        let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-            .expect("Failed to create OPS index compact vector.");
+        //#[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
+        /*let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
+        .expect("Failed to create OPS index compact vector.");
+        */
+        let mut cv = Vec::<_>::new();
         // disable parallelization temporarily for easier debugging
         //let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization
         for mut indices in indicess {
@@ -306,7 +305,7 @@ impl TriplesBitmap {
             }
         }
         let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
-        let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
+        let op_index = OpIndex { sequence: Sequence::new(cv), bitmap: bitmap_index };
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 

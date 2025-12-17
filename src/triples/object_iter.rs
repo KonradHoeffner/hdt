@@ -1,6 +1,5 @@
 use crate::triples::{Id, TripleId, TriplesBitmap};
 use qwt::AccessUnsigned;
-use sucds::int_vectors::Access;
 
 // see "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36

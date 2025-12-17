@@ -1,7 +1,6 @@
 use crate::triples::{Id, TriplesBitmap};
 use qwt::AccessUnsigned;
 use std::cmp::Ordering;
-use sucds::int_vectors::Access;
 
 // see filterPredSubj in "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36
