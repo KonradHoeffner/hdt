@@ -199,7 +199,8 @@ impl Bitmap {
     }
 
     pub fn write(&self, w: &mut impl std::io::Write) -> Result<()> {
-        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        panic!("not yet refactored")
+        /*  let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // type
         let bitmap_type: [u8; 1] = [1];
@@ -225,6 +226,7 @@ impl Bitmap {
         let crc_code = crc_code.to_le_bytes();
         w.write_all(&crc_code)?;
         Ok(())
+        */
     }
 }
 

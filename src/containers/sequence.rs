@@ -7,7 +7,9 @@ use std::fmt;
 use std::io::{BufRead, Write};
 use std::mem::size_of;
 
-const USIZE_BITS: usize = usize::BITS as usize;
+//const USIZE_BITS: usize = usize::BITS as usize;
+const BLOCK_BITS: usize = 64usize;
+const BITS: usize = 32;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -24,7 +26,7 @@ pub struct Sequence {
     /// Number of bits that each integer uses.
     pub bits_per_entry: usize,
     /// Data in blocks.
-    pub data: Vec<usize>,
+    pub data: Vec<u64>,
 }
 
 enum SequenceType {
@@ -105,19 +107,19 @@ impl<'a> IntoIterator for &'a Sequence {
 impl Sequence {
     /// Get the integer at the given index, counting from 0.
     /// Panics if the index is out of bounds.
-    pub fn get(&self, index: usize) -> usize {
+    pub fn get(&self, index: usize) -> u32 {
         let scaled_index = index * self.bits_per_entry;
-        let block_index = scaled_index / USIZE_BITS;
-        let bit_index = scaled_index % USIZE_BITS;
+        let block_index = scaled_index / BLOCK_BITS;
+        let bit_index = scaled_index % BLOCK_BITS;
 
         let mut result;
 
-        let result_shift = USIZE_BITS - self.bits_per_entry;
-        if bit_index + self.bits_per_entry <= USIZE_BITS {
-            let block_shift = USIZE_BITS - bit_index - self.bits_per_entry;
+        let result_shift = BLOCK_BITS - self.bits_per_entry;
+        if bit_index + self.bits_per_entry <= BLOCK_BITS {
+            let block_shift = BLOCK_BITS - bit_index - self.bits_per_entry;
             result = (self.data[block_index] << block_shift) >> result_shift;
         } else {
-            let block_shift = (USIZE_BITS << 1) - bit_index - self.bits_per_entry;
+            let block_shift = (BLOCK_BITS << 1) - bit_index - self.bits_per_entry;
             result = self.data[block_index] >> bit_index;
             result |= (self.data[block_index + 1] << block_shift) >> result_shift;
         }
@@ -126,7 +128,7 @@ impl Sequence {
 
     /// Size in bytes on the heap.
     pub const fn size_in_bytes(&self) -> usize {
-        (self.data.len() * USIZE_BITS) >> 3
+        (self.data.len() * BLOCK_BITS) >> 3
     }
 
     /// Read sequence including metadata from HDT data.
@@ -146,7 +148,7 @@ impl Sequence {
         reader.read_exact(&mut buffer)?;
         history.extend_from_slice(&buffer);
         let bits_per_entry = buffer[0] as usize;
-        if bits_per_entry > USIZE_BITS {
+        if bits_per_entry > BLOCK_BITS {
             return Err(Error::EntrySizeTooLarge(bits_per_entry));
         }
 
@@ -172,7 +174,7 @@ impl Sequence {
         // read body data
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
-        let full_byte_amount = (total_bits.div_ceil(USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
+        let full_byte_amount = (total_bits.div_ceil(BLOCK_BITS).saturating_sub(1)) * size_of::<u64>();
         let mut full_words = vec![0_u8; full_byte_amount];
         reader.read_exact(&mut full_words)?;
         let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / size_of::<usize>() + 2);
@@ -188,7 +190,7 @@ impl Sequence {
         // read the last few bits, byte aligned
         let mut bits_read = 0;
         let mut last_value: usize = 0;
-        let last_entry_bits = if total_bits == 0 { 0 } else { ((total_bits - 1) % USIZE_BITS) + 1 };
+        let last_entry_bits = if total_bits == 0 { 0 } else { ((total_bits - 1) % BLOCK_BITS) + 1 };
 
         while bits_read < last_entry_bits {
             let mut buffer = [0u8];
@@ -254,12 +256,12 @@ impl Sequence {
 
     /// Pack the given integers., which have to fit into the given number of bits.
     // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
-    pub fn new(nums: &[usize]) -> Sequence {
+    pub fn new(nums: &[u64]) -> Sequence {
         let entries = nums.len();
         if entries == 0 {
             return Sequence { entries, bits_per_entry: 0, data: vec![] };
         }
-        let bits_per_entry = nums.max().bit_width(); // nightly only 
+        let bits_per_entry = nums.iter().max().unwrap().bit_width() as usize; // nightly only 
         let data = Vec::<u64>::new();
         panic!("manual bit packing not implemented yet");
         //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
