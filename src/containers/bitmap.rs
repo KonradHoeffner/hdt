@@ -211,8 +211,7 @@ impl Bitmap {
     }
 
     pub fn write(&self, w: &mut impl std::io::Write) -> Result<()> {
-        panic!("not yet refactored")
-        /*  let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
+        let crc = crc::Crc::<u8>::new(&crc::CRC_8_SMBUS);
         let mut hasher = crc.digest();
         // type
         let bitmap_type: [u8; 1] = [1];
@@ -230,15 +229,22 @@ impl Bitmap {
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut hasher = crc32.digest();
 
-        let words = self.dict.bit_vector().words();
-        let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
+        //let words = self.dict.bit_vector().words();
+        // very inefficient and mess and messy, just for trying out QWT. TODO: optimize later ***
+        use std::iter::successors;
+        let iter = successors(Some(0), |&i| Some(i + 1)).map_while(|i| self.dict.get(i));
+        let bv = BitVector::from_iter(iter);
+        //let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
+        let iter = (0..bv.len().div_ceil(64)).map(|i| bv.get_word(i));
+        let bytes: Vec<u8> = iter.flat_map(|val| val.to_le_bytes()).collect();
+        // ********************
+
         w.write_all(&bytes)?;
         hasher.update(&bytes);
         let crc_code = hasher.finalize();
         let crc_code = crc_code.to_le_bytes();
         w.write_all(&crc_code)?;
         Ok(())
-        */
     }
 }
 
