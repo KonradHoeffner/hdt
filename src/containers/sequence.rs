@@ -256,21 +256,82 @@ impl Sequence {
         Ok(())
     }
 
-    /// Pack the given integers., which have to fit into the given number of bits.
-    // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
-    pub fn new(nums: &[usize]) -> Sequence {
-        let entries = nums.len();
-        if entries == 0 {
-            return Sequence { entries, bits_per_entry: 0, data: vec![] };
+    /*
+        // this is the new one using sucds but we are back to the old manual code + pack_bits with qwt for now
+        /// Pack the given integers., which have to fit into the given number of bits.
+        // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
+        pub fn new(nums: &[usize]) -> Sequence {
+            let entries = nums.len();
+            if entries == 0 {
+                return Sequence { entries, bits_per_entry: 0, data: vec![] };
+            }
+            let bits_per_entry = nums.iter().max().unwrap().bit_width() as usize; // nightly only
+            let data = Vec::<usize>::new();
+            panic!("manual bit packing not implemented yet");
+            //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
+            // let cv = CompactVector::from_slice(nums).unwrap();
+            // let bits_per_entry = cv.width();
+            // let data = cv.into_bit_vector().into_words();
+            Sequence { entries, bits_per_entry, data }
         }
-        let bits_per_entry = nums.iter().max().unwrap().bit_width() as usize; // nightly only 
-        let data = Vec::<usize>::new();
-        panic!("manual bit packing not implemented yet");
-        //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-        // let cv = CompactVector::from_slice(nums).unwrap();
-        // let bits_per_entry = cv.width();
-        // let data = cv.into_bit_vector().into_words();
-        Sequence { entries, bits_per_entry, data }
+    }
+    */
+
+    // could also determine bits per entry using max of numbers but that would take time
+    pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
+        let numbers8 = Self::pack_bits(numbers, bits_per_entry);
+        // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
+        // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
+        let entries = numbers.len();
+        let bytes = numbers8.len();
+        let rest_byte_amount = bytes % size_of::<usize>();
+        let full_byte_amount = bytes - rest_byte_amount;
+        let mut data = Vec::<usize>::new();
+        let full_words = &numbers8[..full_byte_amount];
+        for word in full_words.chunks_exact(size_of::<usize>()) {
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        }
+        if rest_byte_amount > 0 {
+            let mut last = [0u8; size_of::<usize>()];
+            last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
+            data.push(usize::from_le_bytes(last));
+        }
+    }
+
+    // manual compact integer sequence, as sucds lib does not allow export of internal storage
+    fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
+        let mut output = Vec::new();
+        let mut current_byte = 0u8;
+        let mut bit_offset = 0;
+
+        for value in numbers {
+            let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
+            let mut bits_left = bits_per_entry;
+
+            while bits_left > 0 {
+                let available = 8 - bit_offset;
+                let to_write = bits_left.min(available);
+
+                // Shift bits to align with current byte offset
+                current_byte |= ((val & ((1 << to_write) - 1)) as u8) << bit_offset;
+
+                bit_offset += to_write;
+                val >>= to_write;
+                bits_left -= to_write;
+
+                if bit_offset == 8 {
+                    output.push(current_byte);
+                    current_byte = 0;
+                    bit_offset = 0;
+                }
+            }
+        }
+
+        // Push final byte if there's remaining bits
+        if bit_offset > 0 {
+            output.push(current_byte);
+        }
+        output
     }
 }
 
