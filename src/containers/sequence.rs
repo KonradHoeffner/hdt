@@ -278,11 +278,16 @@ impl Sequence {
     */
 
     // could also determine bits per entry using max of numbers but that would take time
-    pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
+    // pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
+    pub fn new(numbers: &[usize]) -> Sequence {
+        let entries = numbers.len();
+        if entries == 0 {
+            return Sequence { entries, bits_per_entry: 0, data: vec![] };
+        }
+        let bits_per_entry = numbers.iter().max().unwrap().bit_width() as usize; // nightly only
         let numbers8 = Self::pack_bits(numbers, bits_per_entry);
         // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
         // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
-        let entries = numbers.len();
         let bytes = numbers8.len();
         let rest_byte_amount = bytes % size_of::<usize>();
         let full_byte_amount = bytes - rest_byte_amount;
@@ -296,6 +301,7 @@ impl Sequence {
             last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
             data.push(usize::from_le_bytes(last));
         }
+        Sequence { entries, bits_per_entry, data }
     }
 
     // manual compact integer sequence, as sucds lib does not allow export of internal storage
