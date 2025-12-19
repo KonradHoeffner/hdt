@@ -81,6 +81,18 @@ impl fmt::Debug for Bitmap {
     }
 }
 
+impl From<BitVector> for Bitmap {
+    fn from(bv: BitVector) -> Self {
+        Bitmap { dict: bv.into() }
+    }
+}
+
+impl From<BitVectorMut> for Bitmap {
+    fn from(bv: BitVectorMut) -> Self {
+        Bitmap { dict: <BitVectorMut as Into<BitVector>>::into(bv).into() }
+    }
+}
+
 impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
     pub fn new(data: Vec<u64>) -> Self {
@@ -99,7 +111,7 @@ impl Bitmap {
     }
 
     /// Number of bits in the bitmap, multiple of 64
-    pub const fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.dict.n_zeros() + self.dict.n_ones() // RSNarrow.len() is not public
         // self.dict.bv_len() // only on RSWide
     }
@@ -239,7 +251,7 @@ mod tests {
     #[test]
     fn write() -> color_eyre::Result<()> {
         init();
-        let bits: Vec<usize> = vec![0b10111];
+        let bits: Vec<u64> = vec![0b10111];
         let bitmap = Bitmap::new(bits);
         assert_eq!(bitmap.len(), 64);
         // position of k-1th 1 bit
@@ -255,7 +267,8 @@ mod tests {
         let mut buf = Vec::<u8>::new();
         bitmap.write(&mut buf)?;
         let bitmap2 = Bitmap::read(&mut std::io::Cursor::new(buf))?;
-        assert_eq!(bitmap.dict.bit_vector().words(), bitmap2.dict.bit_vector().words());
+        //assert_eq!(bitmap.dict.bit_vector().words(), bitmap2.dict.bit_vector().words());
+        assert_eq!(bitmap.dict, bitmap2.dict);
         Ok(())
     }
 }
