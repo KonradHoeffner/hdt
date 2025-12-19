@@ -21,7 +21,7 @@ impl<'a> PredicateObjectIter<'a> {
         let mut low = triples.op_index.find(o);
         let mut high = triples.op_index.last(o);
         let get_y = |pos_index| {
-            let pos_y = triples.op_index.sequence.access(pos_index).unwrap();
+            let pos_y = triples.op_index.sequence.get(pos_index);
             triples.wavelet_y.get(pos_y).unwrap() as Id
         };
         // Binary search with a twist:
@@ -71,7 +71,7 @@ impl Iterator for PredicateObjectIter<'_> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_y = self.triples.op_index.sequence.access(self.pos_index).unwrap();
+        let pos_y = self.triples.op_index.sequence.get(self.pos_index);
         //let y = self.triples.wavelet_y.get(pos_y as usize) as Id;
         //println!(" op p {y}");
         let s = self.triples.bitmap_y.rank(pos_y) as Id + 1;

@@ -32,7 +32,7 @@ impl Iterator for ObjectIter<'_> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_y = self.triples.op_index.sequence.access(self.pos_index).unwrap();
+        let pos_y = self.triples.op_index.sequence.get(self.pos_index);
         let y = self.triples.wavelet_y.get(pos_y).unwrap() as Id;
         let x = self.triples.bitmap_y.rank(pos_y) as Id + 1;
         self.pos_index += 1;

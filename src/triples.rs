@@ -3,7 +3,7 @@ use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequenc
 use bytesize::ByteSize;
 use log::error;
 use qwt::QWT512;
-use qwt::{AccessUnsigned, BitVector, SpaceUsage};
+use qwt::{AccessUnsigned, BitVector, BitVectorMut, SpaceUsage, bitvector::rs_narrow::RSNarrow};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
@@ -119,8 +119,9 @@ impl fmt::Debug for OpIndex {
         writeln!(
             f,
             "    sequence: {} with {} bits,",
-            ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
-            self.sequence.width()
+            //ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
+            ByteSize(self.sequence.size_in_bytes() as u64),
+            self.sequence.bits_per_entry //self.sequence.width()
         )?;
         write!(f, "    bitmap: {:#?}\n}}", self.bitmap)
     }
@@ -129,7 +130,8 @@ impl fmt::Debug for OpIndex {
 impl OpIndex {
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
+        //self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
+        self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
     }
     /// Find the first position in the OP index of the given object ID.
     pub fn find(&self, o: Id) -> usize {
@@ -286,7 +288,7 @@ impl TriplesBitmap {
             indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
-        let mut bitmap_index_bitvector = BitVector::new();
+        let mut bitmap_index_bitvector = BitVectorMut::new();
         //#[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
         /*let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
         .expect("Failed to create OPS index compact vector.");
@@ -299,20 +301,21 @@ impl TriplesBitmap {
             // sort by predicate
             indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize).unwrap());
             for index in indices {
-                bitmap_index_bitvector.push_bit(first);
+                bitmap_index_bitvector.push(first);
                 first = false;
-                cv.push_int(index as usize).unwrap();
+                cv.push(index as usize);
             }
         }
-        let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
-        let op_index = OpIndex { sequence: Sequence::new(cv), bitmap: bitmap_index };
+        let bv = BitVector::from(bitmap_index_bitvector);
+        let bitmap_index = Bitmap { dict: RSNarrow::from(bv) };
+        let op_index = OpIndex { sequence: Sequence::new(&cv), bitmap: bitmap_index };
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
     /// Creates a new TriplesBitmap from a list of sorted RDF triples
     pub fn from_triples(triples: &[TripleId]) -> Self {
-        let mut y_bitmap = BitVector::new();
-        let mut z_bitmap = BitVector::new();
+        let mut y_bitmap = BitVectorMut::new();
+        let mut z_bitmap = BitVectorMut::new();
         let mut array_y = Vec::new();
         let mut array_z = Vec::new();
 
@@ -334,21 +337,21 @@ impl TriplesBitmap {
             } else if x != last_x {
                 assert!(x == last_x + 1, "the subjects must be correlative.");
                 //x unchanged
-                y_bitmap.push_bit(true);
+                y_bitmap.push(true);
                 array_y.push(y);
 
-                z_bitmap.push_bit(true);
+                z_bitmap.push(true);
             } else if y != last_y {
                 assert!(y >= last_y, "the predicates must be in increasing order.");
                 // y unchanged
-                y_bitmap.push_bit(false);
+                y_bitmap.push(false);
                 array_y.push(y);
 
-                z_bitmap.push_bit(true);
+                z_bitmap.push(true);
             } else {
                 assert!(z >= last_z, "the objects must be in increasing order");
                 // z changed
-                z_bitmap.push_bit(false);
+                z_bitmap.push(false);
             }
             array_z.push(z);
 
@@ -356,10 +359,10 @@ impl TriplesBitmap {
             last_y = y;
             last_z = z;
         }
-        y_bitmap.push_bit(true);
-        z_bitmap.push_bit(true);
-        let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
-        let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
+        y_bitmap.push(true);
+        z_bitmap.push(true);
+        let bitmap_y = Bitmap::from(y_bitmap);
+        let bitmap_z = Bitmap::from(z_bitmap);
         // bit_width() only in nightly for now
         /*let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
         let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);*/
