@@ -407,7 +407,7 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
+        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(usize::BITS as usize);
         assert_eq!(sequence.data.len(), data_size);
 
         let subjects = DictSectPFC::read(&mut reader)?.join().unwrap()?;
@@ -422,7 +422,7 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
+        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(usize::BITS as usize);
         assert_eq!(sequence.data.len(), data_size);
         Ok(())
     }
