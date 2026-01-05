@@ -199,7 +199,7 @@ impl Sequence {
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
             last_value |= (buffer[0] as usize) << bits_read;
-            bits_read += size_of::<usize>();
+            bits_read += 8;
         }
         data.push(last_value);
         // read entry body CRC32
