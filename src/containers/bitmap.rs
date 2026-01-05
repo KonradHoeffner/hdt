@@ -255,6 +255,17 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
+    fn bugtest() -> color_eyre::Result<()> {
+        let mut v = BitVectorMut::new();
+        v.push(true);
+        v.push(false);
+        let bv: BitVector = v.into();
+        let rs: RSNarrow = bv.into();
+        rs.n_zeros();
+        Ok(())
+    }
+
+    #[test]
     fn write() -> color_eyre::Result<()> {
         init();
         let bits: Vec<u64> = vec![0b10111];
