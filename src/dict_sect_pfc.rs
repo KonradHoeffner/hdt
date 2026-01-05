@@ -227,6 +227,7 @@ impl DictSectPFC {
 
     /// Returns an unverified dictionary section together with a handle to verify the checksum.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<JoinHandle<Result<Self>>> {
+        // https://www.rdfhdt.org/hdt-binary-format/#DictionarySection specifies "unsigned 32bit value preamble" but 8bit is used in practice
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -259,7 +260,6 @@ impl DictSectPFC {
         if crc_calculated8 != crc_code8 {
             return Err(Error::InvalidCrc8Checksum(crc_calculated8, crc_code8));
         }
-
         // read sequence log array
         let sequence = Sequence::read(reader)?;
         //println!("read sequence of length {} {:?}", sequence.data.len(), sequence.data);
