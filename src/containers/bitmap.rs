@@ -98,7 +98,7 @@ impl Bitmap {
     pub fn new(data: Vec<u64>) -> Self {
         let mut v = BitVectorMut::new();
         for d in data {
-            let _ = v.append_bits(d, std::mem::size_of::<usize>() * 8);
+            let _ = v.append_bits(d, std::mem::size_of::<u64>() * 8);
         }
         //let dict = Rank9Sel::new(v).select1_hints();
         let dict: BitVector = v.into();
@@ -174,7 +174,7 @@ impl Bitmap {
         let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
 
-        for word in full_words.chunks_exact(size_of::<usize>()) {
+        for word in full_words.chunks_exact(size_of::<u64>()) {
             data.push(u64::from_le_bytes(<[u8; 8]>::try_from(word)?));
         }
 
