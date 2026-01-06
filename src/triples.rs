@@ -267,7 +267,7 @@ impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
     pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
         //let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let wavelet_y = Self::build_wavelet(sequence_y);
+        let wavelet_y = Self::build_wavelet(&sequence_y);
 
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
@@ -443,7 +443,8 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    fn build_wavelet(sequence: Sequence) -> WT {
+    fn build_wavelet(sequence: &Sequence) -> WT {
+        // TODO: remove old code
         /*        let mut builder =
         CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");*/
         // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
@@ -458,7 +459,7 @@ impl TriplesBitmap {
         drop(sequence);
         WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
         */
-        WT::from_iter(&sequence)
+        WT::from_iter(sequence)
     }
 
     /*

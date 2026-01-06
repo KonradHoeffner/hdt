@@ -1,10 +1,7 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
-use qwt::{
-    AccessBin, AccessUnsigned, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage,
-    bitvector::rs_narrow::RSNarrow,
-};
+use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage, bitvector::rs_narrow::RSNarrow};
 #[cfg(feature = "cache")]
 use serde::ser::SerializeStruct;
 use std::fmt;
@@ -98,7 +95,7 @@ impl Bitmap {
     pub fn new(data: Vec<u64>) -> Self {
         let mut v = BitVectorMut::new();
         for d in data {
-            let _ = v.append_bits(d, std::mem::size_of::<u64>() * 8);
+            v.append_bits(d, std::mem::size_of::<u64>() * 8);
         }
         //let dict = Rank9Sel::new(v).select1_hints();
         let dict: BitVector = v.into();
@@ -231,12 +228,13 @@ impl Bitmap {
 
         //let words = self.dict.bit_vector().words();
         // very inefficient and mess and messy, just for trying out QWT. TODO: optimize later ***
+        // TODO: enable more efficient construction in the QWT API as a PR, maintainers were encouraging.
         use std::iter::successors;
         let iter = successors(Some(0), |&i| Some(i + 1)).map_while(|i| self.dict.get(i));
         let bv = BitVector::from_iter(iter);
         //let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
         let iter = (0..bv.len().div_ceil(64)).map(|i| bv.get_word(i));
-        let bytes: Vec<u8> = iter.flat_map(|val| val.to_le_bytes()).collect();
+        let bytes: Vec<u8> = iter.flat_map(u64::to_le_bytes).collect();
         // ********************
 
         w.write_all(&bytes)?;
