@@ -317,6 +317,10 @@ impl TriplesBitmap {
             last_z = z;
         }
         y_bitmap.push(true);
+        let n = y_bitmap.len();
+        // pad to the next multiple of 64 so our comparisons match
+        // TODO: can we just improve the comparisons instead?
+        y_bitmap.extend_with_zeros(n.div_ceil(64) * 64 - n);
         z_bitmap.push(true);
         let bitmap_y = Bitmap::from(y_bitmap);
         let bitmap_z = Bitmap::from(z_bitmap);

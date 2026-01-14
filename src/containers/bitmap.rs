@@ -52,13 +52,12 @@ impl From<BitVectorMut> for Bitmap {
 }
 
 impl Bitmap {
-    /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support.
+    /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support. Number of bits multiple of 64.
     pub fn new(data: Vec<u64>) -> Self {
         let mut v = BitVectorMut::new();
         for d in data {
-            v.append_bits(d, std::mem::size_of::<u64>() * 8);
+            v.append_bits(d, 64);
         }
-        //let dict = Rank9Sel::new(v).select1_hints();
         let dict: BitVector = v.into();
         Bitmap { dict: dict.into() }
     }
@@ -190,12 +189,12 @@ impl Bitmap {
         //let words = self.dict.bit_vector().words();
         // very inefficient and mess and messy, just for trying out QWT. TODO: optimize later ***
         // TODO: enable more efficient construction in the QWT API as a PR, maintainers were encouraging.
-        use std::iter::successors;
-        let iter = successors(Some(0), |&i| Some(i + 1)).map_while(|i| self.dict.get(i));
+        let iter = std::iter::successors(Some(0), |&i| Some(i + 1)).map_while(|i| self.dict.get(i));
         let bv = BitVector::from_iter(iter);
         //let bytes: Vec<u8> = words.iter().flat_map(|&val| val.to_le_bytes()).collect();
         let iter = (0..bv.len().div_ceil(64)).map(|i| bv.get_word(i));
-        let bytes: Vec<u8> = iter.flat_map(u64::to_le_bytes).collect();
+        let mut bytes: Vec<u8> = iter.flat_map(u64::to_le_bytes).collect();
+        bytes.truncate(bv.len().div_ceil(8)); // HDT spec expects no superflous bytes to be written
         // ********************
 
         w.write_all(&bytes)?;
