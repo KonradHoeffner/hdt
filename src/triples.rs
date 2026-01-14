@@ -17,7 +17,7 @@ pub use predicate_object_iter::PredicateObjectIter;
 mod object_iter;
 pub use object_iter::ObjectIter;
 #[cfg(feature = "cache")]
-use serde::ser::SerializeStruct;
+use serde::{self, Deserialize, Serialize, ser::SerializeStruct};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -59,6 +59,7 @@ impl TryFrom<u32> for Order {
 /// This object-based index allows to traverse from the leaves and support ??O and ?PO queries.
 /// Used for logarithmic (?) time access instead of linear time sequential search.
 /// See Martínez-Prieto, M., M. Arias, and J. Fernández (2012). Exchange and Consumption of Huge RDF Data. Pages 8--10.
+#[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct OpIndex {
     /// Compact integer vector of object positions.
     /// "[...] integer sequence: SoP, which stores, for each object, a sorted list of references to the predicate-subject pairs (sorted by predicate) related to it."
@@ -67,50 +68,6 @@ pub struct OpIndex {
     pub sequence: Sequence,
     /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
-}
-
-#[cfg(feature = "cache")]
-impl serde::Serialize for OpIndex {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
-            serializer.serialize_struct("OpIndex", 2)?;
-
-        // Serialize sequence using `sucds`
-        let mut seq_buffer = Vec::new();
-        self.sequence.serialize_into(&mut seq_buffer).map_err(serde::ser::Error::custom)?;
-        state.serialize_field("sequence", &seq_buffer)?;
-
-        state.serialize_field("bitmap", &self.bitmap)?;
-
-        state.end()
-    }
-}
-
-#[cfg(feature = "cache")]
-impl<'de> serde::Deserialize<'de> for OpIndex {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        struct OpIndexData {
-            sequence: Vec<u8>,
-            bitmap: Bitmap,
-        }
-
-        let data = OpIndexData::deserialize(deserializer)?;
-
-        // Deserialize `sucds` structures
-        let mut seq_reader = std::io::BufReader::new(&data.sequence[..]);
-
-        let v = CompactVector::deserialize_from(&mut seq_reader).map_err(serde::de::Error::custom)?;
-        let index = OpIndex { sequence: v, bitmap: data.bitmap }; // Replace with proper reconstruction
-
-        Ok(index)
-    }
 }
 
 impl fmt::Debug for OpIndex {

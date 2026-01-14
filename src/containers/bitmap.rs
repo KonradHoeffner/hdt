@@ -3,13 +3,14 @@ use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
 use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage, bitvector::rs_narrow::RSNarrow};
 #[cfg(feature = "cache")]
-use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
 use std::mem::size_of;
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
+#[cfg_attr(feature = "cache", derive(Serialize, Deserialize))]
 pub struct Bitmap {
     /// should be private but is needed by containers/bitmap.rs, use methods provided by Bitmap
     pub dict: RSNarrow,
@@ -30,46 +31,6 @@ pub enum Error {
     TryFromSliceError(#[from] std::array::TryFromSliceError),
     #[error("Read unsupported bitmap type {0} != 1")]
     UnsupportedBitmapType(u8),
-}
-
-#[cfg(feature = "cache")]
-impl serde::Serialize for Bitmap {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
-            serializer.serialize_struct("Bitmap", 1)?;
-
-        //bitmap_y
-        let mut dict_buffer = Vec::new();
-        self.dict.serialize_into(&mut dict_buffer).map_err(serde::ser::Error::custom)?;
-        state.serialize_field("dict", &dict_buffer)?;
-
-        state.end()
-    }
-}
-
-#[cfg(feature = "cache")]
-impl<'de> serde::Deserialize<'de> for Bitmap {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        struct BitmapData {
-            dict: Vec<u8>,
-        }
-
-        let data = BitmapData::deserialize(deserializer)?;
-
-        // Deserialize `sucds` structures
-        let mut bitmap_reader = std::io::BufReader::new(&data.dict[..]);
-        let rank9sel = Rank9Sel::deserialize_from(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
-
-        let bitmap = Bitmap { dict: rank9sel };
-        Ok(bitmap)
-    }
 }
 
 impl fmt::Debug for Bitmap {
