@@ -1,4 +1,3 @@
-#![feature(uint_bit_width)]
 #![cfg_attr(all(doc, feature = "cache"), doc = include_str!("../README.md"))]
 //! [![github]](https://github.com/konradhoeffner/hdt)&ensp;[![crates-io]](https://crates.io/crates/hdt)&ensp;[![docs-rs]](crate)
 //!
