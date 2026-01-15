@@ -76,9 +76,8 @@ impl fmt::Debug for OpIndex {
         writeln!(
             f,
             "    sequence: {} with {} bits,",
-            //ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
             ByteSize(self.sequence.size_in_bytes() as u64),
-            self.sequence.bits_per_entry //self.sequence.width()
+            self.sequence.bits_per_entry
         )?;
         write!(f, "    bitmap: {:#?}\n}}", self.bitmap)
     }
@@ -163,7 +162,7 @@ impl fmt::Debug for TriplesBitmap {
 impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
     pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
-        //let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
+        //let wavelet_thread = std::thread::spawn(move || WT::from_iter(&sequence_y));
         let wavelet_y = WT::from_iter(&sequence_y);
 
         let entries = adjlist_z.sequence.entries;
@@ -191,7 +190,7 @@ impl TriplesBitmap {
         .expect("Failed to create OPS index compact vector.");
         */
         let mut cv = Vec::<_>::new();
-        // disable parallelization temporarily for easier debugging
+        // temporarily disable threading for wasm support
         //let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization
         for mut indices in indicess {
             let mut first = true;

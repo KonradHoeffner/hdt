@@ -17,7 +17,6 @@ impl<'a> PredicateIter<'a> {
     /// Panics if the object does not exist.
     pub fn new(triples: &'a TriplesBitmap, p: Id) -> Self {
         assert!(p != 0, "object 0 does not exist, cant iterate");
-        // warning: parameter order is swapped between sucds (position, item) and qwt (item, position)
         let occs = triples.wavelet_y.rank(p as usize, triples.wavelet_y.len()).unwrap();
         //println!("the predicate {} is used by {} subjects in the index", p, occs);
         PredicateIter { triples, p, i: 0, pos_z: 0, os: 0, s: 0, occs }
