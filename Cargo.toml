@@ -37,7 +37,7 @@ oxttl = { version = "0.2.1", optional = true }
 lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
 #qwt = "0.3.1"
 #qwt = { path = "../qwt" }
-qwt = { git = "https://github.com/KonradHoeffner/qwt", branch = "32bit" }
+qwt = { git = "https://github.com/KonradHoeffner/qwt", branch = "public" }
 
 [features]
 default = ["sophia"]

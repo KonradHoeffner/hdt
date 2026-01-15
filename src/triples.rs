@@ -161,9 +161,9 @@ impl fmt::Debug for TriplesBitmap {
 
 impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
-    pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
+    pub fn new(order: Order, sequence_y: &Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
         //let wavelet_thread = std::thread::spawn(move || WT::from_iter(&sequence_y));
-        let wavelet_y = WT::from_iter(&sequence_y);
+        let wavelet_y = WT::from_iter(sequence_y);
 
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
@@ -269,7 +269,7 @@ impl TriplesBitmap {
         let sequence_y = Sequence::new(&array_y);
         let sequence_z = Sequence::new(&array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        TriplesBitmap::new(Order::SPO, sequence_y, bitmap_y, adjlist_z)
+        TriplesBitmap::new(Order::SPO, &sequence_y, bitmap_y, adjlist_z)
     }
 
     /// read the whole triple section including control information
@@ -369,7 +369,7 @@ impl TriplesBitmap {
         let sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
-        let triples_bitmap = TriplesBitmap::new(order, sequence_y, bitmap_y, adjlist_z);
+        let triples_bitmap = TriplesBitmap::new(order, &sequence_y, bitmap_y, adjlist_z);
         Ok(triples_bitmap)
     }
 
