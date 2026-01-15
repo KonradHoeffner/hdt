@@ -50,7 +50,7 @@ name = "criterion"
 harness = false
 
 [[bench]]
-name = "iai"
+name = "gungraun"
 harness = false
 
 [lib]
@@ -67,8 +67,7 @@ opt-level = 1
 pretty_assertions = "1"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
-#iai = "0.1"
-iai = { git = "https://github.com/sigaloid/iai", rev = "d56a597" } # until https://github.com/bheisler/iai/pull/35 is merged
+gungraun = "0.17"
 color-eyre = "0.6"
 fs-err = "3.1.0"
 sparesults = "0.3"

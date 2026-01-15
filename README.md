@@ -110,15 +110,15 @@ $ cargo bench --bench criterion
 
 * requires [persondata\_en.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2) placed in `tests/resources`
 
-## iai benchmark
+## Gungraun benchmark
 
 ```sh
-cargo bench --bench iai
+cargo bench --bench gungraun
 ```
 
 * requires [persondata\_en\_10k.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en_10k.hdt.bz2) placed in `tests/resources`
 * requires [Valgrind](https://valgrind.org/) to be installed
-* may require a conservative target CPU like `RUSTFLAGS="-C target-cpu=x86-64" cargo bench --bench iai`
+* may require a conservative target CPU like `RUSTFLAGS="-C target-cpu=skylake" cargo bench --bench gungraun`
 
 ## Comparative benchmark suite
 
