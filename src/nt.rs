@@ -1,8 +1,7 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
-use crate::Hdt;
 use crate::header::Header;
 use crate::triples::{TripleId, TriplesBitmap};
-use crate::{DictSectPFC, FourSectDict, IdKind};
+use crate::{DictSectPFC, FourSectDict, Hdt, IdKind};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
 use lasso::{Key, Spur, ThreadedRodeo};
