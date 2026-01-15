@@ -19,7 +19,6 @@ bytesize = "2"
 crc = "3"
 ntriple = "0.1"
 sophia = { version = "0.9", optional = true }
-sucds = "0.8.3"
 thiserror = "2"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
@@ -36,6 +35,7 @@ fs-err = { version = "3.1.0", optional = true }
 bitset-core = { version = "0.1.1", optional = true }
 oxttl = { version = "0.2.1", optional = true }
 lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
+qwt = { git = "https://github.com/KonradHoeffner/qwt", rev = "460b21a" }
 
 [features]
 default = ["sophia"]

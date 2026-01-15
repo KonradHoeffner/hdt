@@ -227,6 +227,7 @@ impl DictSectPFC {
 
     /// Returns an unverified dictionary section together with a handle to verify the checksum.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<JoinHandle<Result<Self>>> {
+        // https://www.rdfhdt.org/hdt-binary-format/#DictionarySection specifies "unsigned 32bit value preamble" but 8bit is used in practice
         let mut preamble = [0_u8];
         reader.read_exact(&mut preamble)?;
         if preamble[0] != 2 {
@@ -259,7 +260,6 @@ impl DictSectPFC {
         if crc_calculated8 != crc_code8 {
             return Err(Error::InvalidCrc8Checksum(crc_calculated8, crc_code8));
         }
-
         // read sequence log array
         let sequence = Sequence::read(reader)?;
         //println!("read sequence of length {} {:?}", sequence.data.len(), sequence.data);
@@ -350,11 +350,12 @@ impl DictSectPFC {
 
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?
-        let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
+        //let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
         DictSectPFC {
             num_strings: num_terms,
             block_size,
-            sequence: Sequence::new(&offsets, bits_per_entry),
+            //sequence: Sequence::new(&offsets, bits_per_entry),
+            sequence: Sequence::new(&offsets),
             packed_data: Arc::from(compressed_terms),
         }
     }
@@ -406,7 +407,7 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = shared.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
+        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(usize::BITS as usize);
         assert_eq!(sequence.data.len(), data_size);
 
         let subjects = DictSectPFC::read(&mut reader)?.join().unwrap()?;
@@ -421,7 +422,7 @@ mod tests {
             assert_eq!(term, back, "term does not translate back to itself {} -> {} -> {}", term, id, back);
         }
         let sequence = subjects.sequence;
-        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(64);
+        let data_size = (sequence.bits_per_entry * sequence.entries).div_ceil(usize::BITS as usize);
         assert_eq!(sequence.data.len(), data_size);
         Ok(())
     }

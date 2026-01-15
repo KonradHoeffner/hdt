@@ -13,6 +13,13 @@ pub type Result<T> = core::result::Result<T, Error>;
 
 /// Integer sequence with a given number of bits, which means numbers may be represented along byte boundaries.
 /// Also called "array" in the HDT spec, only Log64 is supported.
+/// However no documentation for Log64 could be found, it seems to be just "normal" bit packing.
+/// In the HDT serialization, it is byte-aligned but for performance reasons we use a bigger block size here like usize or u64 and fill the rest with zeroes.
+/// It is not tested whether u64 or usize gives the best performance on a 32 Bit target like WASM32 which is run on a 64 Bit CPU.
+/// This type is not optimized for used for general integer sequences because other libraries already implement that e.g. sucds CompactVector.
+/// Instead it is meant to be read from and written to an HDT file, as such it doesn't have good interoperability.
+/// We could still use an off-the-shelf library for the data which may be even more optimized but they often don't allow you to write or read to the internal data which makes constructing and writing it less comfortable and performant.
+// Update: Now that we are evaluating switching from sucds to QWT, which does not seem to contain such a type, such helper functions could be useful.
 //#[derive(Clone)]
 #[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct Sequence {
@@ -192,7 +199,7 @@ impl Sequence {
             reader.read_exact(&mut buffer)?;
             history.extend_from_slice(&buffer);
             last_value |= (buffer[0] as usize) << bits_read;
-            bits_read += size_of::<usize>();
+            bits_read += 8;
         }
         data.push(last_value);
         // read entry body CRC32
@@ -249,17 +256,89 @@ impl Sequence {
         Ok(())
     }
 
-    /// Pack the given integers., which have to fit into the given number of bits.
-    pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
-        use sucds::int_vectors::CompactVector;
-        let entries = nums.len();
-        if entries == 0 && bits_per_entry == 0 {
-            return Sequence { entries, bits_per_entry, data: vec![] };
+    /*
+        // this is the new one using sucds but we are back to the old manual code + pack_bits with qwt for now
+        /// Pack the given integers., which have to fit into the given number of bits.
+        // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
+        pub fn new(nums: &[usize]) -> Sequence {
+            let entries = nums.len();
+            if entries == 0 {
+                return Sequence { entries, bits_per_entry: 0, data: vec![] };
+            }
+            let bits_per_entry = nums.iter().max().unwrap().bit_width() as usize; // nightly only
+            let data = Vec::<usize>::new();
+            panic!("manual bit packing not implemented yet");
+            //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
+            // let cv = CompactVector::from_slice(nums).unwrap();
+            // let bits_per_entry = cv.width();
+            // let data = cv.into_bit_vector().into_words();
+            Sequence { entries, bits_per_entry, data }
         }
-        let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-        cv.extend(nums.iter().copied()).unwrap();
-        let data = cv.into_bit_vector().into_words();
+    }
+    */
+
+    // could also determine bits per entry using max of numbers but that would take time
+    // pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
+    pub fn new(numbers: &[usize]) -> Sequence {
+        let entries = numbers.len();
+        if entries == 0 {
+            return Sequence { entries, bits_per_entry: 0, data: vec![] };
+        }
+        //let bits_per_entry = numbers.iter().max().unwrap().bit_width() as usize; // nightly only
+        let bits_per_entry = (usize::BITS - numbers.iter().max().unwrap().leading_zeros()) as usize; // emulate bit_width using stable API
+        let numbers8 = Self::pack_bits(numbers, bits_per_entry);
+        // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
+        // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
+        let bytes = numbers8.len();
+        let rest_byte_amount = bytes % size_of::<usize>();
+        let full_byte_amount = bytes - rest_byte_amount;
+        let mut data = Vec::<usize>::new();
+        let full_words = &numbers8[..full_byte_amount];
+        for word in full_words.chunks_exact(size_of::<usize>()) {
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        }
+        if rest_byte_amount > 0 {
+            let mut last = [0u8; size_of::<usize>()];
+            last[..rest_byte_amount].copy_from_slice(&numbers8[full_byte_amount..]);
+            data.push(usize::from_le_bytes(last));
+        }
         Sequence { entries, bits_per_entry, data }
+    }
+
+    // manual compact integer sequence, as sucds lib does not allow export of internal storage
+    fn pack_bits(numbers: &[usize], bits_per_entry: usize) -> Vec<u8> {
+        let mut output = Vec::new();
+        let mut current_byte = 0u8;
+        let mut bit_offset = 0;
+
+        for value in numbers {
+            let mut val = value & ((1 << bits_per_entry) - 1); // mask to get only relevant bits
+            let mut bits_left = bits_per_entry;
+
+            while bits_left > 0 {
+                let available = 8 - bit_offset;
+                let to_write = bits_left.min(available);
+
+                // Shift bits to align with current byte offset
+                current_byte |= ((val & ((1 << to_write) - 1)) as u8) << bit_offset;
+
+                bit_offset += to_write;
+                val >>= to_write;
+                bits_left -= to_write;
+
+                if bit_offset == 8 {
+                    output.push(current_byte);
+                    current_byte = 0;
+                    bit_offset = 0;
+                }
+            }
+        }
+
+        // Push final byte if there's remaining bits
+        if bit_offset > 0 {
+            output.push(current_byte);
+        }
+        output
     }
 }
 
@@ -301,10 +380,14 @@ mod tests {
         assert_eq!(numbers, numbers2);
         assert_eq!(cursor.position(), buf.len() as u64);
         // new and pack_bits
-        let s3 = Sequence::new(&numbers, 4);
+        let s3 = Sequence::new(&numbers);
+        //let s3 = Sequence::new(&numbers, 4);
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
-        assert_eq!(s, s3);
+        //assert_eq!(s, s3);
+        // while we are evaluating the QWT lib instead of sucds, we are not manually giving the bit depth
+        // thus the optimal one is determined automatically and the internal data does not match so we just compare the numbers
+        assert_eq!(s.into_iter().collect::<Vec<_>>(), s3.into_iter().collect::<Vec<_>>());
         Ok(())
     }
 }
