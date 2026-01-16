@@ -1,5 +1,5 @@
 use crate::triples::{Id, TripleId, TriplesBitmap};
-use sucds::int_vectors::Access;
+use qwt::AccessUnsigned;
 
 // see "Exchange and Consumption of Huge RDF Data" by Martinez et al. 2012
 // https://link.springer.com/chapter/10.1007/978-3-642-30284-8_36
@@ -32,8 +32,8 @@ impl Iterator for ObjectIter<'_> {
         if self.pos_index > self.max_index {
             return None;
         }
-        let pos_y = self.triples.op_index.sequence.access(self.pos_index).unwrap();
-        let y = self.triples.wavelet_y.access(pos_y).unwrap() as Id;
+        let pos_y = self.triples.op_index.sequence.get(self.pos_index);
+        let y = self.triples.wavelet_y.get(pos_y).unwrap() as Id;
         let x = self.triples.bitmap_y.rank(pos_y) as Id + 1;
         self.pos_index += 1;
         Some([x, y, self.o])

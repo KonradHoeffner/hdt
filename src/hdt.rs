@@ -169,7 +169,7 @@ impl Hdt {
         // we cannot rely on the numTriples property being present, see https://github.com/rdfhdt/hdt-cpp/issues/289
         // let num_triples = triples_ci.get("numTriples").expect("numTriples key missing in triples CI");
         // thus we use the number of bytes of the header data
-        let mut buf = [0u8; 8];
+        let mut buf = [0u8; size_of::<usize>()];
         index_reader.read_exact(&mut buf)?;
         if header_length != usize::from_le_bytes(buf) {
             return Err("failed index validation".into());

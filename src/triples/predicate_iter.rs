@@ -1,4 +1,5 @@
 use crate::triples::{Id, TripleId, TriplesBitmap};
+use qwt::{RankUnsigned, SelectUnsigned};
 
 /// Iterator over all triples with a given property ID, answering an (?S,P,?O) query.
 pub struct PredicateIter<'a> {
@@ -16,7 +17,7 @@ impl<'a> PredicateIter<'a> {
     /// Panics if the object does not exist.
     pub fn new(triples: &'a TriplesBitmap, p: Id) -> Self {
         assert!(p != 0, "object 0 does not exist, cant iterate");
-        let occs = triples.wavelet_y.rank(triples.wavelet_y.len(), p as usize).unwrap();
+        let occs = triples.wavelet_y.rank(p as usize, triples.wavelet_y.len()).unwrap();
         //println!("the predicate {} is used by {} subjects in the index", p, occs);
         PredicateIter { triples, p, i: 0, pos_z: 0, os: 0, s: 0, occs }
     }
@@ -30,7 +31,7 @@ impl Iterator for PredicateIter<'_> {
         }
         if self.os == 0 {
             // Algorithm 1 findSubj from Martinez et al. 2012 ******
-            let pos_y = self.triples.wavelet_y.select(self.i, self.p as usize).unwrap();
+            let pos_y = self.triples.wavelet_y.select(self.p as usize, self.i).unwrap();
             self.s = self.triples.bitmap_y.rank(pos_y) as Id + 1;
             // *****************************************************
             // SP can have multiple O

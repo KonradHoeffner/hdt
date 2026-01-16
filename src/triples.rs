@@ -2,13 +2,11 @@ use crate::ControlInfo;
 use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
 use log::error;
+use qwt::QWT512;
+use qwt::{AccessUnsigned, BitVector, BitVectorMut, SpaceUsage, bitvector::rs_narrow::RSNarrow};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
-use sucds::Serializable;
-use sucds::bit_vectors::{BitVector, Rank9Sel};
-use sucds::char_sequences::WaveletMatrix;
-use sucds::int_vectors::CompactVector;
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;
@@ -19,7 +17,7 @@ pub use predicate_object_iter::PredicateObjectIter;
 mod object_iter;
 pub use object_iter::ObjectIter;
 #[cfg(feature = "cache")]
-use serde::ser::SerializeStruct;
+use serde::{self, Deserialize, Serialize};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -61,57 +59,15 @@ impl TryFrom<u32> for Order {
 /// This object-based index allows to traverse from the leaves and support ??O and ?PO queries.
 /// Used for logarithmic (?) time access instead of linear time sequential search.
 /// See Martínez-Prieto, M., M. Arias, and J. Fernández (2012). Exchange and Consumption of Huge RDF Data. Pages 8--10.
+#[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
 pub struct OpIndex {
     /// Compact integer vector of object positions.
     /// "[...] integer sequence: SoP, which stores, for each object, a sorted list of references to the predicate-subject pairs (sorted by predicate) related to it."
     // we don't use our own Sequence type because CompactVector is easier to construct step by step (should we rename it but if yes to what?)
-    pub sequence: CompactVector,
+    // update: as we replaced sucds with QWT, we need to use our own type for now.
+    pub sequence: Sequence,
     /// Bitmap with a one bit for every new object to allow finding the starting point for a given object id.
     pub bitmap: Bitmap,
-}
-
-#[cfg(feature = "cache")]
-impl serde::Serialize for OpIndex {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
-            serializer.serialize_struct("OpIndex", 2)?;
-
-        // Serialize sequence using `sucds`
-        let mut seq_buffer = Vec::new();
-        self.sequence.serialize_into(&mut seq_buffer).map_err(serde::ser::Error::custom)?;
-        state.serialize_field("sequence", &seq_buffer)?;
-
-        state.serialize_field("bitmap", &self.bitmap)?;
-
-        state.end()
-    }
-}
-
-#[cfg(feature = "cache")]
-impl<'de> serde::Deserialize<'de> for OpIndex {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        struct OpIndexData {
-            sequence: Vec<u8>,
-            bitmap: Bitmap,
-        }
-
-        let data = OpIndexData::deserialize(deserializer)?;
-
-        // Deserialize `sucds` structures
-        let mut seq_reader = std::io::BufReader::new(&data.sequence[..]);
-
-        let v = CompactVector::deserialize_from(&mut seq_reader).map_err(serde::de::Error::custom)?;
-        let index = OpIndex { sequence: v, bitmap: data.bitmap }; // Replace with proper reconstruction
-
-        Ok(index)
-    }
 }
 
 impl fmt::Debug for OpIndex {
@@ -120,8 +76,8 @@ impl fmt::Debug for OpIndex {
         writeln!(
             f,
             "    sequence: {} with {} bits,",
-            ByteSize(self.sequence.len() as u64 * self.sequence.width() as u64 / 8),
-            self.sequence.width()
+            ByteSize(self.sequence.size_in_bytes() as u64),
+            self.sequence.bits_per_entry
         )?;
         write!(f, "    bitmap: {:#?}\n}}", self.bitmap)
     }
@@ -130,7 +86,8 @@ impl fmt::Debug for OpIndex {
 impl OpIndex {
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
+        //self.sequence.len() * self.sequence.width() / 8 + self.bitmap.size_in_bytes()
+        self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
     }
     /// Find the first position in the OP index of the given object ID.
     pub fn find(&self, o: Id) -> usize {
@@ -142,8 +99,11 @@ impl OpIndex {
     }
 }
 
+type WT = QWT512<usize>;
+
 /// `BitmapTriples` variant of the triples section.
 //#[derive(Clone)]
+#[cfg_attr(feature = "cache", derive(Serialize, Deserialize))]
 pub struct TriplesBitmap {
     order: Order,
     /// bitmap to find positions in the wavelet matrix
@@ -153,7 +113,7 @@ pub struct TriplesBitmap {
     /// Index for object-based access. Points to the predicate layer.
     pub op_index: OpIndex,
     /// wavelet matrix for predicate-based access
-    pub wavelet_y: WaveletMatrix<Rank9Sel>,
+    pub wavelet_y: WT,
 }
 
 #[derive(Debug)]
@@ -195,74 +155,15 @@ impl fmt::Debug for TriplesBitmap {
         writeln!(f, "total size {}", ByteSize(self.size_in_bytes() as u64))?;
         writeln!(f, "adjlist_z {:#?}", self.adjlist_z)?;
         writeln!(f, "op_index {:#?}", self.op_index)?;
-        write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.size_in_bytes() as u64))
-    }
-}
-
-#[cfg(feature = "cache")]
-impl serde::Serialize for TriplesBitmap {
-    fn serialize<S>(&self, serializer: S) -> core::result::Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        let mut state: <S as serde::ser::Serializer>::SerializeStruct =
-            serializer.serialize_struct("TriplesBitmap", 5)?;
-        // Extract the number of triples
-        state.serialize_field("order", &self.order)?;
-        //bitmap_y
-        state.serialize_field("bitmap_y", &self.bitmap_y)?;
-        // adjlist_z
-        state.serialize_field("adjlist_z", &self.adjlist_z)?;
-        // op_index
-        state.serialize_field("op_index", &self.op_index)?;
-        // wavelet_y
-        let mut wavelet_y_buffer = Vec::new();
-        self.wavelet_y.serialize_into(&mut wavelet_y_buffer).map_err(serde::ser::Error::custom)?;
-        state.serialize_field("wavelet_y", &wavelet_y_buffer)?;
-
-        state.end()
-    }
-}
-
-#[cfg(feature = "cache")]
-impl<'de> serde::Deserialize<'de> for TriplesBitmap {
-    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        #[derive(serde::Deserialize)]
-        struct TriplesBitmapData {
-            order: Order,
-            pub bitmap_y: Bitmap,
-            pub adjlist_z: AdjList,
-            pub op_index: OpIndex,
-            pub wavelet_y: Vec<u8>,
-        }
-
-        let data = TriplesBitmapData::deserialize(deserializer)?;
-
-        // Deserialize `sucds` structures
-        let mut bitmap_reader = std::io::BufReader::new(&data.wavelet_y[..]);
-        let wavelet_y =
-            WaveletMatrix::<Rank9Sel>::deserialize_from(&mut bitmap_reader).map_err(serde::de::Error::custom)?;
-
-        let bitmap = TriplesBitmap {
-            order: data.order,
-            bitmap_y: data.bitmap_y,
-            adjlist_z: data.adjlist_z,
-            op_index: data.op_index,
-            wavelet_y,
-        };
-
-        Ok(bitmap)
+        write!(f, "wavelet_y {}", ByteSize(self.wavelet_y.space_usage_byte() as u64))
     }
 }
 
 impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
-    pub fn new(order: Order, sequence_y: Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
-        //let wavelet_thread = std::thread::spawn(|| Self::build_wavelet(sequence_y));
-        let wavelet_y = Self::build_wavelet(sequence_y);
+    pub fn new(order: Order, sequence_y: &Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
+        //let wavelet_thread = std::thread::spawn(move || WT::from_iter(&sequence_y));
+        let wavelet_y = WT::from_iter(sequence_y);
 
         let entries = adjlist_z.sequence.entries;
         // if it takes too long to calculate, can also pass in as parameter
@@ -283,31 +184,34 @@ impl TriplesBitmap {
             indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
         }
         // reduce memory consumption of index by using adjacency list
-        let mut bitmap_index_bitvector = BitVector::new();
-        #[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
-        let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-            .expect("Failed to create OPS index compact vector.");
-        // disable parallelization temporarily for easier debugging
+        let mut bitmap_index_bitvector = BitVectorMut::new();
+        //#[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
+        /*let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
+        .expect("Failed to create OPS index compact vector.");
+        */
+        let mut cv = Vec::<_>::new();
+        // temporarily disable threading for wasm support
         //let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization
         for mut indices in indicess {
             let mut first = true;
             // sort by predicate
-            indices.sort_by_cached_key(|pos_y| wavelet_y.access(*pos_y as usize).unwrap());
+            indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize).unwrap());
             for index in indices {
-                bitmap_index_bitvector.push_bit(first);
+                bitmap_index_bitvector.push(first);
                 first = false;
-                cv.push_int(index as usize).unwrap();
+                cv.push(index as usize);
             }
         }
-        let bitmap_index = Bitmap { dict: Rank9Sel::new(bitmap_index_bitvector) };
-        let op_index = OpIndex { sequence: cv, bitmap: bitmap_index };
+        let bv = BitVector::from(bitmap_index_bitvector);
+        let bitmap_index = Bitmap { dict: RSNarrow::from(bv) };
+        let op_index = OpIndex { sequence: Sequence::new(&cv), bitmap: bitmap_index };
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
     /// Creates a new TriplesBitmap from a list of sorted RDF triples
     pub fn from_triples(triples: &[TripleId]) -> Self {
-        let mut y_bitmap = BitVector::new();
-        let mut z_bitmap = BitVector::new();
+        let mut y_bitmap = BitVectorMut::new();
+        let mut z_bitmap = BitVectorMut::new();
         let mut array_y = Vec::new();
         let mut array_z = Vec::new();
 
@@ -329,21 +233,21 @@ impl TriplesBitmap {
             } else if x != last_x {
                 assert!(x == last_x + 1, "the subjects must be correlative.");
                 //x unchanged
-                y_bitmap.push_bit(true);
+                y_bitmap.push(true);
                 array_y.push(y);
 
-                z_bitmap.push_bit(true);
+                z_bitmap.push(true);
             } else if y != last_y {
                 assert!(y >= last_y, "the predicates must be in increasing order.");
                 // y unchanged
-                y_bitmap.push_bit(false);
+                y_bitmap.push(false);
                 array_y.push(y);
 
-                z_bitmap.push_bit(true);
+                z_bitmap.push(true);
             } else {
                 assert!(z >= last_z, "the objects must be in increasing order");
                 // z changed
-                z_bitmap.push_bit(false);
+                z_bitmap.push(false);
             }
             array_z.push(z);
 
@@ -351,15 +255,21 @@ impl TriplesBitmap {
             last_y = y;
             last_z = z;
         }
-        y_bitmap.push_bit(true);
-        z_bitmap.push_bit(true);
-        let bitmap_y = Bitmap::new(y_bitmap.words().to_vec());
-        let bitmap_z = Bitmap::new(z_bitmap.words().to_vec());
+        y_bitmap.push(true);
+        let n = y_bitmap.len();
+        // pad to the next multiple of 64 so our comparisons match
+        // TODO: can we just improve the comparisons instead?
+        y_bitmap.extend_with_zeros(n.div_ceil(64) * 64 - n);
+        z_bitmap.push(true);
+        let bitmap_y = Bitmap::from(y_bitmap);
+        let bitmap_z = Bitmap::from(z_bitmap);
         // bit_width() only in nightly for now
-        let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
-        let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);
+        /*let sequence_y = Sequence::new(&array_y, (Id::BITS - max_y.leading_zeros()) as usize);
+        let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);*/
+        let sequence_y = Sequence::new(&array_y);
+        let sequence_z = Sequence::new(&array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        TriplesBitmap::new(Order::SPO, sequence_y, bitmap_y, adjlist_z)
+        TriplesBitmap::new(Order::SPO, &sequence_y, bitmap_y, adjlist_z)
     }
 
     /// read the whole triple section including control information
@@ -393,7 +303,7 @@ impl TriplesBitmap {
 
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
-        self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.size_in_bytes()
+        self.adjlist_z.size_in_bytes() + self.op_index.size_in_bytes() + self.wavelet_y.space_usage_byte()
     }
 
     /// Position in the wavelet index of the first predicate for the given subject ID.
@@ -419,7 +329,7 @@ impl TriplesBitmap {
 
         while low < high {
             let mid = usize::midpoint(low, high);
-            match self.wavelet_y.access(mid).unwrap().cmp(&element) {
+            match self.wavelet_y.get(mid).unwrap().cmp(&element) {
                 Ordering::Less => low = mid + 1,
                 Ordering::Greater => high = mid,
                 Ordering::Equal => return Some(mid),
@@ -431,21 +341,6 @@ impl TriplesBitmap {
     /// Search the wavelet matrix for the position of a given subject, predicate pair.
     pub fn search_y(&self, subject_id: usize, property_id: usize) -> Option<usize> {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
-    }
-
-    fn build_wavelet(sequence: Sequence) -> WaveletMatrix<Rank9Sel> {
-        let mut builder =
-            CompactVector::new(sequence.bits_per_entry.max(1)).expect("Failed to create wavelet matrix builder.");
-        // possible refactor of Sequence to use sucds CompactVector, then builder can be removed
-        for x in &sequence {
-            builder.push_int(x).unwrap();
-        }
-        // work around sucds not supporting empty WaveletMatrix
-        if sequence.entries == 0 {
-            builder.push_int(0).unwrap();
-        }
-        drop(sequence);
-        WaveletMatrix::new(builder).expect("Error building the wavelet matrix. Aborting.")
     }
 
     /*
@@ -474,7 +369,7 @@ impl TriplesBitmap {
         let sequence_z = Sequence::read(reader).map_err(|e| Error::Sequence(Level::Z, e))?;
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
 
-        let triples_bitmap = TriplesBitmap::new(order, sequence_y, bitmap_y, adjlist_z);
+        let triples_bitmap = TriplesBitmap::new(order, &sequence_y, bitmap_y, adjlist_z);
         Ok(triples_bitmap)
     }
 
@@ -483,7 +378,8 @@ impl TriplesBitmap {
         self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
         self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
-        Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+        Sequence::new(&y).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+        //Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
         self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
         Ok(())
     }
