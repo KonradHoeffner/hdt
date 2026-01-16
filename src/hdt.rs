@@ -62,9 +62,7 @@ pub enum Error {
 
 impl Hdt {
     #[deprecated(since = "0.4.0", note = "please use `read` instead")]
-    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> {
-        Self::read(reader)
-    }
+    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> { Self::read(reader) }
 
     /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
     /// The reader must point to the beginning of the data of an HDT file.
@@ -202,9 +200,7 @@ impl Hdt {
     }
 
     /// Recursive size in bytes on the heap.
-    pub fn size_in_bytes(&self) -> usize {
-        self.dict.size_in_bytes() + self.triples.size_in_bytes()
-    }
+    pub fn size_in_bytes(&self) -> usize { self.dict.size_in_bytes() + self.triples.size_in_bytes() }
 
     /// An iterator visiting *all* triples as strings in order.
     /// Using this method with a filter can be inefficient for large graphs,
@@ -324,9 +320,7 @@ struct TripleCache<'a> {
 
 impl<'a> TripleCache<'a> {
     /// Build a new [`TripleCache`] for the given [`Hdt`]
-    const fn new(hdt: &'a super::Hdt) -> Self {
-        TripleCache { hdt, tid: [0; 3], arc: [None, None, None] }
-    }
+    const fn new(hdt: &'a super::Hdt) -> Self { TripleCache { hdt, tid: [0; 3], arc: [None, None, None] } }
 
     /// Translate a triple of indexes into a triple of strings.
     fn translate(&mut self, t: TripleId) -> core::result::Result<StringTriple, TranslateError> {

@@ -101,9 +101,7 @@ impl<'a> IntoIterator for &'a Sequence {
     type Item = usize;
     type IntoIter = SequenceIter<'a>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        SequenceIter { sequence: self, i: 0 }
-    }
+    fn into_iter(self) -> Self::IntoIter { SequenceIter { sequence: self, i: 0 } }
 }
 
 impl Sequence {
@@ -129,9 +127,7 @@ impl Sequence {
     }
 
     /// Size in bytes on the heap.
-    pub const fn size_in_bytes(&self) -> usize {
-        (self.data.len() * USIZE_BITS) >> 3
-    }
+    pub const fn size_in_bytes(&self) -> usize { (self.data.len() * USIZE_BITS) >> 3 }
 
     /// Read sequence including metadata from HDT data.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {

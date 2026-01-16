@@ -7,9 +7,9 @@ fn_params_layout = "Compressed"
 single_line_if_else_max_width = 115
 
 # *** only available in nightly rust ***
-#where_single_line = true
-#fn_single_line = true
-#group_imports = "One"
-#condense_wildcard_suffixes = true
-#imports_granularity = "Module"
+where_single_line = true
+fn_single_line = true
+group_imports = "One"
+condense_wildcard_suffixes = true
+imports_granularity = "Module"
 # ***************************************

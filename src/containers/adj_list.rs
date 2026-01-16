@@ -15,34 +15,22 @@ pub struct AdjList {
 
 impl AdjList {
     /// Adjacency list with the given sequence and bitmap.
-    pub const fn new(sequence: Sequence, bitmap: Bitmap) -> Self {
-        AdjList { sequence, bitmap }
-    }
+    pub const fn new(sequence: Sequence, bitmap: Bitmap) -> Self { AdjList { sequence, bitmap } }
 
     /// Combined size in bytes of the sequence and the bitmap on the heap.
-    pub fn size_in_bytes(&self) -> usize {
-        self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
-    }
+    pub fn size_in_bytes(&self) -> usize { self.sequence.size_in_bytes() + self.bitmap.size_in_bytes() }
 
     /// Whether the given position represents the last child of the parent node.
-    pub fn at_last_sibling(&self, word_index: usize) -> bool {
-        self.bitmap.at_last_sibling(word_index)
-    }
+    pub fn at_last_sibling(&self, word_index: usize) -> bool { self.bitmap.at_last_sibling(word_index) }
 
     /// Get the ID at the given position.
-    pub fn get_id(&self, word_index: usize) -> Id {
-        self.sequence.get(word_index) as Id
-    }
+    pub fn get_id(&self, word_index: usize) -> Id { self.sequence.get(word_index) as Id }
 
     /// Number of entries in both the integer sequence and the bitmap.
-    pub const fn len(&self) -> usize {
-        self.sequence.entries
-    }
+    pub const fn len(&self) -> usize { self.sequence.entries }
 
     /// Whether the list is emtpy
-    pub const fn is_empty(&self) -> bool {
-        self.sequence.entries == 0
-    }
+    pub const fn is_empty(&self) -> bool { self.sequence.entries == 0 }
 
     /// Find the first position for the given ID, counting from 1.
     pub fn find(&self, x: Id) -> usize {
@@ -81,7 +69,5 @@ impl AdjList {
     }
 
     /// Find the last position for the given ID, counting from 1.
-    pub fn last(&self, x: Id) -> usize {
-        self.find(x + 1) - 1
-    }
+    pub fn last(&self, x: Id) -> usize { self.find(x + 1) - 1 }
 }

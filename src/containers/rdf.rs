@@ -27,9 +27,7 @@ impl fmt::Display for Triple {
 
 /// delegate to display
 impl fmt::Debug for Triple {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Display::fmt(self, f)
-    }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(self, f) }
 }
 
 /// RDF identifiers can either be Internationalized Resource Identifiers (IRIs) or blank node
@@ -129,9 +127,7 @@ impl fmt::Debug for Literal {
 impl Literal {
     /// Create a new literal with type [xs:string](http://www.w3.org/2001/XMLSchema#string) (which
     /// we do not store since it is the default type).
-    pub const fn new(form: String) -> Self {
-        Literal { form, datatype: None, lang: None }
-    }
+    pub const fn new(form: String) -> Self { Literal { form, datatype: None, lang: None } }
 
     /// Create a new literal with a given form and datatype.
     pub const fn new_typed(form: String, datatype: String) -> Self {
