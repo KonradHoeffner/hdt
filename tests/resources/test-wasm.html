@@ -16,7 +16,8 @@
     <h1>HDT WASM64 Test</h1>
     <dl>
       <dt>1. Build</dt>
-      <dd><code>cargo build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release --features wasm --lib</code></dd>
+      <!--<dd><code>cargo build --target wasm64-unknown-unknown -Z build-std=std,panic_abort --release --features wasm --lib</code></dd>-->
+      <dd><code>wasm-pack build --target web -- --features wasm</code></dd>
 
       <dt>2. Run server</dt>
       <dd>
@@ -27,7 +28,20 @@
     <div id="status" class="status loading">Loading...</div>
     <div id="output"></div>
 
-    <script>
+    <script type="module">
+        // new wasm32 code
+        import init, { HdtGraph } from '../../pkg/hdt.js';
+				async function run() {
+            try {
+                // 1. Initialize the WASM module
+                await init(); 
+                console.log("WASM initialized.");
+						}
+				}
+				run();
+        // old wasm64 code
+		function old()
+		{
         const decoder = new TextDecoder();
         const encoder = new TextEncoder();
 
@@ -39,8 +53,6 @@
         }
 
         async function loadWasm() {
-            const wasmUrl = '/target/wasm64-unknown-unknown/release/hdt.wasm';
-            const response = await fetch(wasmUrl);
             if (!response.ok) {
                 console.error(`[loadWasm] Failed to fetch WASM: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to fetch WASM: ${response.status} ${response.statusText}. Did you build it first?`);
@@ -204,6 +216,7 @@
         }
 
         main();
+				}
     </script>
 </body>
 </html>
