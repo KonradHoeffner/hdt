@@ -1,7 +1,8 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
-use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage, bitvector::rs_narrow::RSNarrow};
+use qwt::bitvector::rs_narrow::RSNarrow;
+use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, SpaceUsage};
 #[cfg(feature = "cache")]
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -40,15 +41,11 @@ impl fmt::Debug for Bitmap {
 }
 
 impl From<BitVector> for Bitmap {
-    fn from(bv: BitVector) -> Self {
-        Bitmap { dict: bv.into() }
-    }
+    fn from(bv: BitVector) -> Self { Bitmap { dict: bv.into() } }
 }
 
 impl From<BitVectorMut> for Bitmap {
-    fn from(bv: BitVectorMut) -> Self {
-        Bitmap { dict: <BitVectorMut as Into<BitVector>>::into(bv).into() }
-    }
+    fn from(bv: BitVectorMut) -> Self { Bitmap { dict: <BitVectorMut as Into<BitVector>>::into(bv).into() } }
 }
 
 impl Bitmap {
@@ -63,9 +60,7 @@ impl Bitmap {
     }
 
     /// Size in bytes on the heap.
-    pub fn size_in_bytes(&self) -> usize {
-        self.dict.space_usage_byte()
-    }
+    pub fn size_in_bytes(&self) -> usize { self.dict.space_usage_byte() }
 
     /// Number of bits in the bitmap, multiple of 64
     pub fn len(&self) -> usize {
@@ -74,14 +69,10 @@ impl Bitmap {
     }
 
     /// Number of bits set
-    pub fn num_ones(&self) -> usize {
-        self.dict.n_ones()
-    }
+    pub fn num_ones(&self) -> usize { self.dict.n_ones() }
 
     /// Returns the position of the k-1-th one bit or None if there aren't that many.
-    pub fn select1(&self, k: usize) -> Option<usize> {
-        self.dict.select1(k)
-    }
+    pub fn select1(&self, k: usize) -> Option<usize> { self.dict.select1(k) }
 
     /// Returns the number of one bits from the 0-th bit to the k-1-th bit. Panics if self.len() < pos.
     pub fn rank(&self, k: usize) -> usize {

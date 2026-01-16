@@ -67,13 +67,9 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
         v.into_iter()
     }
 
-    fn internalize_term(&self, term: Term) -> Result<String, Error> {
-        Ok(term_to_hdt_bgp_str(term))
-    }
+    fn internalize_term(&self, term: Term) -> Result<String, Error> { Ok(term_to_hdt_bgp_str(term)) }
 
-    fn externalize_term(&self, term: String) -> Result<Term, Error> {
-        hdt_bgp_str_to_term(&term)
-    }
+    fn externalize_term(&self, term: String) -> Result<Term, Error> { hdt_bgp_str_to_term(&term) }
 }
 
 pub fn query<'a>(q: &str, hdt: &'a Hdt) -> Result<spareval::QueryResults<'a>, QueryEvaluationError> {
