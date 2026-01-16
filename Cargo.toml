@@ -47,6 +47,7 @@ nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
 wasm = ["dep:serde", "dep:serde_json"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
 getrandom_02 = { package="getrandom", version = "0.2", features = ["js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 
