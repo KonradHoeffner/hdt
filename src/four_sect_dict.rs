@@ -5,6 +5,7 @@ use crate::dict_sect_pfc;
 use crate::triples::Id;
 use crate::{ControlInfo, DictSectPFC};
 use std::io::BufRead;
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use std::thread::JoinHandle;
 use thiserror::Error;
 
@@ -180,11 +181,17 @@ impl FourSectDict {
 }
 
 /// A wrapper to ensure prevent using FourSectDict before its checksums have been validated
+#[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 pub struct UnvalidatedFourSectDict([JoinHandle<dict_sect_pfc::Result<DictSectPFC>>; 4]);
+
+/// WASM version without JoinHandle
+#[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+pub struct UnvalidatedFourSectDict([DictSectPFC; 4]);
 
 impl UnvalidatedFourSectDict {
     /// Validates the checksums of all dictionary sections in parallel.
     /// Dict validation takes around 1200 ms on a single thread with an 1.5 GB HDT file on an i9-12900k.
+    #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
     pub fn validate(self) -> Result<FourSectDict> {
         use SectKind::*;
         let r: Vec<_> = [Shared, Subject, Predicate, Object]
@@ -193,6 +200,13 @@ impl UnvalidatedFourSectDict {
             .map(|(sect_kind, handle)| handle.join().unwrap().map_err(|e| DictSectError { e, sect_kind }))
             .collect::<std::result::Result<Vec<DictSectPFC>, DictSectError>>()?;
         let [shared, subjects, predicates, objects]: [DictSectPFC; 4] = r.try_into().unwrap();
+        Ok(FourSectDict { shared, subjects, predicates, objects })
+    }
+
+    /// WASM version - sections are already validated during read
+    #[cfg(any(target_arch = "wasm32", target_arch = "wasm64"))]
+    pub fn validate(self) -> Result<FourSectDict> {
+        let [shared, subjects, predicates, objects] = self.0;
         Ok(FourSectDict { shared, subjects, predicates, objects })
     }
 }
