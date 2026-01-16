@@ -46,6 +46,10 @@ sparql = ["dep:spareval", "dep:spargebra"]
 nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
 wasm = ["dep:serde", "dep:serde_json"]
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_02 = { package="getrandom", version = "0.2", features = ["js"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
+
 [dependencies.serde_json]
 version = "1"
 optional = true
