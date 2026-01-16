@@ -1,7 +1,3 @@
-//! Manual WebAssembly bindings without wasm-bindgen
-//!
-//! This module provides simple C-style exports that work with wasm64
-
 use crate::Hdt;
 use serde::{Deserialize, Serialize};
 use std::io::{self, BufRead, Read};
