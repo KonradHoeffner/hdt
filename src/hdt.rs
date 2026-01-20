@@ -312,6 +312,37 @@ impl Hdt {
             [None, None, None] => Box::new(self.triples_all()),
         }
     }
+
+    /// Get all internal triple IDs that fit the given triple patterns, where `None` stands for a variable.
+    /// Used for specific optimizations, call triples_with_pattern instead to get actual string results.
+    pub fn triple_ids_with_pattern<'a>(
+        &'a self, sp: Option<&'a str>, pp: Option<&'a str>, op: Option<&'a str>,
+    ) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+        let pattern: [Option<usize>; 3] =
+            [(0, sp), (1, pp), (2, op)].map(|(i, x)| x.map(|x| self.dict.string_to_id(x, IdKind::KINDS[i])));
+        // fail fast if any constant is 0, meaning missing from the dict
+        if pattern.contains(&Some(0)) {
+            return Box::new(iter::empty());
+        }
+        // we did not fail, so all constants are >0 so we transform None values into 0 to signify variables
+        let pattern: TripleId = pattern.map(|x| x.unwrap_or(0));
+        self.triple_ids_with_id_pattern(pattern)
+    }
+
+    /// Get all internal triple IDs that fit the given triple patterns, where 0 stands for a variable.
+    /// Used for specific optimizations, call triples_with_pattern instead to get actual string results.
+    pub fn triple_ids_with_id_pattern<'a>(&'a self, pattern: TripleId) -> Box<dyn Iterator<Item = TripleId> + 'a> {
+        let ts = &self.triples;
+        let [s, p, o] = pattern;
+        // can't use slice: half_open_range_patterns_in_slices is still unstable, see https://github.com/rust-lang/rust/issues/67264
+        match (s, p, o) {
+            (1.., _, _) => Box::new(SubjectIter::with_pattern(ts, [s, p, o]).map(move |t| [s, t[1], t[2]])),
+            (0, 1.., 1..) => Box::new(PredicateObjectIter::new(ts, p, o).map(move |sid| [sid, p, o])),
+            (0, 1.., 0) => Box::new(PredicateIter::new(ts, p).map(move |t| [t[0], p, t[2]])),
+            (0, 0, 1..) => Box::new(ObjectIter::new(ts, o).map(move |t| [t[0], t[1], o])),
+            (0, 0, 0) => Box::new(self.triples.into_iter()),
+        }
+    }
 }
 
 /// A TripleCache stores the `Arc<str>` of the last returned triple
