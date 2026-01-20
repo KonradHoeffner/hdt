@@ -193,7 +193,7 @@ impl Bitmap {
         };
 
         w.write_all(bytes)?;
-        hasher.update(&bytes);
+        hasher.update(bytes);
         let crc_code = hasher.finalize();
         let crc_code = crc_code.to_le_bytes();
         w.write_all(&crc_code)?;
