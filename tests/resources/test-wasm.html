@@ -40,7 +40,7 @@
 				<code>RUSTFLAGS="-C target-feature=+simd128" wasm-pack build --target web --release -- --features wasm</code>
 			</dd>
 
-			<dt>2. Run server</dt>
+			<dt>2. Run server (requires downloading and unpacking <a href="https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2">persondata_en.hdt</a> into tests/resources)</dt>
 			<dd>
 				<code>python3 -m http.server 8000</code><br />
 				(<em>or:</em> <code>php -S localhost:8000</code> <em>or:</em> <code>npx http-server -p 8000</code>)
