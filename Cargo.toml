@@ -44,18 +44,15 @@ cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
 nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
-wasm = ["dep:serde", "dep:serde_json"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 getrandom_02 = { package="getrandom", version = "0.2", features = ["js"] }
 getrandom = { version = "0.3", features = ["wasm_js"] }
 console_error_panic_hook = "0.1"
-
-[dependencies.serde_json]
-version = "1"
-optional = true
-
+serde = "1"
+serde_json = "1"
+ 
 [[bench]]
 name = "criterion"
 harness = false

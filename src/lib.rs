@@ -101,8 +101,6 @@ pub use sophia;
 #[cfg(feature = "sophia")]
 /// Adapter for the Sophia library.
 pub mod hdt_graph;
-#[cfg(feature = "wasm")]
-pub mod hdt_wasm;
 /// Types for representing the header.
 pub mod header;
 #[cfg(feature = "sparql")]
@@ -112,6 +110,8 @@ pub mod sparql;
 pub mod triples;
 /// Constants for triple terms
 pub mod vocab;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 pub use crate::hdt::Hdt;
 use containers::ControlInfo;

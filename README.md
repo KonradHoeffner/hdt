@@ -77,6 +77,10 @@ let hdt = hdt::Hdt::read_from_path(std::path::Path::new("tests/resources/snikmet
 
 The `sparql` feature implements [spareval](https://crates.io/crates/spareval) .
 
+### Web Assembly WASM32
+The `wasm` feature allows purely client-side HDT in the browser using `wasm_pack` and `wasm_bindgen`.
+
+
 ## API Documentation
 
 See [docs.rs/latest/hdt](https://docs.rs/hdt) or generate for yourself with `cargo doc --no-deps` without disabling default features.
