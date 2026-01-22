@@ -10,6 +10,8 @@ pub struct HdtWasm {
 
 #[wasm_bindgen(js_class = "Hdt")]
 impl HdtWasm {
+    /// Creates an immutable HDT instance from the given HDT binary data.
+    /// This data can be obtained in JavaScript with `await (await fetch(path)).arrayBuffer()`
     #[wasm_bindgen(constructor)]
     pub fn new(data: Vec<u8>) -> Result<HdtWasm, JsError> {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -52,5 +54,24 @@ impl HdtWasm {
             );
         }
         Ok(strings)
+    }
+
+    #[cfg(feature = "sparql")]
+    pub fn select(&self, q: String) -> Result<Vec<String>, JsError> {
+        use crate::sparql;
+        let mut outputs = Vec::new();
+        let results = sparql::query(&q, &self.hdt).map_err(|e| JsError::new(&e.to_string()))?;
+        match results {
+            spareval::QueryResults::Solutions(solutions) => {
+                //let solutions: Vec<_> = solutions.collect();
+                for solution in solutions {
+                    outputs.push(solution?.get("x").unwrap().to_string());
+                }
+            }
+            _ => {
+                return Err(JsError::new("SELECT query results expected but got something else"));
+            }
+        }
+        Ok(outputs)
     }
 }

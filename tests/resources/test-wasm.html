@@ -79,6 +79,12 @@
 				const lastStrings = hdt.ids_to_strings(ids.subarray(-300));
 				outputDiv.innerText = lastStrings;
 				log(`Translated the last 100 triple IDs to string in ${performance.now() - start} ms`, 'success');
+				// WASM SPARQL
+				log(`Testing SPARQL query: any 10 subjects...`);
+				start = performance.now();
+				const subjects = hdt.select("SELECT ?x WHERE {?x ?p ?o.} LIMIT 10");
+				outputDiv.innerText = "SPARQL subjects: " + subjects;
+				log(`Finished SPARQL query in ${performance.now() - start} ms`, 'success');
 			}
 			run();
 

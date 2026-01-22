@@ -52,6 +52,7 @@ getrandom = { version = "0.3", features = ["wasm_js"] }
 console_error_panic_hook = "0.1"
 serde = "1"
 serde_json = "1"
+oxsdatatypes = { version = "0.2", features = ["js"] } # replaces std::time calls which crash on WASM
  
 [[bench]]
 name = "criterion"
