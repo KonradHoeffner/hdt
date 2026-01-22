@@ -46,8 +46,7 @@ impl HdtTerm {
 impl Term for HdtTerm {
     type BorrowTerm<'x>
         = &'x Self
-    where
-        Self: 'x;
+    where Self: 'x;
 
     fn kind(&self) -> TermKind {
         match self {
@@ -57,9 +56,7 @@ impl Term for HdtTerm {
         }
     }
 
-    fn borrow_term(&self) -> Self::BorrowTerm<'_> {
-        self
-    }
+    fn borrow_term(&self) -> Self::BorrowTerm<'_> { self }
 
     fn iri(&self) -> Option<sophia::api::term::IriRef<mownstr::MownStr<'_>>> {
         match self {
@@ -99,13 +96,9 @@ impl Term for HdtTerm {
 }
 
 impl PartialEq for HdtTerm {
-    fn eq(&self, other: &Self) -> bool {
-        Term::eq(self, other)
-    }
+    fn eq(&self, other: &Self) -> bool { Term::eq(self, other) }
 }
 
 impl Eq for HdtTerm {}
 
-fn mown2arc(m: MownStr) -> Arc<str> {
-    Box::<str>::from(m).into()
-}
+fn mown2arc(m: MownStr) -> Arc<str> { Box::<str>::from(m).into() }

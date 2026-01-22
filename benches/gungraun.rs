@@ -17,27 +17,19 @@ fn load() -> Hdt {
 }
 
 #[library_benchmark]
-fn bench_load() -> Hdt {
-    load()
-}
+fn bench_load() -> Hdt { load() }
 
 #[library_benchmark]
 #[bench::default(load())]
-fn query_all(hdt: Hdt) {
-    hdt.triples_with_pattern(None, None, None).count();
-}
+fn query_all(hdt: Hdt) { hdt.triples_with_pattern(None, None, None).count(); }
 
 #[library_benchmark]
 #[bench::default(load())]
-fn query_all_sophia(hdt: Hdt) {
-    hdt.triples_matching(Any, Any, Any).count();
-}
+fn query_all_sophia(hdt: Hdt) { hdt.triples_matching(Any, Any, Any).count(); }
 
 #[library_benchmark]
 #[bench::default(load())]
-fn query_po(hdt: Hdt) {
-    hdt.triples_with_pattern(None, Some(TYPE), Some(PERSON)).count();
-}
+fn query_po(hdt: Hdt) { hdt.triples_with_pattern(None, Some(TYPE), Some(PERSON)).count(); }
 
 #[library_benchmark]
 #[bench::default(load())]
@@ -49,9 +41,7 @@ fn query_po_sophia(hdt: Hdt) {
 
 #[library_benchmark]
 #[bench::default(load())]
-fn query_o(hdt: Hdt) {
-    hdt.triples_with_pattern(None, None, Some(PERSON)).count();
-}
+fn query_o(hdt: Hdt) { hdt.triples_with_pattern(None, None, Some(PERSON)).count(); }
 
 #[library_benchmark]
 #[bench::default(load())]

@@ -2,8 +2,8 @@ use crate::ControlInfo;
 use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
 use log::error;
-use qwt::QWT512;
-use qwt::{AccessUnsigned, BitVector, BitVectorMut, SpaceUsage, bitvector::rs_narrow::RSNarrow};
+use qwt::bitvector::rs_narrow::RSNarrow;
+use qwt::{AccessUnsigned, BitVector, BitVectorMut, QWT512, SpaceUsage};
 use std::cmp::Ordering;
 use std::fmt;
 use std::io::BufRead;
@@ -90,9 +90,7 @@ impl OpIndex {
         self.sequence.size_in_bytes() + self.bitmap.size_in_bytes()
     }
     /// Find the first position in the OP index of the given object ID.
-    pub fn find(&self, o: Id) -> usize {
-        self.bitmap.select1(o - 1).unwrap() as usize
-    }
+    pub fn find(&self, o: Id) -> usize { self.bitmap.select1(o - 1).unwrap() as usize }
     /// Find the last position in the object index of the given object ID.
     pub fn last(&self, o: Id) -> usize {
         self.bitmap.select1(o).map_or_else(|| self.bitmap.len() - 1, |index| index as usize - 1)
@@ -318,9 +316,7 @@ impl TriplesBitmap {
     }
 
     /// Position in the wavelet index of the last predicate for the given subject ID.
-    pub fn last_y(&self, subject_id: usize) -> usize {
-        self.find_y(subject_id + 1) - 1
-    }
+    pub fn last_y(&self, subject_id: usize) -> usize { self.find_y(subject_id + 1) - 1 }
 
     /// Binary search in the wavelet matrix.
     fn bin_search_y(&self, element: usize, begin: usize, end: usize) -> Option<usize> {
@@ -403,18 +399,14 @@ impl TriplesBitmap {
     }
 
     /// Number of triples
-    pub const fn len(&self) -> usize {
-        self.adjlist_z.sequence.entries
-    }
+    pub const fn len(&self) -> usize { self.adjlist_z.sequence.entries }
 }
 
 impl<'a> IntoIterator for &'a TriplesBitmap {
     type Item = TripleId;
     type IntoIter = SubjectIter<'a>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        SubjectIter::new(self)
-    }
+    fn into_iter(self) -> Self::IntoIter { SubjectIter::new(self) }
 }
 
 /// Subject, predicate or object ID, starting at 1.

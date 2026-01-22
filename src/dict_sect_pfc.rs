@@ -71,9 +71,7 @@ pub enum ExtractError {
 
 impl DictSectPFC {
     /// size in bytes of the dictionary section
-    pub fn size_in_bytes(&self) -> usize {
-        self.sequence.size_in_bytes() + self.packed_data.len()
-    }
+    pub fn size_in_bytes(&self) -> usize { self.sequence.size_in_bytes() + self.packed_data.len() }
 
     fn index_str(&self, index: usize) -> &str {
         let position: usize = self.sequence.get(index);
@@ -225,9 +223,7 @@ impl DictSectPFC {
     }
 
     /// deprecated: we should be able to remove this as it is public now
-    pub const fn num_strings(&self) -> usize {
-        self.num_strings
-    }
+    pub const fn num_strings(&self) -> usize { self.num_strings }
 
     /// Common parsing logic for reading a dictionary section.
     /// Returns the parsed components and the CRC32 code to be verified.

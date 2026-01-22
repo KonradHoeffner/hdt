@@ -108,9 +108,7 @@ impl ControlInfo {
     }
 
     /// Read and verify control information.
-    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
-        Ok(Self::read_kind(reader)?)
-    }
+    pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> { Ok(Self::read_kind(reader)?) }
 
     // Helper function returning a ControlInfoReadErrorKind that is wrapped by Self::read.
     fn read_kind<R: BufRead>(reader: &mut R) -> core::result::Result<Self, ControlInfoReadErrorKind> {
@@ -174,9 +172,7 @@ impl ControlInfo {
     }
 
     /// Save a ControlInfo object to file using crc
-    pub fn write(&self, write: &mut impl Write) -> Result<()> {
-        Ok(self.write_kind(write)?)
-    }
+    pub fn write(&self, write: &mut impl Write) -> Result<()> { Ok(self.write_kind(write)?) }
 
     // Helper function for Self::write
     fn write_kind(&self, dest_writer: &mut impl Write) -> core::result::Result<(), ControlInfoReadErrorKind> {
@@ -217,9 +213,7 @@ impl ControlInfo {
     }
 
     /// Get property value for the given key, if available.
-    pub fn get(&self, key: &str) -> Option<String> {
-        self.properties.get(key).cloned()
-    }
+    pub fn get(&self, key: &str) -> Option<String> { self.properties.get(key).cloned() }
 }
 
 #[cfg(test)]
