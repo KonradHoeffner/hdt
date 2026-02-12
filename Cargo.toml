@@ -36,7 +36,7 @@ bitset-core = { version = "0.1.1", optional = true }
 oxttl = { version = "0.2.1", optional = true }
 lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
 qwt = "0.3.4"
-mem_dbg = "0.3.4"
+mem_dbg = "0.4.0"
 
 [features]
 default = ["sophia"]
