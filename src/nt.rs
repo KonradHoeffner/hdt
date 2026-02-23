@@ -165,6 +165,12 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
 //pub fn parse_nt_terms(path: &Path) -> Result<(Vec<[usize; 3]>, Indices, Indices, Indices, Vec<String>)> {
 fn parse_nt_terms(path: &Path) -> Result<IndexPool> {
     let lasso: Arc<ThreadedRodeo<Spur>> = Arc::new(ThreadedRodeo::new());
+    // determine max parallel threads from MAX_THREADS env var or number of CPU cores
+    let max_threads = std::env::var("MAX_THREADS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or_else(|| thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
+    debug!("Using up to {max_threads} threads for N-Triples parsing");
     // Store triple indices instead of strings
     let readers =
         NTriplesParser::new().split_file_for_parallel_parsing(path, thread::available_parallelism()?.get())?;
