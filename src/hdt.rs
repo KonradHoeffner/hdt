@@ -206,6 +206,32 @@ impl Hdt {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
     }
 
+    /// Returns the HDT header.
+    pub fn header(&self) -> &Header {
+        &self.header
+    }
+
+    /// Returns a mutable HDT header.
+    ///
+    /// Call [`Self::recompute_header_length`] after mutating header triples so the
+    /// serialized header control information stays consistent.
+    pub fn header_mut(&mut self) -> &mut Header {
+        &mut self.header
+    }
+
+    /// Recomputes the serialized byte length for the current header body.
+    ///
+    /// This should be called after mutating [`Self::header_mut`].
+    pub fn recompute_header_length(&mut self) -> std::io::Result<()> {
+        use std::io::Write as _;
+        let mut buf = Vec::<u8>::new();
+        for triple in &self.header.body {
+            writeln!(&mut buf, "{triple}")?;
+        }
+        self.header.length = buf.len();
+        Ok(())
+    }
+
     /// An iterator visiting *all* triples as strings in order.
     /// Using this method with a filter can be inefficient for large graphs,
     /// because the strings are stored in compressed form and must be decompressed and allocated.
@@ -407,6 +433,29 @@ pub mod tests {
         hdt.write(&mut buf)?;
         let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
         snikmeta_check(&hdt2)?;
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "nt")]
+    fn header_metadata_can_be_mutated_before_single_write() -> Result<()> {
+        use crate::containers::rdf::{Id as RdfId, Term as RdfTerm, Triple as RdfTriple};
+
+        init();
+        let mut hdt = Hdt::read_nt(Path::new("tests/resources/empty.nt"))?;
+        let triple = RdfTriple::new(
+            RdfId::Named("http://example.org/dataset".to_owned()),
+            "https://decisym.ai/de#graphIRI".to_owned(),
+            RdfTerm::Id(RdfId::Named("http://example.org/graph".to_owned())),
+        );
+        hdt.header_mut().body.insert(triple.clone());
+        hdt.recompute_header_length()?;
+
+        let mut buf = Vec::<u8>::new();
+        hdt.write(&mut buf)?;
+        let reloaded = Hdt::read(std::io::Cursor::new(buf))?;
+
+        assert!(reloaded.header().body.contains(&triple));
         Ok(())
     }
 
