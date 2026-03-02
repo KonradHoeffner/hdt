@@ -248,7 +248,9 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
                         s.pop();
                     }
                 };
-                let q = q.unwrap(); // TODO: error handling
+                let q = q.map_err(|e| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Error reading N-Triples: {e}"))
+                })?;
                 let mut subj_str = q.subject.to_string();
                 clean(&mut subj_str);
                 let mut pred_str = q.predicate.to_string();
@@ -260,10 +262,10 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
                 let p = interner.get_or_intern(&pred_str);
                 let o = interner.get_or_intern(&obj_str);
 
-                [s, p, o]
+                Ok([s, p, o])
             })
         })
-        .collect();
+        .collect::<Result<Vec<[u32; 3]>>>()?;
 
     let interner = Arc::try_unwrap(interner).expect("interner Arc still has outstanding references");
     Ok(ParsedTerms::new(interner, triples))
@@ -413,6 +415,7 @@ pub mod tests {
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
+    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -460,6 +463,25 @@ pub mod tests {
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
         Hdt::read(std::io::Cursor::new(buf))?;
+        Ok(())
+    }
+
+    #[test]
+    fn read_nt_invalid_input_returns_error_without_panic() -> Result<()> {
+        init();
+        let invalid_path = std::env::temp_dir().join(format!(
+            "hdt-invalid-nt-{}-{}.nt",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("unnamed")
+        ));
+        fs::write(&invalid_path, "invalid triple\n")?;
+
+        let result = std::panic::catch_unwind(|| Hdt::read_nt(&invalid_path));
+        assert!(result.is_ok(), "Hdt::read_nt should return Err instead of panicking on invalid N-Triples");
+        let parse_result = result.expect("catch_unwind should not fail");
+        assert!(parse_result.is_err(), "invalid N-Triples should produce an error result");
+
+        let _ = fs::remove_file(&invalid_path);
         Ok(())
     }
 }
