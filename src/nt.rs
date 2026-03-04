@@ -165,14 +165,13 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
 /// use MAX_PARALLEL_PARSERS to cap the number of parallel parsers, oterwise defaults to number of CPU cores.
 fn parse_nt_terms(path: &Path) -> Result<IndexPool> {
     let lasso: Arc<ThreadedRodeo<Spur>> = Arc::new(ThreadedRodeo::new());
-    // determine max parallel parsers from MAX_PARALLEL_PARSERS env var or number of CPU cores
-    let max_parsers = std::env::var("MAX_PARALLEL_PARSERS")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .unwrap_or_else(|| thread::available_parallelism().map(|n| n.get()).unwrap_or(1));
-    debug!("Using up to {max_parsers} parallel parsers for N-Triples");
+    // workaround for bug with lasso v0.7.3 when concurrency is too high, see https://github.com/Kixiron/lasso/issues/48
+    // experiments have always failed with 24, often with 23 and sometimes with 22 threads, choose 16 to be on the safe side
+    // use two threads when available parallelism cannot be determined as going to a single thread is around 38% slower
+    let num_parsers = std::cmp::min(16, thread::available_parallelism().map(|n| n.get()).unwrap_or(2));
+    debug!("Using up to {num_parsers} parallel parsers for N-Triples");
     // Store triple indices instead of strings
-    let readers = NTriplesParser::new().split_file_for_parallel_parsing(path, max_parsers)?;
+    let readers = NTriplesParser::new().split_file_for_parallel_parsing(path, num_parsers)?;
     let triples: Vec<[usize; 3]> = readers
         .into_par_iter()
         .flat_map_iter(|reader| {
