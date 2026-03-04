@@ -11,11 +11,12 @@ use sophia::api::term::{IriRef, SimpleTerm};
 const VINCENT: &str = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
+const H: &str = "tests/resources/persondata_en.hdt";
+const N: &str = "tests/resources/persondata_en.nt";
 
 fn load() -> Result<Hdt> {
     color_eyre::install().unwrap();
-    let n = "tests/resources/persondata_en.hdt";
-    let f = File::open(n).wrap_err(format!("Error opening {n}, did you download it? See README.md."))?;
+    let f = File::open(H).wrap_err(format!("Error opening {H}, did you download it? See README.md."))?;
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");
     //let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     Ok(Hdt::read(std::io::BufReader::new(f))?)
@@ -92,9 +93,9 @@ fn query(c: &mut Criterion) {
 fn read_nt_benchmarks(c: &mut Criterion) {
     let mut group = c.benchmark_group("dictionary_read_nt");
     group.sample_size(10);
-    let test_file = std::path::Path::new("tests/resources/persondata_en.nt");
+    let f = File::open(N).wrap_err(format!("Error opening {N}, did you create it? See README.md.")).unwrap();
 
-    group.bench_function("read_nt", |b| b.iter(|| Hdt::read_nt(test_file).unwrap()));
+    group.bench_function("read_nt", |b| b.iter(|| Hdt::read_nt(f.path())));
     group.finish();
 }
 

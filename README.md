@@ -121,6 +121,7 @@ $ cargo bench --bench criterion
 ```
 
 * requires [persondata\_en.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2) placed in `tests/resources`
+* with the "nt" feature it also requires the file above converted to [persondata\_en.nt] in the same directory
 
 ## Gungraun benchmark
 
