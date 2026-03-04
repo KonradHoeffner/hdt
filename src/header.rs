@@ -2,7 +2,10 @@ use crate::containers::ControlInfo;
 use crate::containers::rdf::{Id, Literal, Term, Triple};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
+use std::fs::File;
 use std::io::BufRead;
+use std::io::BufReader;
+use std::path::Path;
 use std::str;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -35,6 +38,17 @@ pub enum Error {
 }
 
 impl Header {
+    /// Reads the header section directly from an HDT file path.
+    ///
+    /// This reads and validates the leading global control info chunk, then
+    /// parses the header section.
+    pub fn read_from_hdt_path(path: &Path) -> Result<Self> {
+        let file = File::open(path)?;
+        let mut reader = BufReader::new(file);
+        ControlInfo::read(&mut reader)?;
+        Self::read(&mut reader)
+    }
+
     /// Reader needs to be positioned directly after the global control information.
     pub fn read<R: BufRead>(reader: &mut R) -> Result<Self> {
         let header_ci = ControlInfo::read(reader)?;
@@ -96,17 +110,11 @@ impl Header {
 mod tests {
     use super::*;
     use crate::tests::init;
-    use fs_err::File;
-    use std::io::BufReader;
 
     #[test]
     fn read_header() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/yago_header.hdt")?;
-        let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader)?;
-
-        let header = Header::read(&mut reader)?;
+        let header = Header::read_from_hdt_path(Path::new("tests/resources/yago_header.hdt"))?;
         assert_eq!(header.format, "ntriples");
         assert_eq!(header.length, 1891);
         assert_eq!(header.body.len(), 22);
