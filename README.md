@@ -130,7 +130,7 @@ cargo bench --bench gungraun
 ```
 
 * requires [persondata\_en\_10k.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en_10k.hdt.bz2) placed in `tests/resources`
-* requires [Valgrind](https://valgrind.org/) to be installed
+* requires [Valgrind](https://valgrind.org/) and [gungraun-runner](https://gungraun.github.io/gungraun/latest/html/installation/gungraun.html) to be installed
 * may require a conservative target CPU like `RUSTFLAGS="-C target-cpu=skylake" cargo bench --bench gungraun`
 
 ## Comparative benchmark suite

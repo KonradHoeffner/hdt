@@ -209,14 +209,13 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[test]
-    fn bugtest() -> color_eyre::Result<()> {
+    fn bugtest() {
         let mut v = BitVectorMut::new();
         v.push(true);
         v.push(false);
         let bv: BitVector = v.into();
         let rs: RSNarrow = bv.into();
         rs.n_zeros();
-        Ok(())
     }
 
     #[test]
