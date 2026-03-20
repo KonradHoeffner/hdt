@@ -9,11 +9,11 @@ authors:
     email: konrad.hoeffner@uni-leipzig.de
     affiliation: Institute for Medical Informatics, Statistics and Epidemiology (IMISE), Leipzig, Germany
     orcid: https://orcid.org/0000-0001-7358-3217
-  - given-names: Baccaert
-    family-names: Tim
+  - given-names: Tim
+    family-names: Baccaert
     affiliation: Independent Researcher, Belgium
-  - given-names: Hanson
-    family-names: Greg
+  - given-names: Greg
+    family-names: Hanson
     affiliation: DeciSym
 repository-code: 'https://github.com/konradhoeffner/hdt'
 url: 'https://crates.io/crates/hdt'
