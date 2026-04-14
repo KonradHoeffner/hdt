@@ -54,13 +54,9 @@ impl From<BitVectorMut> for Bitmap {
 
 impl Bitmap {
     /// Construct a bitmap from an existing bitmap in form of a vector, which doesn't have rank and select support. Number of bits multiple of 64.
-    pub fn new(data: Vec<u64>) -> Self {
-        let mut v = BitVectorMut::new();
-        for d in data {
-            v.append_bits(d, 64);
-        }
-        let dict: BitVector = v.into();
-        Bitmap { dict: dict.into() }
+    pub fn new(data: &[u64]) -> Self {
+        let v: BitVector = BitVectorMut::from_packed_data(data, data.len() * 64).into();
+        Bitmap { dict: v.into() }
     }
 
     /// Size in bytes on the heap.
@@ -165,7 +161,7 @@ impl Bitmap {
         if crc_calculated != crc_code {
             return Err(InvalidCrc32Checksum(crc_calculated, crc_code));
         }
-        Ok(Self::new(data))
+        Ok(Self::new(&data))
     }
 
     pub fn write(&self, w: &mut impl std::io::Write) -> Result<()> {
@@ -222,7 +218,7 @@ mod tests {
     fn write() -> color_eyre::Result<()> {
         init();
         let bits: Vec<u64> = vec![0b10111];
-        let bitmap = Bitmap::new(bits);
+        let bitmap = Bitmap::new(&bits);
         assert_eq!(bitmap.len(), 64);
         // position of k-1th 1 bit
         // read bits from right to left, i.e. last one is pos 0
