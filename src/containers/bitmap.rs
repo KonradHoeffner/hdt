@@ -1,7 +1,7 @@
 //! Bitmap with rank and select support read from an HDT file.
 use crate::containers::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
-use mem_dbg::{MemSize, SizeFlags};
+use qwt::mem_dbg::{MemSize, SizeFlags};
 use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, bitvector::rs_narrow::RSNarrow};
 #[cfg(feature = "cache")]
 use serde::{Deserialize, Serialize};
