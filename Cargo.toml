@@ -24,7 +24,7 @@ sophia = { version = "0.10", optional = true }
 thiserror = "2"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
-mownstr = "0.3"
+mownstr = { version = "0.3", optional = true }
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 rayon = { version = "1.11.0", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
@@ -43,7 +43,7 @@ qwt = "0.4.0"
 
 [features]
 default = ["sophia"]
-sophia = ["dep:sophia"]
+sophia = ["dep:sophia", "dep:mownstr"]
 cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
