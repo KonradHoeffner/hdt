@@ -442,7 +442,7 @@ pub mod tests {
         use crate::containers::rdf::{Id as RdfId, Term as RdfTerm, Triple as RdfTriple};
 
         init();
-        let mut hdt = Hdt::read_nt(Path::new("tests/resources/empty.nt"))?;
+        let mut hdt = Hdt::read_nt(std::path::Path::new("tests/resources/empty.nt"))?;
         let triple = RdfTriple::new(
             RdfId::Named("http://example.org/dataset".to_owned()),
             "https://decisym.ai/de#graphIRI".to_owned(),
