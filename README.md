@@ -82,11 +82,13 @@ Web Assembly allows purely client-side HDT in the browser.
 It is gated behind the wasm32-unknown-unknown target and not a feature but is still experimental.
 We don't release the compiled artifacts to NPM yet (please open an issue if you need this or something else) so for now you need to build them yourself.
 Open [test-wasm.html](tests/resources/test-wasm.html) to test it and see the source code for how to load and query HDT with Wasm.
+Due to CORS browser restrictions you may have to run a local server e.g. on port 8000 and then open <http://localhost:8000/tests/resources/test-wasm.html>.
 
 ```sh
 rustup target add wasm32-unknown-unknown
-cargo install wasm_pack
+cargo install wasm-pack
 RUSTFLAGS="-C target-feature=+simd128" wasm-pack build --target web --release
+python -m http.server 8000
 ```
 
 ## API Documentation
