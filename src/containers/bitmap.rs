@@ -66,13 +66,13 @@ impl Bitmap {
 
     /// Number of bits in the bitmap, multiple of 64
     pub fn len(&self) -> usize {
-        self.dict.n_zeros() + self.dict.n_ones() // RSNarrow.len() is not public
+        self.dict.count_zeros() + self.dict.count_ones() // RSNarrow.len() is not public
         // self.dict.bv_len() // only on RSWide
     }
 
     /// Number of bits set
     pub fn num_ones(&self) -> usize {
-        self.dict.n_ones()
+        self.dict.count_ones()
     }
 
     /// Returns the position of the k-1-th one bit or None if there aren't that many.
@@ -211,7 +211,7 @@ mod tests {
         v.push(false);
         let bv: BitVector = v.into();
         let rs: RSNarrow = bv.into();
-        rs.n_zeros();
+        rs.count_zeros();
     }
 
     #[test]
