@@ -135,13 +135,14 @@ impl Graph for Hdt {
     ///     let persons = dbpedia.triples_matching(Any, Some(birth_place), Some(leipzig));
     /// }
     /// ```
-    fn triples_matching<'s, S, P, O>(
+    fn triples_matching<'s, 't, S, P, O>(
         &'s self, sm: S, pm: P, om: O,
-    ) -> impl Iterator<Item = Result<Self::Triple<'s>, Self::Error>> + 's
+    ) -> impl Iterator<Item = Result<Self::Triple<'s>, Self::Error>> + 't
     where
-        S: TermMatcher + 's,
-        P: TermMatcher + 's,
-        O: TermMatcher + 's,
+        's: 't,
+        S: TermMatcher + 't,
+        P: TermMatcher + 't,
+        O: TermMatcher + 't,
     {
         use HdtMatcher::{Constant, Other};
         let Some(xso) = unpack_matcher(self, &sm, IdKind::Subject) else {
