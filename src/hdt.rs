@@ -27,7 +27,7 @@ mod nt;
 pub struct Hdt {
     //global_ci: ControlInfo,
     // header is not necessary for querying but shouldn't waste too much space and we need it for writing in the future, may also make it optional
-    header: Header,
+    pub header: Header,
     /// in-memory representation of dictionary
     pub dict: FourSectDict,
     /// in-memory representation of triples
@@ -204,32 +204,6 @@ impl Hdt {
     /// Recursive size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.dict.size_in_bytes() + self.triples.size_in_bytes()
-    }
-
-    /// Returns the HDT header.
-    pub fn header(&self) -> &Header {
-        &self.header
-    }
-
-    /// Returns a mutable HDT header.
-    ///
-    /// Call [`Self::recompute_header_length`] after mutating header triples so the
-    /// serialized header control information stays consistent.
-    pub fn header_mut(&mut self) -> &mut Header {
-        &mut self.header
-    }
-
-    /// Recomputes the serialized byte length for the current header body.
-    ///
-    /// This should be called after mutating [`Self::header_mut`].
-    pub fn recompute_header_length(&mut self) -> std::io::Result<()> {
-        use std::io::Write as _;
-        let mut buf = Vec::<u8>::new();
-        for triple in &self.header.body {
-            writeln!(&mut buf, "{triple}")?;
-        }
-        self.header.length = buf.len();
-        Ok(())
     }
 
     /// An iterator visiting *all* triples as strings in order.
@@ -448,14 +422,13 @@ pub mod tests {
             "https://decisym.ai/de#graphIRI".to_owned(),
             RdfTerm::Id(RdfId::Named("http://example.org/graph".to_owned())),
         );
-        hdt.header_mut().body.insert(triple.clone());
-        hdt.recompute_header_length()?;
+        hdt.header.body.insert(triple.clone());
 
         let mut buf = Vec::<u8>::new();
         hdt.write(&mut buf)?;
         let reloaded = Hdt::read(std::io::Cursor::new(buf))?;
 
-        assert!(reloaded.header().body.contains(&triple));
+        assert!(reloaded.header.body.contains(&triple));
         Ok(())
     }
 

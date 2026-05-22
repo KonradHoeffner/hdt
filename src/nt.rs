@@ -48,7 +48,6 @@ impl Hdt {
         use crate::containers::rdf::Term::Literal as Lit;
         use crate::containers::rdf::{Id, Literal, Term, Triple};
         use crate::vocab::*;
-        use std::io::Write;
 
         const ORDER: &str = "SPO";
 
@@ -104,11 +103,6 @@ impl Hdt {
         // exclude for now to skip dependency on chrono
         //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
         //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
-        let mut buf = Vec::<u8>::new();
-        for triple in &self.header.body {
-            writeln!(buf, "{triple}")?;
-        }
-        self.header.length = buf.len();
         Ok(())
     }
 }

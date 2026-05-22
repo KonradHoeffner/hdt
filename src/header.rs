@@ -98,10 +98,13 @@ impl Header {
     }
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        ControlInfo::header(self.length).write(write)?;
+        use std::io::Write as _;
+        let mut body = Vec::<u8>::new();
         for triple in &self.body {
-            writeln!(write, "{triple}")?;
+            writeln!(&mut body, "{triple}")?;
         }
+        ControlInfo::header(body.len()).write(write)?;
+        write.write_all(&body)?;
         Ok(())
     }
 }
