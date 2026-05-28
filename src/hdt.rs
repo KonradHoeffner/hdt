@@ -7,9 +7,12 @@ use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
 use std::fs::File;
+use std::io::{BufRead, Write};
 #[cfg(feature = "cache")]
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Seek, SeekFrom};
 use std::iter;
+#[cfg(feature = "cache")]
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -27,7 +30,7 @@ mod nt;
 pub struct Hdt {
     //global_ci: ControlInfo,
     // header is not necessary for querying but shouldn't waste too much space and we need it for writing in the future, may also make it optional
-    header: Header,
+    pub header: Header,
     /// in-memory representation of dictionary
     pub dict: FourSectDict,
     /// in-memory representation of triples
@@ -62,8 +65,14 @@ pub enum Error {
 
 impl Hdt {
     #[deprecated(since = "0.4.0", note = "please use `read` instead")]
-    pub fn new<R: std::io::BufRead>(reader: R) -> Result<Self> {
+    pub fn new(reader: impl BufRead) -> Result<Self> {
         Self::read(reader)
+    }
+
+    /// Validates the leading global control info chunk, then returns the header section.
+    pub fn read_header<R: BufRead>(reader: &mut R) -> header::Result<Header> {
+        ControlInfo::read(reader)?;
+        Header::read(reader)
     }
 
     /// Creates an immutable HDT instance containing the dictionary and triples from the given reader.
@@ -76,9 +85,8 @@ impl Hdt {
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("error opening file");
     /// let hdt = hdt::Hdt::read(std::io::BufReader::new(file)).unwrap();
     /// ```
-    pub fn read<R: std::io::BufRead>(mut reader: R) -> Result<Self> {
-        ControlInfo::read(&mut reader)?;
-        let header = Header::read(&mut reader)?;
+    pub fn read<R: BufRead>(mut reader: R) -> Result<Self> {
+        let header = Self::read_header(&mut reader)?;
         let unvalidated_dict = FourSectDict::read(&mut reader)?;
         let triples = TriplesBitmap::read_sect(&mut reader)?;
         let dict = unvalidated_dict.validate()?;
@@ -90,7 +98,7 @@ impl Hdt {
 
     /// Write as N-Triples
     #[cfg(feature = "sophia")]
-    pub fn write_nt(&self, write: &mut impl std::io::Write) -> std::io::Result<()> {
+    pub fn write_nt(&self, write: &mut impl Write) -> std::io::Result<()> {
         use sophia::api::prelude::TripleSerializer;
         use sophia::turtle::serializer::nt::NtSerializer;
         NtSerializer::new(write).serialize_graph(self).map_err(|e| std::io::Error::other(format!("{e}")))?;
@@ -105,12 +113,11 @@ impl Hdt {
     /// The initial HDT specification at <http://www.w3.org/Submission/2011/03/> is outdated and not supported.
     /// # Example
     /// ```
-    /// let hdt = hdt::Hdt::read_from_path(std::path::Path::new("tests/resources/snikmeta.hdt")).unwrap();
+    /// let hdt = hdt::Hdt::read_from_path("tests/resources/snikmeta.hdt").unwrap();
     /// ```
     #[cfg(feature = "cache")]
-    pub fn read_from_path(f: &std::path::Path) -> Result<Self> {
-        use log::warn;
-
+    pub fn read_from_path(f: impl AsRef<Path>) -> Result<Self> {
+        let f = f.as_ref();
         let source = File::open(f)?;
         let mut reader = std::io::BufReader::new(source);
         ControlInfo::read(&mut reader)?;
@@ -125,7 +132,7 @@ impl Hdt {
             match Self::load_with_cache(&mut reader, &index_file_path, header.length) {
                 Ok(triples) => triples,
                 Err(e) => {
-                    warn!("error loading cache, overwriting: {e}");
+                    log::warn!("error loading cache, overwriting: {e}");
                     reader.seek(SeekFrom::Start(pos))?;
                     Self::load_without_cache(&mut reader, &index_file_path, header.length)?
                 }
@@ -142,8 +149,8 @@ impl Hdt {
     }
 
     #[cfg(feature = "cache")]
-    fn load_without_cache<R: std::io::BufRead>(
-        mut reader: R, index_file_path: &std::path::PathBuf, header_length: usize,
+    fn load_without_cache<R: BufRead>(
+        mut reader: R, index_file_path: &PathBuf, header_length: usize,
     ) -> Result<TriplesBitmap> {
         use log::warn;
 
@@ -157,8 +164,8 @@ impl Hdt {
     }
 
     #[cfg(feature = "cache")]
-    fn load_with_cache<R: std::io::BufRead>(
-        mut reader: R, index_file_path: &std::path::PathBuf, header_length: usize,
+    fn load_with_cache<R: BufRead>(
+        mut reader: R, index_file_path: &PathBuf, header_length: usize,
     ) -> core::result::Result<TriplesBitmap, Box<dyn std::error::Error>> {
         use std::io::Read;
         // load cached index
@@ -182,7 +189,7 @@ impl Hdt {
     /// Writes a custom cache file to improve load times. This cache file is usuable only by
     /// this library and is not intended to be used with hdt-cpp or hdt-java versions of the HDT tooling
     pub fn write_cache(
-        index_file_path: &std::path::PathBuf, triples: &TriplesBitmap, header_length: usize,
+        index_file_path: &PathBuf, triples: &TriplesBitmap, header_length: usize,
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
@@ -192,7 +199,7 @@ impl Hdt {
         Ok(())
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
+    pub fn write(&self, write: &mut impl Write) -> Result<()> {
         ControlInfo::global().write(write)?;
         self.header.write(write)?;
         self.dict.write(write)?;
@@ -410,13 +417,34 @@ pub mod tests {
         Ok(())
     }
 
+    #[test]
+    fn modify_header() -> Result<()> {
+        use crate::containers::rdf::{Id as RdfId, Term as RdfTerm, Triple as RdfTriple};
+
+        init();
+        let mut hdt = snikmeta()?;
+        let triple = RdfTriple::new(
+            RdfId::Named("http://example.org/dataset".to_owned()),
+            "https://decisym.ai/de#graphIRI".to_owned(),
+            RdfTerm::Id(RdfId::Named("http://example.org/graph".to_owned())),
+        );
+        assert!(!hdt.header.body.contains(&triple));
+        hdt.header.body.insert(triple.clone());
+
+        let mut buf = Vec::<u8>::new();
+        hdt.write(&mut buf)?;
+        let reloaded = Hdt::read(std::io::Cursor::new(buf))?;
+
+        assert!(reloaded.header.body.contains(&triple));
+        Ok(())
+    }
+
     // make sure loading with cache works under different circumstances
     // e.g. clear cache, prexisting cache, stale cache
     #[cfg(feature = "cache")]
     #[test]
     fn cache() -> Result<()> {
         use fs_err::remove_file;
-        use std::path::Path;
         init();
         // start with an empty cache
         let filename = "tests/resources/snikmeta.hdt";
