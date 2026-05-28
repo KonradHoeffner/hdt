@@ -21,12 +21,12 @@ impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
-    /// ```no_run
-    /// let path = std::path::Path::new("example.nt");
-    /// let hdt = hdt::Hdt::read_nt(path).unwrap();
     /// ```
-    pub fn read_nt(f: &Path) -> Result<Self> {
+    /// let hdt = hdt::Hdt::read_nt("tests/resources/empty.nt").unwrap();
+    /// ```
+    pub fn read_nt(f: impl AsRef<Path>) -> Result<Self> {
         const BLOCK_SIZE: usize = 16;
+        let f = f.as_ref();
 
         let (dict, mut encoded_triples) = read_dict_triples(f, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
