@@ -17,6 +17,9 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[cfg(feature = "cache")]
 const CACHE_EXT: &str = "index.v1-rust-cache";
 #[cfg(feature = "nt")]
+#[path = "concurrent_interner.rs"]
+mod concurrent_interner;
+#[cfg(feature = "nt")]
 #[path = "nt.rs"]
 /// Converting N-Triples to HDT, available only if HDT is built with the experimental `"nt"` feature.
 mod nt;

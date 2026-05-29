@@ -34,7 +34,8 @@ clap = { version = "4.5", optional = true, features = ["derive"] }
 fs-err = { version = "3.1.0", optional = true }
 bitset-core = { version = "0.1.1", optional = true }
 oxttl = { version = "0.2.1", optional = true }
-lasso = { git = "https://github.com/DeciSym/lasso", features = ["multi-threaded"], optional = true, branch = "memory-allocation-thread-safety" }
+dashmap = { version = "6", optional = true }
+boxcar = { version = "0.2", optional = true }
 #qwt = "0.3.4"
 qwt = { git = "https://github.com/rossanoventurini/qwt" }
 
@@ -44,7 +45,7 @@ sophia = ["dep:sophia"]
 cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
 sparql = ["dep:spareval", "dep:spargebra"]
-nt = ["dep:lasso","dep:oxttl","dep:bitset-core"]
+nt = ["dep:dashmap","dep:boxcar","dep:oxttl","dep:bitset-core"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
