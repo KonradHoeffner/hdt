@@ -1,5 +1,5 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
-use super::concurrent_interner::Interner;
+use super::concurrent_interner::{Interner, Terms};
 use crate::header::Header;
 use crate::triples::{Id, TripleId, TriplesBitmap};
 use crate::{DictSectPFC, FourSectDict, Hdt};
@@ -150,10 +150,11 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
     //    Returns three `index -> u32 id` lookup tables — direct array indexing
     //    during encoding, no more binary-search-through-PFC.
     let (dict, subj_map, pred_map, obj_map) = {
-        // Materialize the interned strings for the build, then drop at end of
-        // this block so they are freed before the encoding peak.
-        let strings = interner.into_strings();
-        build_dict_and_id_maps(&strings, &subjects, &predicates, &objects, block_size)
+        // Consume the interner into an arena-backed, index-addressable view (no
+        // per-term copy), then drop it at the end of this block so the term
+        // bytes are freed before the encoding peak.
+        let terms = interner.into_terms();
+        build_dict_and_id_maps(&terms, &subjects, &predicates, &objects, block_size)
     };
     // Bitsets served their purpose; drop before the encoding peak.
     drop(subjects);
@@ -212,9 +213,9 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
                 let mut obj_str = q.object.to_string();
                 clean(&mut obj_str);
 
-                let s = u32::try_from(interner.get_or_intern(subj_str)).expect("more than u32::MAX unique terms");
-                let p = u32::try_from(interner.get_or_intern(pred_str)).expect("more than u32::MAX unique terms");
-                let o = u32::try_from(interner.get_or_intern(obj_str)).expect("more than u32::MAX unique terms");
+                let s = interner.get_or_intern(&subj_str);
+                let p = interner.get_or_intern(&pred_str);
+                let o = interner.get_or_intern(&obj_str);
 
                 [s, p, o]
             })
@@ -269,7 +270,7 @@ fn collect_set_indices(bitset: &Indices) -> Vec<u32> {
 /// - unique objects: object-only terms (object ids N_shared+1..=N_shared+N_obj)
 /// - predicates: all predicate terms (ids 1..=N_pred)
 fn build_dict_and_id_maps(
-    strings: &[String], subjects_bs: &Indices, predicates_bs: &Indices, objects_bs: &Indices, block_size: usize,
+    terms: &Terms, subjects_bs: &Indices, predicates_bs: &Indices, objects_bs: &Indices, block_size: usize,
 ) -> (FourSectDict, IdMap, IdMap, IdMap) {
     use log::warn;
 
@@ -298,7 +299,7 @@ fn build_dict_and_id_maps(
     // uses the rayon thread pool, so running the four sorts back-to-back lets
     // each one use every core; spawning them all in parallel would just fight
     // over the same workers.
-    let cmp = |a: &u32, b: &u32| strings[*a as usize].cmp(&strings[*b as usize]);
+    let cmp = |a: &u32, b: &u32| terms.cmp(*a, *b);
     shared_keys.par_sort_unstable_by(cmp);
     unique_subj_keys.par_sort_unstable_by(cmp);
     pred_keys.par_sort_unstable_by(cmp);
@@ -306,7 +307,7 @@ fn build_dict_and_id_maps(
 
     // Allocate ID maps sized by the interner's term count (also the bit
     // length of the role bitsets).
-    let map_len = strings.len();
+    let map_len = terms.len();
     let mut subj_map: IdMap = vec![0u32; map_len];
     let mut pred_map: IdMap = vec![0u32; map_len];
     let mut obj_map: IdMap = vec![0u32; map_len];
@@ -330,7 +331,7 @@ fn build_dict_and_id_maps(
     }
 
     // Compress the four sections concurrently. Each thread pulls its strings
-    // straight from the `strings` slice (no intermediate `Vec<&str>` or `BTreeSet`).
+    // straight from the term arena (no intermediate `Vec<&str>` or `BTreeSet`).
     let shared_ref = &shared_keys;
     let unique_subj_ref = &unique_subj_keys;
     let pred_ref = &pred_keys;
@@ -339,18 +340,14 @@ fn build_dict_and_id_maps(
         let h_shared = thread::Builder::new()
             .name("shared".into())
             .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(
-                    shared_ref.iter().map(|&k| strings[k as usize].as_str()),
-                    shared_ref.len(),
-                    block_size,
-                )
+                DictSectPFC::compress_iter(shared_ref.iter().map(|&k| terms.get(k)), shared_ref.len(), block_size)
             })
             .unwrap();
         let h_subj = thread::Builder::new()
             .name("unique subjects".into())
             .spawn_scoped(s, || {
                 DictSectPFC::compress_iter(
-                    unique_subj_ref.iter().map(|&k| strings[k as usize].as_str()),
+                    unique_subj_ref.iter().map(|&k| terms.get(k)),
                     unique_subj_ref.len(),
                     block_size,
                 )
@@ -359,18 +356,14 @@ fn build_dict_and_id_maps(
         let h_pred = thread::Builder::new()
             .name("predicates".into())
             .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(
-                    pred_ref.iter().map(|&k| strings[k as usize].as_str()),
-                    pred_ref.len(),
-                    block_size,
-                )
+                DictSectPFC::compress_iter(pred_ref.iter().map(|&k| terms.get(k)), pred_ref.len(), block_size)
             })
             .unwrap();
         let h_obj = thread::Builder::new()
             .name("unique objects".into())
             .spawn_scoped(s, || {
                 DictSectPFC::compress_iter(
-                    unique_obj_ref.iter().map(|&k| strings[k as usize].as_str()),
+                    unique_obj_ref.iter().map(|&k| terms.get(k)),
                     unique_obj_ref.len(),
                     block_size,
                 )
