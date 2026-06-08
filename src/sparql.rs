@@ -94,7 +94,9 @@ mod tests {
     use sophia::api::prelude::{Any, Triple, TripleSerializer, TripleSource};
     use sophia::api::term::{SimpleTerm, Term};
     use sophia::inmem::graph::FastGraph;
-    use sophia::turtle::serializer::nt::NtSerializer;
+    use sophia::iri::resolve::BaseIriRef;
+    use sophia::turtle::parser::turtle::TurtleParser;
+    use sophia::turtle::serializer::nt::NTriplesSerializer;
     use std::collections::HashMap;
     use std::io::{BufReader, Write};
     use std::path::{Path, PathBuf};
@@ -164,15 +166,13 @@ mod tests {
         let nt_file = File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
         let mut writer = std::io::BufWriter::new(nt_file);
         let mut graph = sophia::inmem::graph::LightGraph::default();
-        let mut sophia_serializer = NtSerializer::new(writer.by_ref());
+        let mut sophia_serializer = NTriplesSerializer::new(writer.by_ref());
 
         if source_rdf.extension().is_some_and(|ext| ext == ".ttl") {
-            let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
-                base: Some(sophia::iri::Iri::new(format!(
-                    "file://{}",
-                    std::path::Path::new(source_rdf).file_name().unwrap().to_str().unwrap()
-                ))?),
-            };
+            let base_iri_string =
+                format!("file://{}", std::path::Path::new(source_rdf).file_name().unwrap().to_str().unwrap())
+                    .into_boxed_str();
+            let ttl_parser = TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
 
             ttl_parser.parse(reader).add_to_graph(&mut graph)?;
         }
@@ -186,12 +186,10 @@ mod tests {
     fn load_manifest(path: &Path) -> Result<FastGraph, Box<dyn std::error::Error>> {
         let file = BufReader::new(File::open(path)?);
         let mut graph = sophia::inmem::graph::FastGraph::default();
-        let ttl_parser = sophia::turtle::parser::turtle::TurtleParser {
-            base: Some(sophia::iri::Iri::new(format!(
-                "file://{}/#",
-                std::path::Path::new(path).parent().unwrap().to_str().unwrap()
-            ))?),
-        };
+        let base_iri_string =
+            format!("file://{}/#", std::path::Path::new(path).parent().unwrap().to_str().unwrap())
+                .into_boxed_str();
+        let ttl_parser = TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
 
         ttl_parser.parse(file).add_to_graph(&mut graph)?;
         Ok(graph)
