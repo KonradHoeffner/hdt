@@ -202,62 +202,68 @@ mod tests {
 
         // Find the manifest node
         let p = MF.get("entries")?;
-        let manifest_nodes: Vec<_> = g.triples_matching(Any, [&p], Any).collect();
+        let manifest_nodes: Vec<_> = g.triples_matching(Any, Some(&p), Any).collect();
         if manifest_nodes.is_empty() {
             return Ok(cases);
         }
 
         // The object of mf:entries is the head of an RDF list
-        let list_head = manifest_nodes[0]?.o().clone();
+        let list_head = manifest_nodes[0]?.o();
 
         // Walk the RDF list
         let mut current = list_head;
         while !current.is_iri() || current.iri().unwrap() != rdf::nil.to_iriref() {
             if let Some(test) = g
-                .triples_matching([&current], [&rdf::first, &MF.get("QueryEvaluationTest")?], Any)
+                .triples_matching(Some(&current.as_simple()), [&rdf::first, &MF.get("QueryEvaluationTest")?], Any)
                 .next()
-                .map(|t| t.unwrap().o().clone())
+                .map(|t| t.unwrap().o())
             {
                 // find mf:action
-                if let Some(action_node) =
-                    g.triples_matching([&test], [&MF.get("action")?], Any).next().map(|t| t.unwrap().o().clone())
+                if let Some(action_node) = g
+                    .triples_matching(Some(&test.as_simple()), Some(&MF.get("action")?), Any)
+                    .next()
+                    .map(|t| t.unwrap().o())
                 {
                     // find qt:data
-                    let data = g.triples_matching([&action_node], [&QT.get("data")?], Any).next().map(|t| match t
-                        .unwrap()
-                        .o()
-                    {
-                        SimpleTerm::BlankNode(b) => b.to_string(),
-                        SimpleTerm::Iri(i) => i.to_string(),
-                        SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                        SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
-                        SimpleTerm::Triple(_t) => todo!(),
-                        SimpleTerm::Variable(v) => v.to_string(),
-                    });
-
-                    // find qt:query
-                    let query =
-                        g.triples_matching([&action_node], [&QT.get("query")?], Any).next().map(|t| {
-                            match t.unwrap().o() {
+                    let data = g
+                        .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("data")?), Any)
+                        .next()
+                        .map(|t| {
+                            let obj = t.unwrap().o();
+                            match obj.as_simple() {
                                 SimpleTerm::BlankNode(b) => b.to_string(),
                                 SimpleTerm::Iri(i) => i.to_string(),
                                 SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                                SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
+                                SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
                                 SimpleTerm::Triple(_t) => todo!(),
                                 SimpleTerm::Variable(v) => v.to_string(),
                             }
                         });
-                    // find mf:result
-                    let result = g.triples_matching([&test], [&MF.get("result")?], Any).next().map(|t| {
-                        match t.unwrap().o() {
+
+                    // find qt:query
+                    let query = g
+                        .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("query")?), Any)
+                        .next()
+                        .map(|t| match t.unwrap().o().as_simple() {
                             SimpleTerm::BlankNode(b) => b.to_string(),
                             SimpleTerm::Iri(i) => i.to_string(),
                             SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                            SimpleTerm::LiteralLanguage(a, _b) => a.to_string(),
+                            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
                             SimpleTerm::Triple(_t) => todo!(),
                             SimpleTerm::Variable(v) => v.to_string(),
-                        }
-                    });
+                        });
+                    // find mf:result
+                    let result = g
+                        .triples_matching(Some(&test.as_simple()), Some(&MF.get("result")?), Any)
+                        .next()
+                        .map(|t| match t.unwrap().o().as_simple() {
+                            SimpleTerm::BlankNode(b) => b.to_string(),
+                            SimpleTerm::Iri(i) => i.to_string(),
+                            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+                            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
+                            SimpleTerm::Triple(_t) => todo!(),
+                            SimpleTerm::Variable(v) => v.to_string(),
+                        });
 
                     if let (Some(data), Some(query), Some(result)) = (data, query, result) {
                         cases.push(TestCase {
@@ -269,8 +275,9 @@ mod tests {
                 }
             }
 
-            let s = current.clone();
-            if let Some(next) = g.triples_matching([&s], [&rdf::rest], Any).next().map(|t| t.unwrap().o().clone())
+            let s = current;
+            if let Some(next) =
+                g.triples_matching(Some(&s.as_simple()), Some(&rdf::rest), Any).next().map(|t| t.unwrap().o())
             {
                 current = next;
             } else {
