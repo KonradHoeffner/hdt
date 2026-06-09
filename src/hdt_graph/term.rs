@@ -1,7 +1,7 @@
 //! I define [`HdtTerm`], an implementation of [`sophia::api::term::Term`].
 use sophia::api::MownStr;
 use sophia::api::ns::{rdf, xsd};
-use sophia::api::term::{BnodeId, LanguageTag, Term, TermKind};
+use sophia::api::term::{BaseDirection, BnodeId, LanguageTag, Term, TermKind};
 use sophia::iri::IriRef;
 use std::sync::{Arc, LazyLock};
 
@@ -95,6 +95,11 @@ impl Term for HdtTerm {
             HdtTerm::LiteralLanguage(_, tag) => Some(tag.as_ref().map_unchecked(MownStr::from_ref)),
             _ => None,
         }
+    }
+
+    // added in Sophia 0.10; as we don't support RDF 1.2 base directions return None for now
+    fn base_direction(&self) -> Option<BaseDirection> {
+        None
     }
 }
 

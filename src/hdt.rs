@@ -100,8 +100,8 @@ impl Hdt {
     #[cfg(feature = "sophia")]
     pub fn write_nt(&self, write: &mut impl Write) -> std::io::Result<()> {
         use sophia::api::prelude::TripleSerializer;
-        use sophia::turtle::serializer::nt::NtSerializer;
-        NtSerializer::new(write).serialize_graph(self).map_err(|e| std::io::Error::other(format!("{e}")))?;
+        use sophia::turtle::serializer::nt::NTriplesSerializer;
+        NTriplesSerializer::new(write).serialize_graph(self).map_err(|e| std::io::Error::other(format!("{e}")))?;
         Ok(())
     }
 
