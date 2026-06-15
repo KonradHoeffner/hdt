@@ -10,11 +10,11 @@ categories = ["compression", "filesystem", "parsing", "web-programming"]
 readme = "README.md"
 edition = "2024"
 rust-version = "1.87"
+exclude = ["tests/resources/rdf-tests"]
 
 [package.metadata."docs.rs"]
 all-features = true
 
-exclude = ["tests/resources/rdf-tests"]
 
 [dependencies]
 bytesize = "2"

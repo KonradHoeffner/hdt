@@ -328,7 +328,10 @@ mod tests {
         let mut skipped = 0;
         for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {
             let input_files = find_ttl_files(format!("tests/resources/rdf-tests/sparql/{sparql_test_version}"));
-            assert!(!input_files.is_empty(), "tests/resources/rdf-tests submodule not found, not checked out?");
+            if input_files.is_empty() {
+                log::error!("tests/resources/rdf-tests submodule not found, skipping w3c_tests");
+                return Ok(());
+            }
             let mut cases = HashMap::new();
             for p in &input_files {
                 let parent_folder_name = p.parent().unwrap().file_name().unwrap().to_str().unwrap();
