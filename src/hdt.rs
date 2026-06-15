@@ -461,10 +461,10 @@ pub mod tests {
         #[cfg(feature = "nt")]
         {
             // create a cache for an empty HDT
-            let path_empty_nt = Path::new("tests/resources/empty.nt");
+            let path_empty_nt = Path::new("tests/resources/generated/empty.nt");
             // it's empty so we could just pass an empty buffer
             let hdt_empty = Hdt::read_nt(path_empty_nt)?;
-            let filename_empty_hdt = "tests/resources/empty.hdt";
+            let filename_empty_hdt = "tests/resources/generated/empty.hdt";
             let path_empty_hdt = Path::new(filename_empty_hdt);
             if !path_empty_hdt.exists() {
                 let file_empty_hdt = File::create(filename_empty_hdt)?;

@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.7.0"
+version = "0.7.1"
 repository = "https://github.com/KonradHoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner", "Greg Hanson"]
 license = "MIT"
@@ -13,6 +13,8 @@ rust-version = "1.87"
 
 [package.metadata."docs.rs"]
 all-features = true
+
+exclude = ["tests/resources/rdf-tests"]
 
 [dependencies]
 bytesize = "2"
