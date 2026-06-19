@@ -1,27 +1,6 @@
-//! Decode-only, one-shot streaming of every triple in an HDT archive in SPO
-//! order, **without** building the [`TriplesBitmap`](crate::triples::TriplesBitmap)
-//! query indexes.
-//!
-//! [`Hdt::read`](crate::Hdt::read) calls [`TriplesBitmap::read_sect`], which in
-//! turn calls [`TriplesBitmap::new`]. That constructor exists purely to serve
-//! triple-pattern / object / predicate *queries*: it builds a wavelet matrix over
-//! `sequence_y`, a per-object `Vec<Vec<u32>>`, a `sort_by_cached_key`, and an
-//! object-predicate index (a compact vector + a rank/select bitmap). A consumer
-//! that only wants to read every triple once — e.g. a bulk import into another
-//! store — issues none of those queries, so all of that work is performed and then
-//! immediately dropped.
-//!
-//! [`Hdt::triples_streaming`] reads the same on-disk sections the full path reads
-//! (the global control info + header, the four-section dictionary, and the triples
-//! section's `bitmap_y` / `bitmap_z` / `sequence_y` / `sequence_z`) and walks the
-//! adjacency lists sequentially to yield `[usize; 3]` triple IDs, skipping
-//! `TriplesBitmap::new` entirely. The walk is the same one [`SubjectIter`] performs
-//! over the built structure, but reads the predicate from `sequence_y` and the
-//! end-of-run flags from the two bitmaps directly.
-//!
-//! [`SubjectIter`]: crate::triples::SubjectIter
-//! [`TriplesBitmap::read_sect`]: crate::triples::TriplesBitmap::read_sect
-//! [`TriplesBitmap::new`]: crate::triples::TriplesBitmap::new
+//! Decode-only streaming of every triple in SPO order, without building the
+//! `TriplesBitmap` query indexes. For one-shot bulk reads where no triple-pattern
+//! query is ever issued, e.g. importing every triple into another store.
 
 use crate::Hdt;
 use crate::containers::{Bitmap, ControlInfo, ControlType, Sequence};
@@ -29,9 +8,8 @@ use crate::four_sect_dict::FourSectDict;
 use crate::header::Header;
 use std::io::{self, BufRead, Error, ErrorKind};
 
-/// The triples section, read but not indexed: the two adjacency bitmaps and the two
-/// ID sequences exactly as they appear on disk. Walking these yields every triple in
-/// SPO order without the wavelet matrix / OP-index that `TriplesBitmap::new` builds.
+/// The triples section read but not indexed: the two adjacency bitmaps and the two
+/// ID sequences as they appear on disk. Walking these yields every triple in SPO order.
 struct StreamingTriples {
     bitmap_y: Bitmap,
     bitmap_z: Bitmap,
@@ -40,10 +18,7 @@ struct StreamingTriples {
 }
 
 impl StreamingTriples {
-    /// Reads the triples section (control info + the two bitmaps + the two
-    /// sequences) without building any query index. Mirrors the section order of
-    /// [`TriplesBitmap::read`](crate::triples::TriplesBitmap), minus the
-    /// `TriplesBitmap::new` call.
+    /// Reads the triples section without building any query index.
     fn read<R: BufRead>(reader: &mut R) -> io::Result<Self> {
         let triples_ci =
             ControlInfo::read(reader).map_err(|e| Error::new(ErrorKind::InvalidData, e.to_string()))?;
@@ -84,9 +59,7 @@ impl StreamingTriples {
 }
 
 /// Iterator over `[subject_id, predicate_id, object_id]` triples in SPO order,
-/// produced by [`Hdt::triples_streaming`] without any query index. IDs are 1-based,
-/// as in the HDT dictionary; resolve them through the dictionary returned alongside
-/// the iterator if string terms are needed.
+/// produced by [`Hdt::triples_streaming`]. IDs are 1-based, as in the HDT dictionary.
 pub struct TripleIdStreamingIter {
     triples: StreamingTriples,
     x: usize,
@@ -107,10 +80,6 @@ impl TripleIdStreamingIter {
 impl Iterator for TripleIdStreamingIter {
     type Item = [usize; 3];
 
-    /// Sequential SPO walk, identical in shape to [`SubjectIter::next`], but reading
-    /// the predicate from `sequence_y` and the run-end flags from the raw bitmaps.
-    ///
-    /// [`SubjectIter::next`]: crate::triples::SubjectIter
     fn next(&mut self) -> Option<[usize; 3]> {
         if self.pos_y >= self.max_y || self.pos_z >= self.max_z {
             return None;
@@ -132,18 +101,11 @@ impl Iterator for TripleIdStreamingIter {
 }
 
 impl Hdt {
-    /// Decode-only: read the dictionary, then stream every triple as `[s, p, o]`
-    /// dictionary IDs in SPO order **without** building the wavelet matrix / OP-index
-    /// that [`Hdt::read`] constructs for pattern queries.
-    ///
-    /// This is intended for one-shot bulk reads (e.g. importing every triple into
-    /// another store) where none of the query indexes are ever used. It returns the
-    /// validated [`FourSectDict`] dictionary (so IDs can be resolved to terms) and an
-    /// iterator over the triple IDs. The IDs follow the HDT convention: subjects and
-    /// objects share the leading "shared" section, predicates are a separate space;
-    /// use [`FourSectDict::id_to_string`] with the appropriate
-    /// [`IdKind`](crate::IdKind) to resolve them.
-    ///
+    /// Reads the dictionary, then streams every triple as `[s, p, o]` dictionary IDs
+    /// in SPO order without building the query indexes that [`Hdt::read`] constructs.
+    /// Intended for one-shot bulk reads where no triple-pattern query is issued.
+    /// Returns the validated dictionary, so IDs can be resolved to terms with
+    /// [`FourSectDict::id_to_string`] and the matching [`IdKind`](crate::IdKind).
     /// # Example
     /// ```
     /// let file = std::fs::File::open("tests/resources/snikmeta.hdt").expect("open");
