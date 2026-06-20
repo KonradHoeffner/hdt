@@ -1,6 +1,4 @@
-//! Decode-only streaming of every triple in SPO order, without building the
-//! `TriplesBitmap` query indexes. For one-shot bulk reads where no triple-pattern
-//! query is ever issued, e.g. importing every triple into another store.
+//! Decode-only streaming of every triple in SPO order without building the `TriplesBitmap` query indexes.
 
 use crate::Hdt;
 use crate::containers::{Bitmap, ControlInfo, ControlType, Sequence};
