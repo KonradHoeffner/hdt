@@ -109,6 +109,8 @@ pub mod header;
 pub mod sparql;
 /// Types for representing and querying triples.
 pub mod triples;
+/// Decode-only streaming of triple IDs without building the query indexes.
+pub mod triples_streaming;
 /// Constants for triple terms
 pub mod vocab;
 #[cfg(target_arch = "wasm32")]
