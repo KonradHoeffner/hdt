@@ -14,7 +14,7 @@ use sophia::api::prelude::{TripleSerializer, TripleSource};
 //use sophia::api::prelude::Stringifier;
 use sophia::inmem::graph::LightGraph;
 use sophia::turtle::parser::{nt, turtle};
-use sophia::turtle::serializer::nt::NtSerializer;
+use sophia::turtle::serializer::nt::NTriplesSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
 use std::ffi::OsStr;
 use std::io::{BufReader, BufWriter};
@@ -151,7 +151,7 @@ fn main() -> Result<(), Report> {
                 Some("nt") => {
                     // Default: export the complete graph as N-Triples.
                     //NtSerializer::new_stringifier()
-                    NtSerializer::new(writer)
+                    NTriplesSerializer::new(writer)
                         .serialize_graph(&hdt)
                         .wrap_err("error serializing graph as N-Triples")?;
                     //.to_string()

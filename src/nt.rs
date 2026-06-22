@@ -1,7 +1,8 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
 use super::concurrent_interner::{Interner, Terms};
+use crate::containers::rdf::Id;
 use crate::header::Header;
-use crate::triples::{Id, TripleId, TriplesBitmap};
+use crate::triples::{Id as HdtId, TripleId, TriplesBitmap};
 use crate::{DictSectPFC, FourSectDict, Hdt};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
@@ -21,14 +22,37 @@ impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
-    /// ```no_run
-    /// let path = std::path::Path::new("example.nt");
-    /// let hdt = hdt::Hdt::read_nt(path).unwrap();
     /// ```
-    pub fn read_nt(f: &Path) -> Result<Self> {
+    /// let hdt = hdt::Hdt::read_nt("tests/resources/empty.nt").unwrap();
+    /// ```
+    pub fn read_nt(f: impl AsRef<Path>) -> Result<Self> {
+        let f = f.as_ref();
+        let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
+        let original_size = std::fs::File::open(f)?.metadata()?.len();
+        let pool = parse_nt_terms(f)?;
+        Self::from_parsed_terms(pool, &base, Some(original_size))
+    }
+
+    /// Builds an HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order
+    /// from triples in memory, e.g. to write an existing RDF graph as HDT without going through a file.
+    /// Terms are given in the HDT dictionary string format: IRIs without enclosing angle brackets,
+    /// literals including quotes, e.g. `"example"@en` or `"123"^^<http://www.w3.org/2001/XMLSchema#integer>`,
+    /// and blank nodes as `_:b1`. This is the same format that [`Hdt::triples_all`] returns.
+    /// The base IRI denotes the dataset in the header.
+    /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
+    /// # Example
+    /// ```
+    /// let triples = [["http://example.org/subject", "http://example.org/predicate", "\"object\"@en"]];
+    /// let hdt = hdt::Hdt::from_triples(triples, "http://example.org/mydataset").unwrap();
+    /// ```
+    pub fn from_triples<S: AsRef<str>>(triples: impl IntoIterator<Item = [S; 3]>, base_iri: &str) -> Result<Self> {
+        Self::from_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None)
+    }
+
+    fn from_parsed_terms(pool: ParsedTerms, base: &Id, original_size: Option<u64>) -> Result<Self> {
         const BLOCK_SIZE: usize = 16;
 
-        let (dict, mut encoded_triples) = read_dict_triples(f, BLOCK_SIZE)?;
+        let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
         encoded_triples.par_sort_unstable();
@@ -36,7 +60,7 @@ impl Hdt {
 
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
         let mut hdt = Hdt { header, dict, triples };
-        hdt.fill_header(f, BLOCK_SIZE, num_triples)?;
+        hdt.fill_header(base, BLOCK_SIZE, num_triples, original_size);
 
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
         debug!("{hdt:#?}");
@@ -45,11 +69,10 @@ impl Hdt {
 
     /// Populate HDT header fields.
     /// Some fields may be optional, populating same triples as those in C++ version for now.
-    fn fill_header(&mut self, path: &Path, block_size: usize, num_triples: usize) -> Result<()> {
+    fn fill_header(&mut self, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>) {
         use crate::containers::rdf::Term::Literal as Lit;
-        use crate::containers::rdf::{Id, Literal, Term, Triple};
+        use crate::containers::rdf::{Literal, Term, Triple};
         use crate::vocab::*;
-        use std::io::Write;
 
         const ORDER: &str = "SPO";
 
@@ -63,10 +86,6 @@ impl Hdt {
                 self.header.body.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
             };
         }
-        // as this is "just" metadata, we could also add a fallback if there ever is a valid use case, e.g. loading from stream instead of file
-        let file_iri = format!("file://{}", path.canonicalize()?.display());
-        let base = Id::Named(file_iri);
-
         literal!(base, RDF_TYPE, HDT_CONTAINER);
         literal!(base, RDF_TYPE, VOID_DATASET);
         literal!(base, VOID_TRIPLES, num_triples);
@@ -98,26 +117,21 @@ impl Hdt {
         literal!(triples_id, HDT_NUM_TRIPLES, num_triples);
         literal!(triples_id, HDT_TRIPLES_ORDER, ORDER);
         // // Sizes
-        let meta = std::fs::File::open(path)?.metadata()?;
-        literal!(stats_id, HDT_ORIGINAL_SIZE, meta.len());
+        if let Some(size) = original_size {
+            literal!(stats_id, HDT_ORIGINAL_SIZE, size);
+        }
         // a few bytes off because that literal itself is not counted
         literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
         // exclude for now to skip dependency on chrono
         //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
         //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
-        let mut buf = Vec::<u8>::new();
-        for triple in &self.header.body {
-            writeln!(buf, "{triple}")?;
-        }
-        self.header.length = buf.len();
-        Ok(())
     }
 }
 
-/// Output of [`parse_nt_terms`]. All term strings live inside the `Interner`;
-/// the triples hold `u32` term indices (4 bytes each) instead of full strings,
-/// and the three bitsets track which indices appear as subject / predicate /
-/// object.
+/// Output of [`parse_nt_terms`] (file path) and [`intern_terms`] (in-memory).
+/// All term strings live inside the `Interner`; the triples hold `u32` term
+/// indices (4 bytes each) instead of full strings, and the three bitsets track
+/// which indices appear as subject / predicate / object.
 struct ParsedTerms {
     triples: Vec<[u32; 3]>,
     interner: Interner,
@@ -126,19 +140,48 @@ struct ParsedTerms {
     objects: Indices,
 }
 
+impl ParsedTerms {
+    /// Derive the role bitsets (subject / predicate / object) from the interned
+    /// triples. Indices are 0-based and dense, sized by the interner's term count.
+    fn new(interner: Interner, triples: Vec<[u32; 3]>) -> Self {
+        let block = [0u64; 4];
+        let blocks = interner.len().div_ceil(256);
+        let mut subjects: Indices = vec![block; blocks];
+        let mut objects: Indices = vec![block; blocks];
+        let mut predicates: Indices = vec![block; blocks];
+
+        for [s, p, o] in &triples {
+            subjects.bit_set(*s as usize);
+            predicates.bit_set(*p as usize);
+            objects.bit_set(*o as usize);
+        }
+
+        ParsedTerms { triples, interner, subjects, predicates, objects }
+    }
+}
+
 /// ID map: indexed by term index (`u32` as `usize`), holds the final HDT id for
 /// a term in a given role (subject/predicate/object), or 0 if it has no id in
 /// that role. u32 fits: HDT ids are at most `num_strings` ≤ u32::MAX.
 type IdMap = Vec<u32>;
 
-/// read N-Triples and convert them to a dictionary and triple IDs
-fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Vec<TripleId>)> {
-    // 1. Parse N-Triples, interning each unique term exactly once in the `Interner`.
-    let ParsedTerms { triples, interner, subjects, predicates, objects } = parse_nt_terms(path)?;
+/// Intern in-memory string triples into a [`ParsedTerms`]. Single-threaded — the
+/// input is one sequential iterator, so there is no parser-level parallelism to
+/// exploit here (dictionary compression below still runs on four threads).
+fn intern_terms<S: AsRef<str>>(triples: impl IntoIterator<Item = [S; 3]>) -> ParsedTerms {
+    let interner = Interner::new();
+    let triples: Vec<[u32; 3]> =
+        triples.into_iter().map(|t| t.map(|term| interner.get_or_intern(term.as_ref()))).collect();
+    ParsedTerms::new(interner, triples)
+}
 
-    // 2. In parallel with dictionary build: sort + dedup triples (by term index
-    //    — this removes exact duplicate triples; the final SPO-ID sort happens
-    //    later, once we've assigned HDT ids).
+/// Convert a parsed/interned term pool to a dictionary and encoded triple IDs.
+fn dict_triples(pool: ParsedTerms, block_size: usize) -> Result<(FourSectDict, Vec<TripleId>)> {
+    let ParsedTerms { triples, interner, subjects, predicates, objects } = pool;
+
+    // In parallel with dictionary build: sort + dedup triples (by term index
+    // — this removes exact duplicate triples; the final SPO-ID sort happens
+    // later, once we've assigned HDT ids).
     let sorter = thread::Builder::new().name("sorter".to_owned()).spawn(move || {
         let mut t = triples;
         t.par_sort_unstable();
@@ -146,9 +189,9 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
         t
     })?;
 
-    // 3. Assign HDT ids in sorted-string order and build the compressed dict.
-    //    Returns three `index -> u32 id` lookup tables — direct array indexing
-    //    during encoding, no more binary-search-through-PFC.
+    // Assign HDT ids in sorted-string order and build the compressed dict.
+    // Returns three `index -> u32 id` lookup tables — direct array indexing
+    // during encoding, no more binary-search-through-PFC.
     let (dict, subj_map, pred_map, obj_map) = {
         // Consume the interner into an arena-backed, index-addressable view (no
         // per-term copy), then drop it at the end of this block so the term
@@ -161,17 +204,17 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
     drop(predicates);
     drop(objects);
 
-    // 4. Drain the sorted index triples directly into HDT-id triples via the
-    //    ID maps. `into_par_iter` consumes the Vec so the index triples are
-    //    freed before `read_dict_triples` returns — only `Vec<TripleId>`
-    //    survives into `TriplesBitmap::from_triples`.
+    // Drain the sorted index triples directly into HDT-id triples via the ID
+    // maps. `into_par_iter` consumes the Vec so the index triples are freed
+    // before this function returns — only `Vec<TripleId>` survives into
+    // `TriplesBitmap::from_triples`.
     let sorted_triples = sorter.join().expect("NT sorter thread panicked");
     let encoded_triples: Vec<TripleId> = sorted_triples
         .into_par_iter()
         .map(|[s_idx, p_idx, o_idx]| {
-            let s = subj_map[s_idx as usize] as Id;
-            let p = pred_map[p_idx as usize] as Id;
-            let o = obj_map[o_idx as usize] as Id;
+            let s = subj_map[s_idx as usize] as HdtId;
+            let p = pred_map[p_idx as usize] as HdtId;
+            let o = obj_map[o_idx as usize] as HdtId;
             if s == 0 || p == 0 || o == 0 {
                 error!("encoded triple [{s}, {p}, {o}] contains 0; term missing from dictionary");
             }
@@ -186,7 +229,7 @@ fn read_dict_triples(path: &Path, block_size: usize) -> Result<(FourSectDict, Ve
     Ok((dict, encoded_triples))
 }
 
-/// Parse N-Triples and collect terms into the interning pool + role bitsets.
+/// Parse N-Triples in parallel and collect terms into the interning pool + role bitsets.
 fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
     let interner: Arc<Interner> = Arc::new(Interner::new());
     // use two threads when available parallelism cannot be determined as going to a single thread is around 38% slower
@@ -223,21 +266,7 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
         .collect();
 
     let interner = Arc::try_unwrap(interner).expect("interner Arc still has outstanding references");
-
-    // Role bitsets indexed by term index (0-based, dense).
-    let block = [0u64; 4];
-    let blocks = interner.len().div_ceil(256);
-    let mut subjects: Indices = vec![block; blocks];
-    let mut objects: Indices = vec![block; blocks];
-    let mut predicates: Indices = vec![block; blocks];
-
-    for [s, p, o] in &triples {
-        subjects.bit_set(*s as usize);
-        predicates.bit_set(*p as usize);
-        objects.bit_set(*o as usize);
-    }
-
-    Ok(ParsedTerms { triples, interner, subjects, predicates, objects })
+    Ok(ParsedTerms::new(interner, triples))
 }
 
 /// Enumerate the set-bit positions (term indices) of a bitset. Uses
@@ -406,6 +435,28 @@ pub mod tests {
         snikmeta_check(&snikmeta_nt)?;
         let path = Path::new("tests/resources/empty.nt");
         let hdt_empty = Hdt::read_nt(path)?;
+        let mut buf = Vec::<u8>::new();
+        hdt_empty.write(&mut buf)?;
+        Hdt::read(std::io::Cursor::new(buf))?;
+        Ok(())
+    }
+
+    #[test]
+    fn from_triples() -> Result<()> {
+        init();
+        let snikmeta = snikmeta()?;
+        let triples: Vec<StringTriple> = snikmeta.triples_all().collect();
+        let from_triples = Hdt::from_triples(triples, "http://www.snik.eu/ontology/meta")?;
+
+        let hdt_triples: Vec<StringTriple> = snikmeta.triples_all().collect();
+        let mem_triples: Vec<StringTriple> = from_triples.triples_all().collect();
+        assert_eq!(mem_triples, hdt_triples);
+        assert_eq!(snikmeta.triples.bitmap_y.dict, from_triples.triples.bitmap_y.dict);
+        snikmeta_check(&from_triples)?;
+        let mut buf = Vec::<u8>::new();
+        from_triples.write(&mut buf)?;
+        snikmeta_check(&Hdt::read(std::io::Cursor::new(buf))?)?;
+        let hdt_empty = Hdt::from_triples(std::iter::empty::<[&str; 3]>(), "http://example.org/empty")?;
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
         Hdt::read(std::io::Cursor::new(buf))?;

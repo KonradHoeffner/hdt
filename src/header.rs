@@ -2,7 +2,7 @@ use crate::containers::ControlInfo;
 use crate::containers::rdf::{Id, Literal, Term, Triple};
 use ntriple::parser::triple_line;
 use std::collections::BTreeSet;
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::str;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -83,30 +83,26 @@ impl Header {
         Ok(Header { format: header_ci.format, length, body })
     }
 
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        ControlInfo::header(self.length).write(write)?;
+    pub fn write(&self, write: &mut impl Write) -> Result<()> {
+        let mut body = Vec::<u8>::new();
         for triple in &self.body {
-            writeln!(write, "{triple}")?;
+            writeln!(&mut body, "{triple}")?;
         }
+        ControlInfo::header(body.len()).write(write)?;
+        write.write_all(&body)?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::tests::init;
-    use fs_err::File;
-    use std::io::BufReader;
 
     #[test]
     fn read_header() -> color_eyre::Result<()> {
         init();
-        let file = File::open("tests/resources/yago_header.hdt")?;
-        let mut reader = BufReader::new(file);
-        ControlInfo::read(&mut reader)?;
-
-        let header = Header::read(&mut reader)?;
+        let mut r = std::io::BufReader::new(std::fs::File::open("tests/resources/yago_header.hdt")?);
+        let header = crate::Hdt::read_header(&mut r)?;
         assert_eq!(header.format, "ntriples");
         assert_eq!(header.length, 1891);
         assert_eq!(header.body.len(), 22);

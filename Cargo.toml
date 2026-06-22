@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.6.0"
+version = "0.7.2"
 repository = "https://github.com/KonradHoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner", "Greg Hanson"]
 license = "MIT"
@@ -10,15 +10,17 @@ categories = ["compression", "filesystem", "parsing", "web-programming"]
 readme = "README.md"
 edition = "2024"
 rust-version = "1.87"
+exclude = ["tests/resources/rdf-tests"]
 
 [package.metadata."docs.rs"]
 all-features = true
+
 
 [dependencies]
 bytesize = "2"
 crc = "3"
 ntriple = "0.1"
-sophia = { version = "0.9", optional = true }
+sophia = { version = "0.10", optional = true }
 thiserror = "2"
 log = "0.4"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
@@ -36,8 +38,8 @@ bitset-core = { version = "0.1.1", optional = true }
 oxttl = { version = "0.2.1", optional = true }
 hashbrown = { version = "0.14", optional = true }
 ahash = { version = "0.8", optional = true }
-#qwt = "0.3.4"
-qwt = { git = "https://github.com/rossanoventurini/qwt" }
+qwt = "0.4.0"
+
 
 [features]
 default = ["sophia"]
@@ -78,7 +80,7 @@ opt-level = 1
 pretty_assertions = "1"
 env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
-gungraun = "0.18"
+gungraun = "0.19"
 color-eyre = "0.6"
 fs-err = "3.1.0"
 sparesults = "0.3"
