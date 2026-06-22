@@ -128,7 +128,9 @@ impl Hdt {
 
 #[cfg(test)]
 mod tests {
+    use crate::hdt::tests::snikmeta;
     use crate::{Hdt, IdKind};
+    use color_eyre::Result;
     use std::collections::BTreeSet;
     use std::fs::File;
     use std::io::BufReader;
@@ -138,14 +140,13 @@ mod tests {
     /// The decode-only stream must yield exactly the same triples (as resolved term
     /// strings) as the full `Hdt::read` path, which builds the query indexes.
     #[test]
-    fn streaming_matches_full_read() {
+    fn streaming_matches_full_read() -> Result<()> {
         // Full path: build everything, collect resolved triples.
-        let full = Hdt::read(BufReader::new(File::open(SNIKMETA).unwrap())).unwrap();
         let expected: BTreeSet<[String; 3]> =
-            full.triples_all().map(|[s, p, o]| [s.to_string(), p.to_string(), o.to_string()]).collect();
+            snikmeta()?.triples_all().map(|[s, p, o]| [s.to_string(), p.to_string(), o.to_string()]).collect();
 
         // Decode-only path: stream IDs, resolve through the dictionary, no indexes built.
-        let (dict, stream) = Hdt::triples_streaming(BufReader::new(File::open(SNIKMETA).unwrap())).unwrap();
+        let (dict, stream) = Hdt::triples_streaming(BufReader::new(File::open(SNIKMETA)?))?;
         let got: BTreeSet<[String; 3]> = stream
             .map(|[s, p, o]| {
                 [
@@ -158,5 +159,6 @@ mod tests {
 
         assert!(!expected.is_empty(), "fixture must contain triples");
         assert_eq!(expected, got, "decode-only stream must equal the full read path");
+        Ok(())
     }
 }
