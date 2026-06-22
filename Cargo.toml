@@ -1,6 +1,6 @@
 [package]
 name = "hdt"
-version = "0.7.1"
+version = "0.7.2"
 repository = "https://github.com/KonradHoeffner/hdt"
 authors = ["Tim Baccaert <tbaccaer@vub.be>", "Konrad Höffner", "Greg Hanson"]
 license = "MIT"
@@ -37,7 +37,7 @@ fs-err = { version = "3.1.0", optional = true }
 bitset-core = { version = "0.1.1", optional = true }
 oxttl = { version = "0.2.1", optional = true }
 lasso = { version = "0.7.3", features = ["multi-threaded"], optional = true }
-qwt = "0.3.5"
+qwt = "0.4"
 
 [features]
 default = ["sophia"]
