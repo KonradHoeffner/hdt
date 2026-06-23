@@ -160,52 +160,75 @@ impl fmt::Debug for TriplesBitmap {
     }
 }
 
+/// Sort (object, predicate, pos_y) entries by (object, predicate) and
+/// stream them into the two components of an op-index: a position sequence
+/// (`cv`) and a bitmap marking object-group boundaries.
+///
+/// Takes ownership of `entries` so the ~6 GB flat array is freed before the
+/// caller assembles the final `Sequence`/`Bitmap` structures (which have
+/// their own transient allocations).
+///
+/// The previous implementation allocated one `Vec<u32>` per distinct object
+/// (`vec![Vec::<u32>::with_capacity(4); max_object]`), which for 200M
+/// objects consumed ~8 GB of heap in 200M separate allocations. This flat
+/// approach uses one contiguous allocation of N × 12 bytes (~6 GB for
+/// 500M triples), sorts in-place, and streams in order.
+fn build_op_index_from_entries(mut entries: Vec<(u32, u32, u32)>) -> (Vec<u32>, BitVectorMut) {
+    // Sort key must include pos_y as a tiebreaker so the ordering is fully
+    // determined: entries with the same (object, predicate) that were
+    // collected in pos_z order have monotonically non-decreasing pos_y
+    // (because bitmap.rank is monotone), which matches the insertion-order
+    // preservation of the old stable sort_by_cached_key.
+    //
+    // par_sort splits into chunks, sorts each in parallel, then merges.
+    // For 500M entries this is the single largest time sink in cache
+    // generation (~60-120s single-threaded, ~15-30s with rayon).
+    use rayon::slice::ParallelSliceMut;
+    entries.par_sort_unstable_by_key(|&(obj, pred, pos_y)| (obj, pred, pos_y));
+
+    let n = entries.len();
+    let mut bitmap = BitVectorMut::new();
+    let mut cv = Vec::<u32>::with_capacity(n);
+    let mut prev_object = 0u32;
+    for &(object, _, pos_y) in &entries {
+        bitmap.push(object != prev_object);
+        prev_object = object;
+        cv.push(pos_y);
+    }
+    // `entries` dropped here — frees the sorted array before Sequence::new_from_u32.
+    (cv, bitmap)
+}
+
 impl TriplesBitmap {
     /// builds the necessary indexes and constructs TriplesBitmap
     pub fn new(order: Order, sequence_y: &Sequence, bitmap_y: Bitmap, adjlist_z: AdjList) -> Self {
+        use rayon::prelude::*;
         //let wavelet_thread = std::thread::spawn(move || WT::from_iter(&sequence_y));
         let wavelet_y = WT::from_iter(sequence_y);
 
         let entries = adjlist_z.sequence.entries;
-        // if it takes too long to calculate, can also pass in as parameter
-        let max_object = adjlist_z.sequence.into_iter().max().unwrap_or(0).to_owned();
-        // limited to < 2^32 objects
-        let mut indicess = vec![Vec::<u32>::with_capacity(4); max_object];
-        // Count the indexes of appearance of each object
-        // In https://github.com/rdfhdt/hdt-cpp/blob/develop/libhdt/src/triples/BitmapTriples.cpp
-        // they count the number of appearances in a sequence instead, which saves memory
-        // temporarily but they need to loop over it an additional time.
-        for pos_z in 0..entries {
-            let object = adjlist_z.sequence.get(pos_z);
-            if object == 0 {
-                error!("ERROR: There is a zero value in the Z level.");
-                continue;
-            }
-            let pos_y = adjlist_z.bitmap.rank(pos_z.to_owned());
-            indicess[object - 1].push(pos_y as u32); // hdt index counts from 1 but we count from 0 for simplicity
-        }
-        // reduce memory consumption of index by using adjacency list
-        let mut bitmap_index_bitvector = BitVectorMut::new();
-        //#[allow(clippy::redundant_closure_for_method_calls)] // false positive, anyhow transitive dep
-        /*let mut cv = CompactVector::with_capacity(entries, sucds::utils::needed_bits(entries))
-        .expect("Failed to create OPS index compact vector.");
-        */
-        let mut cv = Vec::<_>::new();
-        // temporarily disable threading for wasm support
-        //let wavelet_y = wavelet_thread.join().unwrap(); // join as late as possible for max parallelization
-        for mut indices in indicess {
-            let mut first = true;
-            // sort by predicate
-            indices.sort_by_cached_key(|pos_y| wavelet_y.get(*pos_y as usize).unwrap());
-            for index in indices {
-                bitmap_index_bitvector.push(first);
-                first = false;
-                cv.push(index as usize);
-            }
-        }
+        // Collect (object, predicate, pos_y) tuples for the op-index build.
+        // Each iteration does one sequence.get + one bitmap.rank + one wavelet.get;
+        // all are read-only so we parallelize with rayon for ~6-8× speedup.
+        let pairs: Vec<(u32, u32, u32)> = (0..entries)
+            .into_par_iter()
+            .filter_map(|pos_z| {
+                let object = adjlist_z.sequence.get(pos_z);
+                if object == 0 {
+                    error!("ERROR: There is a zero value in the Z level.");
+                    return None;
+                }
+                let pos_y = adjlist_z.bitmap.rank(pos_z) as u32;
+                let predicate = wavelet_y.get(pos_y as usize).unwrap() as u32;
+                Some((object as u32, predicate, pos_y))
+            })
+            .collect();
+
+        // Sort + stream → op-index components. `pairs` is consumed and freed.
+        let (cv, bitmap_index_bitvector) = build_op_index_from_entries(pairs);
         let bv = BitVector::from(bitmap_index_bitvector);
         let bitmap_index = Bitmap { dict: RSNarrow::from(bv) };
-        let op_index = OpIndex { sequence: Sequence::new(&cv), bitmap: bitmap_index };
+        let op_index = OpIndex { sequence: Sequence::new_from_u32(&cv), bitmap: bitmap_index };
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
@@ -219,35 +242,28 @@ impl TriplesBitmap {
         let mut last_x = 0;
         let mut last_y = 0;
         let mut last_z = 0;
-        let mut max_y = 1;
-        let mut max_z = 1;
 
         for (i, triple) in triples.iter().enumerate() {
             let [x, y, z] = *triple;
 
             assert!(!(x == 0 || y == 0 || z == 0), "triple IDs should never be zero");
-            max_y = max_y.max(y);
-            max_z = max_z.max(z);
 
             if i == 0 {
                 array_y.push(y);
             } else if x != last_x {
                 assert!(x == last_x + 1, "the subjects must be correlative.");
-                //x unchanged
                 y_bitmap.push(true);
                 array_y.push(y);
 
                 z_bitmap.push(true);
             } else if y != last_y {
                 assert!(y >= last_y, "the predicates must be in increasing order.");
-                // y unchanged
                 y_bitmap.push(false);
                 array_y.push(y);
 
                 z_bitmap.push(true);
             } else {
                 assert!(z >= last_z, "the objects must be in increasing order");
-                // z changed
                 z_bitmap.push(false);
             }
             array_z.push(z);

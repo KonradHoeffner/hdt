@@ -347,26 +347,39 @@ impl DictSectPFC {
         Ok(())
     }
 
-    /// sorted and unique terms
+    /// Compress sorted, unique terms from a `BTreeSet` into a PFC section.
     pub fn compress(terms: &BTreeSet<&str>, block_size: usize) -> Self {
+        Self::compress_iter(terms.iter().copied(), terms.len(), block_size)
+    }
+
+    /// Compress pre-sorted, unique terms into a PFC section.
+    ///
+    /// The caller must guarantee `terms` yields exactly `num_terms` items in
+    /// ascending lexicographic order with no duplicates. This entry point lets
+    /// callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
+    /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of
+    /// term indices resolved on the fly) — the major memory saver during NT ingest.
+    pub fn compress_iter<'a, I>(terms: I, num_terms: usize, block_size: usize) -> Self
+    where
+        I: IntoIterator<Item = &'a str>,
+    {
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
         let mut last_term: &[u8] = &[];
 
-        let num_terms = terms.len();
-        for (i, term) in terms.iter().enumerate() {
-            let term = term.as_bytes();
+        for (i, term) in terms.into_iter().enumerate() {
+            let term_bytes: &[u8] = term.as_bytes();
             if i % block_size == 0 {
                 offsets.push(compressed_terms.len());
-                compressed_terms.extend_from_slice(term);
+                compressed_terms.extend_from_slice(term_bytes);
             } else {
-                let common_prefix_len = last_term.iter().zip(term).take_while(|(a, b)| a == b).count();
+                let common_prefix_len = last_term.iter().zip(term_bytes).take_while(|(a, b)| a == b).count();
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-                compressed_terms.extend_from_slice(&term[common_prefix_len..]);
+                compressed_terms.extend_from_slice(&term_bytes[common_prefix_len..]);
             }
 
             compressed_terms.push(0); // Null separator
-            last_term = term;
+            last_term = term_bytes;
         }
         if num_terms > 0 {
             offsets.push(compressed_terms.len());

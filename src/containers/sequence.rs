@@ -340,6 +340,61 @@ impl Sequence {
         }
         output
     }
+
+    /// Same as [`Self::new`] but accepts `&[u32]` values directly, avoiding a
+    /// `Vec<usize>` intermediate. The values are widened to `usize` during
+    /// bit-packing only — no separate `Vec<usize>` is ever allocated.
+    ///
+    /// Used by the op-index builder where every value fits in `u32` (they
+    /// are Y-level positions capped at ~2^28 for any realistic HDT).
+    pub fn new_from_u32(numbers: &[u32]) -> Sequence {
+        let entries = numbers.len();
+        if entries == 0 {
+            return Sequence { entries, bits_per_entry: 0, data: vec![] };
+        }
+        let bits_per_entry = (u32::BITS - numbers.iter().max().unwrap().leading_zeros()) as usize;
+
+        // Bit-pack directly from u32, same algorithm as pack_bits but
+        // widening u32→usize on the fly instead of requiring &[usize].
+        let mut output = Vec::<u8>::with_capacity((entries * bits_per_entry).div_ceil(8));
+        let mut current_byte = 0u8;
+        let mut bit_offset = 0usize;
+        for &value in numbers {
+            let mut val = value as usize & ((1usize << bits_per_entry) - 1);
+            let mut bits_left = bits_per_entry;
+            while bits_left > 0 {
+                let available = 8 - bit_offset;
+                let to_write = bits_left.min(available);
+                current_byte |= ((val & ((1 << to_write) - 1)) as u8) << bit_offset;
+                bit_offset += to_write;
+                val >>= to_write;
+                bits_left -= to_write;
+                if bit_offset == 8 {
+                    output.push(current_byte);
+                    current_byte = 0;
+                    bit_offset = 0;
+                }
+            }
+        }
+        if bit_offset > 0 {
+            output.push(current_byte);
+        }
+
+        // Repack u8 → usize words (same as Sequence::new).
+        let bytes = output.len();
+        let rest_byte_amount = bytes % size_of::<usize>();
+        let full_byte_amount = bytes - rest_byte_amount;
+        let mut data = Vec::<usize>::new();
+        for word in output[..full_byte_amount].chunks_exact(size_of::<usize>()) {
+            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        }
+        if rest_byte_amount > 0 {
+            let mut last = [0u8; size_of::<usize>()];
+            last[..rest_byte_amount].copy_from_slice(&output[full_byte_amount..]);
+            data.push(usize::from_le_bytes(last));
+        }
+        Sequence { entries, bits_per_entry, data }
+    }
 }
 
 #[cfg(test)]
