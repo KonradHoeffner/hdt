@@ -197,7 +197,7 @@ impl Hdt {
         let new_index_file = File::create(index_file_path)?;
         let mut writer = std::io::BufWriter::new(new_index_file);
         writer.write_all(&header_length.to_le_bytes())?;
-        bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
+        postcard::to_io(triples, &mut writer)?;
         writer.flush()?;
         Ok(())
     }

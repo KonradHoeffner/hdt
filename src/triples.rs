@@ -148,7 +148,7 @@ pub enum Error {
     External(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
     #[error("cache decode error")]
     #[cfg(feature = "cache")]
-    Decode(#[from] bincode::error::DecodeError),
+    Decode(#[from] postcard::Error),
 }
 
 impl fmt::Debug for TriplesBitmap {
@@ -314,7 +314,9 @@ impl TriplesBitmap {
     /// load the entire cached TriplesBitmap object
     #[cfg(feature = "cache")]
     pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
-        let triples: TriplesBitmap = bincode::serde::decode_from_std_read(reader, bincode::config::standard())?;
+        let mut buffer = Vec::new();
+        let _ = reader.read_to_end(&mut buffer);
+        let triples: TriplesBitmap = postcard::from_bytes(&buffer)?;
         Ok(triples)
     }
 
