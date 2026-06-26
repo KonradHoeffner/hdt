@@ -18,7 +18,7 @@ use std::sync::Arc;
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[cfg(feature = "cache")]
-const CACHE_EXT: &str = "index.v1-rust-cache";
+pub const CACHE_EXT: &str = "index.v1-rust-cache";
 #[cfg(feature = "nt")]
 #[path = "concurrent_interner.rs"]
 mod concurrent_interner;

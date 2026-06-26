@@ -1,7 +1,7 @@
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
-use criterion::{Criterion, criterion_group, criterion_main};
-use fs_err::File;
+use criterion::{Criterion, criterion_group};
+use fs_err::{File, exists};
 use hdt::triples::*;
 use hdt::{Hdt, IdKind};
 use sophia::api::graph::Graph;
@@ -12,10 +12,10 @@ const VINCENT: &str = "http://dbpedia.org/resource/Vincent_Descombes_Sevoie";
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
 const H: &str = "tests/resources/persondata_en.hdt";
+#[cfg(feature = "nt")]
 const N: &str = "tests/resources/persondata_en.nt";
 
 fn load() -> Result<Hdt> {
-    color_eyre::install().unwrap();
     let f = File::open(H).wrap_err(format!("Error opening {H}, did you download it? See README.md."))?;
     //let file = File::open("tests/resources/lscomplete2015.hdt").expect("error opening file");
     //let file = File::open("tests/resources/snikmeta.hdt").expect("error opening file");
@@ -99,8 +99,29 @@ fn read_nt_benchmarks(c: &mut Criterion) {
     group.finish();
 }
 
+fn read_hdt_benchmarks(c: &mut Criterion) {
+    use std::path::Path;
+    let path = Path::new(H);
+    assert!(exists(path).unwrap(), "{H} does not exist, please create it. See README.md.");
+    let mut group = c.benchmark_group("read_hdt");
+    group.sample_size(10);
+
+    group.bench_function("read_hdt_uncached", |b| b.iter(|| load()));
+    #[cfg(feature = "cache")]
+    {
+        let c = format!("{H}.{}", hdt::hdt::CACHE_EXT);
+        assert!(exists(Path::new(&c)).unwrap(), "cache file {c} does not exist");
+        group.bench_function("read_hdt_cached", |b| b.iter(|| Hdt::read_from_path(path)));
+    }
+    group.finish();
+}
+
 #[cfg(feature = "nt")]
-criterion_group!(criterion, query, read_nt_benchmarks);
+criterion_group!(criterion, query, read_nt_benchmarks, read_hdt_benchmarks);
 #[cfg(not(feature = "nt"))]
-criterion_group!(criterion, query);
-criterion_main!(criterion);
+criterion_group!(criterion, query, read_hdt_benchmarks);
+
+fn main() {
+    color_eyre::install().unwrap();
+    criterion();
+}
