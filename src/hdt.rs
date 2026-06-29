@@ -174,17 +174,20 @@ impl Hdt {
         // load cached index
         debug!("hdt file cache detected, loading from {}", index_file_path.display());
         let index_source = File::open(index_file_path)?;
-        let mut index_reader = std::io::BufReader::new(index_source);
+        //let mut index_reader = std::io::BufReader::new(index_source);
         let triples_ci = ControlInfo::read(&mut reader)?;
         // we cannot rely on the numTriples property being present, see https://github.com/rdfhdt/hdt-cpp/issues/289
         // let num_triples = triples_ci.get("numTriples").expect("numTriples key missing in triples CI");
         // thus we use the number of bytes of the header data
-        let mut buf = [0u8; size_of::<usize>()];
+        /*let mut buf = [0u8; size_of::<usize>()];
         index_reader.read_exact(&mut buf)?;
         if header_length != usize::from_le_bytes(buf) {
             return Err("failed index validation".into());
-        }
-        let triples = TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?;
+        }*/
+        //let triples = TriplesBitmap::load_cache(&mut index_reader, &triples_ci)?;
+        let mmap = unsafe { memmap2::Mmap::map(&index_source)? };
+        let archived = rkyv::access::<TriplesBitmap, Error>(&mmap)?;
+        let triples = archived.data[0];
         Ok(triples)
     }
 
@@ -195,10 +198,15 @@ impl Hdt {
         index_file_path: &PathBuf, triples: &TriplesBitmap, header_length: usize,
     ) -> core::result::Result<(), Box<dyn std::error::Error>> {
         let new_index_file = File::create(index_file_path)?;
-        let mut writer = std::io::BufWriter::new(new_index_file);
-        writer.write_all(&header_length.to_le_bytes())?;
-        bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
-        writer.flush()?;
+        use rkyv::ser::writer::IoWriter;
+        use std::io::BufWriter;
+        let writer = IoWriter::new(BufWriter::new(new_index_file));
+        //let mut writer = std::io::BufWriter::new(new_index_file);
+        //writer.write_all(&header_length.to_le_bytes())?;
+
+        //let archived = rkyv::access::<TriplesBitmap, Error>(&mmap)?;
+        //bincode::serde::encode_into_std_write(triples, &mut writer, bincode::config::standard())?;
+        //writer.flush()?;
         Ok(())
     }
 

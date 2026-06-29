@@ -60,7 +60,7 @@ impl TryFrom<u32> for Order {
 /// This object-based index allows to traverse from the leaves and support ??O and ?PO queries.
 /// Used for logarithmic (?) time access instead of linear time sequential search.
 /// See Martínez-Prieto, M., M. Arias, and J. Fernández (2012). Exchange and Consumption of Huge RDF Data. Pages 8--10.
-#[cfg_attr(feature = "cache", derive(Deserialize, Serialize))]
+#[cfg_attr(feature = "cache", derive(rkyv::Archive, Deserialize, Serialize))]
 pub struct OpIndex {
     /// Compact integer vector of object positions.
     /// "[...] integer sequence: SoP, which stores, for each object, a sorted list of references to the predicate-subject pairs (sorted by predicate) related to it."
@@ -104,7 +104,7 @@ type WT = QWT512<usize>;
 
 /// `BitmapTriples` variant of the triples section.
 //#[derive(Clone)]
-#[cfg_attr(feature = "cache", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "cache", derive(rkyv::Archive, Serialize, Deserialize))]
 pub struct TriplesBitmap {
     order: Order,
     /// bitmap to find positions in the wavelet matrix
@@ -146,9 +146,9 @@ pub enum Error {
     TripleComponentZero(usize, usize, usize),
     #[error("unspecified external library error")]
     External(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
-    #[error("cache decode error")]
-    #[cfg(feature = "cache")]
-    Decode(#[from] bincode::error::DecodeError),
+    //#[error("cache decode error")]
+    //#[cfg(feature = "cache")]
+    //Decode(#[from] bincode::error::DecodeError),
 }
 
 impl fmt::Debug for TriplesBitmap {
@@ -300,24 +300,24 @@ impl TriplesBitmap {
             f => Err(Error::UnknownTriplesFormat(f.to_owned())),
         }
     }
-
-    /// load the cached HDT index file, only supports TriplesBitmap
-    #[cfg(feature = "cache")]
-    pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
-        match &info.format[..] {
-            "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
-            "<http://purl.org/HDT/hdt#triplesList>" => Err(Error::TriplesList),
-            f => Err(Error::UnknownTriplesFormat(f.to_owned())),
+    /*
+        /// load the cached HDT index file, only supports TriplesBitmap
+        #[cfg(feature = "cache")]
+        pub fn load_cache<R: BufRead>(reader: &mut R, info: &ControlInfo) -> Result<Self> {
+            match &info.format[..] {
+                "<http://purl.org/HDT/hdt#triplesBitmap>" => TriplesBitmap::load(reader),
+                "<http://purl.org/HDT/hdt#triplesList>" => Err(Error::TriplesList),
+                f => Err(Error::UnknownTriplesFormat(f.to_owned())),
+            }
         }
-    }
 
-    /// load the entire cached TriplesBitmap object
-    #[cfg(feature = "cache")]
-    pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
-        let triples: TriplesBitmap = bincode::serde::decode_from_std_read(reader, bincode::config::standard())?;
-        Ok(triples)
-    }
-
+        /// load the entire cached TriplesBitmap object
+        #[cfg(feature = "cache")]
+        pub fn load<R: BufRead>(reader: &mut R) -> Result<Self> {
+            let triples: TriplesBitmap = bincode::serde::decode_from_std_read(reader, bincode::config::standard())?;
+            Ok(triples)
+        }
+    */
     /// Size in bytes on the heap.
     pub fn size_in_bytes(&self) -> usize {
         self.adjlist_z.size_in_bytes()
