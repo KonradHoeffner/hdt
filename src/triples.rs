@@ -232,12 +232,28 @@ impl TriplesBitmap {
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
-    /// Creates a new TriplesBitmap from a list of sorted RDF triples
-    pub fn from_triples(triples: &[TripleId]) -> Self {
+    /// Creates a new TriplesBitmap from a list of sorted RDF triples.
+    ///
+    /// Takes the triples by value so the encoded-triple buffer (24 B ×
+    /// num_triples) can be freed as soon as the y/z arrays and bitmaps are
+    /// built, instead of staying resident through the memory-heavy op-index
+    /// construction in [`TriplesBitmap::new`].
+    pub fn from_triples(triples: Vec<TripleId>) -> Self {
         let mut y_bitmap = BitVectorMut::new();
         let mut z_bitmap = BitVectorMut::new();
-        let mut array_y = Vec::new();
-        let mut array_z = Vec::new();
+        // Size both arrays exactly instead of letting `push` grow them: RawVec
+        // doubles to the next power of two, so array_z would reserve 16.8M slots
+        // (134 MB) for 10.3M triples where 82 MB is needed, and every doubling
+        // briefly holds the old and new buffer at once. array_z takes one entry
+        // per triple; array_y one per distinct (subject, predicate) pair, counted
+        // below by a comparison-only pass over the already-sorted triples.
+        let num_y = if triples.is_empty() {
+            0
+        } else {
+            1 + triples.windows(2).filter(|w| w[0][0] != w[1][0] || w[0][1] != w[1][1]).count()
+        };
+        let mut array_y = Vec::with_capacity(num_y);
+        let mut array_z = Vec::with_capacity(triples.len());
 
         let mut last_x = 0;
         let mut last_y = 0;
@@ -272,6 +288,10 @@ impl TriplesBitmap {
             last_y = y;
             last_z = z;
         }
+        // The encoded triples have been fully read into the y/z arrays and
+        // bitmaps; free them (~24 B × num_triples) before the op-index build
+        // peak in TriplesBitmap::new rather than holding them until return.
+        drop(triples);
         y_bitmap.push(true);
         let n = y_bitmap.len();
         // pad to the next multiple of 64 so our comparisons match
@@ -285,6 +305,10 @@ impl TriplesBitmap {
         let sequence_z = Sequence::new(&array_z, (Id::BITS - max_z.leading_zeros()) as usize);*/
         let sequence_y = Sequence::new(&array_y);
         let sequence_z = Sequence::new(&array_z);
+        // The plain usize arrays are now redundant with the bit-packed
+        // sequences; free them (~8 B × len each) before the op-index build.
+        drop(array_y);
+        drop(array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         TriplesBitmap::new(Order::SPO, &sequence_y, bitmap_y, adjlist_z)
     }

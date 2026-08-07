@@ -56,7 +56,9 @@ impl Hdt {
         let num_triples = encoded_triples.len();
         // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
         encoded_triples.par_sort_unstable();
-        let triples = TriplesBitmap::from_triples(&encoded_triples);
+        // Move (don't borrow) the encoded triples in so TriplesBitmap can free
+        // them after its build loop, before its op-index peak.
+        let triples = TriplesBitmap::from_triples(encoded_triples);
 
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
         let mut hdt = Hdt { header, dict, triples };
