@@ -1,5 +1,5 @@
 use io::ErrorKind::UnexpectedEof;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::{self, BufRead, Write};
 use std::str;
 
@@ -46,7 +46,7 @@ pub struct ControlInfo {
     /// "URI identifier of the implementation of the following section."
     pub format: String,
     /// Key-value entries, ASCII only.
-    pub properties: HashMap<String, String>,
+    pub properties: BTreeMap<String, String>,
 }
 
 /// The error type for the `read` method.
@@ -78,14 +78,14 @@ const TRIPLES_BITMAP: &str = "<http://purl.org/HDT/hdt#triplesBitmap>";
 impl ControlInfo {
     /// Create global control information for the start of the HDT file
     pub fn global() -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("Software".to_owned(), "hdt_rs".to_owned());
         ControlInfo { control_type: ControlType::Global, format: HDT_CONTAINER.to_owned(), properties }
     }
 
     /// Create control information for the header
     pub fn header(length: usize) -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("length".to_owned(), length.to_string());
         ControlInfo { control_type: ControlType::Header, format: "ntriples".to_owned(), properties }
     }
@@ -101,7 +101,7 @@ impl ControlInfo {
 
     /// Create control information for BitmapTriples
     pub fn bitmap_triples(order: u32, num_triples: u32) -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("order".to_owned(), order.to_string());
         properties.insert("numTriples".to_owned(), num_triples.to_string());
         ControlInfo { control_type: ControlType::Triples, format: TRIPLES_BITMAP.to_owned(), properties }
@@ -152,7 +152,7 @@ impl ControlInfo {
             return Err(std::io::Error::new(UnexpectedEof, "reading the properties").into());
         }
         let prop_str = String::from_utf8(prop_str)?;
-        let mut properties = HashMap::new();
+        let mut properties = BTreeMap::new();
         for item in prop_str.split(';') {
             if let Some(index) = item.find('=') {
                 let (key, val) = item.split_at(index);
@@ -199,6 +199,9 @@ impl ControlInfo {
 
         // write properties
         let mut properties_string = String::new();
+        // N.B. because properties is a BTreeMap, this iteration has a stable
+        // order which is important so that the same graph serializes
+        // deterministically. (HashMap does not have stable iteration order.)
         for (key, value) in &self.properties {
             properties_string.push_str(key);
             properties_string.push('=');
