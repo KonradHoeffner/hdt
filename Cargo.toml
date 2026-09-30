@@ -9,7 +9,7 @@ keywords = ["rdf", "hdt", "compression", "file-format"]
 categories = ["compression", "filesystem", "parsing", "web-programming"]
 readme = "README.md"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.89"
 exclude = ["tests/resources/rdf-tests"]
 
 [package.metadata."docs.rs"]
