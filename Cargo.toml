@@ -23,7 +23,6 @@ ntriple = "0.1"
 sophia = { version = "0.10", optional = true }
 thiserror = "2"
 log = "0.4"
-env_logger = { version = "0.11", default-features = false, features = ["auto-color"] }
 mownstr = { version = "0.3", optional = true }
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
 rayon = { version = "1.11.0", default-features = false }
