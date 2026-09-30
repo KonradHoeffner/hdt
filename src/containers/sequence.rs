@@ -183,8 +183,8 @@ impl Sequence {
         // read entry body
 
         // turn the raw bytes into usize values
-        for word in full_words.chunks_exact(size_of::<usize>()) {
-            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word)?));
+        for word in full_words.as_chunks::<{ size_of::<usize>() }>().0 {
+            data.push(usize::from_le_bytes(*word));
         }
 
         // keep track of history for CRC32
@@ -294,8 +294,8 @@ impl Sequence {
         let full_byte_amount = bytes - rest_byte_amount;
         let mut data = Vec::<usize>::new();
         let full_words = &numbers8[..full_byte_amount];
-        for word in full_words.chunks_exact(size_of::<usize>()) {
-            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        for word in full_words.as_chunks::<{ size_of::<usize>() }>().0 {
+            data.push(usize::from_le_bytes(*word));
         }
         if rest_byte_amount > 0 {
             let mut last = [0u8; size_of::<usize>()];
@@ -385,8 +385,8 @@ impl Sequence {
         let rest_byte_amount = bytes % size_of::<usize>();
         let full_byte_amount = bytes - rest_byte_amount;
         let mut data = Vec::<usize>::new();
-        for word in output[..full_byte_amount].chunks_exact(size_of::<usize>()) {
-            data.push(usize::from_le_bytes(<[u8; size_of::<usize>()]>::try_from(word).unwrap()));
+        for word in output[..full_byte_amount].as_chunks::<{ size_of::<usize>() }>().0 {
+            data.push(usize::from_le_bytes(*word));
         }
         if rest_byte_amount > 0 {
             let mut last = [0u8; size_of::<usize>()];

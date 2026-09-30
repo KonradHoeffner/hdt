@@ -7,7 +7,6 @@ use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, bitvector::rs_
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
-use std::mem::size_of;
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]
@@ -128,8 +127,8 @@ impl Bitmap {
         let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
         reader.read_exact(&mut full_words)?;
 
-        for word in full_words.chunks_exact(size_of::<u64>()) {
-            data.push(u64::from_le_bytes(<[u8; 8]>::try_from(word)?));
+        for word in full_words.as_chunks::<8>().0 {
+            data.push(u64::from_le_bytes(*word));
         }
 
         // initiate computation of CRC32
