@@ -1,0 +1,10 @@
+<urn:x:s> <urn:x:tab> "tab\there" .
+<urn:x:s> <urn:x:newline> "line\nbreak"@en .
+<urn:x:s> <urn:x:cr> "carriage\rreturn" .
+<urn:x:s> <urn:x:quote> "say \"hi\""^^<http://www.w3.org/2001/XMLSchema#string> .
+<urn:x:s> <urn:x:backslash> "back\\slash"^^<urn:x:dt> .
+<urn:x:s> <urn:x:unicode> "caf\u00E9 \U0001F600" .
+<urn:x:s> <urn:x:raw> "café 😀" .
+<urn:x:s> <urn:x:plain> "nothing to escape" .
+<urn:x:s> <urn:x:iri> <urn:x:o\u00E9> .
+_:b0 <urn:x:bnode> "x" .

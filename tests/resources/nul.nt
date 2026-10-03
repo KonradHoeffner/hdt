@@ -1,0 +1,3 @@
+<urn:x:s> <urn:x:a> "bell" .
+<urn:x:s> <urn:x:b> "before\u0000after" .
+<urn:x:s> <urn:x:c> "beyond" .
