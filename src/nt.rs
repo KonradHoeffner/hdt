@@ -415,6 +415,28 @@ pub mod tests {
     use fs_err::File;
     use std::path::Path;
 
+    /// Regression for #130: the same graph has to serialize to the same
+    /// bytes. Repeated in one process on purpose -- each `HashMap` used to
+    /// get its own `RandomState`, so this failed intermittently without
+    /// needing separate runs.
+    #[test]
+    fn the_same_graph_serializes_to_the_same_bytes() -> Result<()> {
+        init();
+        let base = "http://www.snik.eu/ontology/meta";
+        let triples: Vec<StringTriple> = snikmeta()?.triples_all().collect();
+        let mut first: Option<Vec<u8>> = None;
+        for i in 0..4 {
+            let mut buf = Vec::new();
+            Hdt::from_triples(triples.clone(), base)?.write(&mut buf)?;
+            if let Some(first) = &first {
+                assert_eq!(first.len(), buf.len(), "build {i} differs in length");
+                assert!(first == &buf, "build {i} serialized to different bytes");
+            }
+            first = Some(buf);
+        }
+        Ok(())
+    }
+
     #[test]
     fn read_nt() -> Result<()> {
         init();

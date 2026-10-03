@@ -1,5 +1,5 @@
 use io::ErrorKind::UnexpectedEof;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::{self, BufRead, Write};
 use std::str;
 
@@ -46,7 +46,7 @@ pub struct ControlInfo {
     /// "URI identifier of the implementation of the following section."
     pub format: String,
     /// Key-value entries, ASCII only.
-    pub properties: HashMap<String, String>,
+    pub properties: BTreeMap<String, String>,
 }
 
 /// The error type for the `read` method.
@@ -78,14 +78,14 @@ const TRIPLES_BITMAP: &str = "<http://purl.org/HDT/hdt#triplesBitmap>";
 impl ControlInfo {
     /// Create global control information for the start of the HDT file
     pub fn global() -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("Software".to_owned(), "hdt_rs".to_owned());
         ControlInfo { control_type: ControlType::Global, format: HDT_CONTAINER.to_owned(), properties }
     }
 
     /// Create control information for the header
     pub fn header(length: usize) -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("length".to_owned(), length.to_string());
         ControlInfo { control_type: ControlType::Header, format: "ntriples".to_owned(), properties }
     }
@@ -101,7 +101,7 @@ impl ControlInfo {
 
     /// Create control information for BitmapTriples
     pub fn bitmap_triples(order: u32, num_triples: u32) -> ControlInfo {
-        let mut properties = HashMap::<String, String>::new();
+        let mut properties = BTreeMap::<String, String>::new();
         properties.insert("order".to_owned(), order.to_string());
         properties.insert("numTriples".to_owned(), num_triples.to_string());
         ControlInfo { control_type: ControlType::Triples, format: TRIPLES_BITMAP.to_owned(), properties }
@@ -152,7 +152,7 @@ impl ControlInfo {
             return Err(std::io::Error::new(UnexpectedEof, "reading the properties").into());
         }
         let prop_str = String::from_utf8(prop_str)?;
-        let mut properties = HashMap::new();
+        let mut properties = BTreeMap::new();
         for item in prop_str.split(';') {
             if let Some(index) = item.find('=') {
                 let (key, val) = item.split_at(index);
@@ -199,6 +199,9 @@ impl ControlInfo {
 
         // write properties
         let mut properties_string = String::new();
+        // N.B. because properties is a BTreeMap, this iteration has a stable
+        // order which is important so that the same graph serializes
+        // deterministically. (HashMap does not have stable iteration order.)
         for (key, value) in &self.properties {
             properties_string.push_str(key);
             properties_string.push('=');
@@ -227,6 +230,27 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use std::io::BufReader;
+
+    /// Regression for #130: the same control information has to serialize
+    /// to the same bytes every time. `bitmap_triples` is the only block
+    /// with more than one property and so the only one that could vary.
+    #[test]
+    fn properties_are_written_in_a_fixed_order() {
+        init();
+        let mut previous: Option<Vec<u8>> = None;
+        for _ in 0..8 {
+            // A fresh map each time: with a HashMap each would get its own
+            // RandomState and could iterate in a different order.
+            let mut buf = Vec::new();
+            ControlInfo::bitmap_triples(1, 600_000).write(&mut buf).unwrap();
+            if let Some(first) = &previous {
+                assert_eq!(first, &buf, "control info serialized differently across writes");
+            }
+            previous = Some(buf);
+        }
+        let rendered = String::from_utf8_lossy(previous.as_ref().unwrap()).to_string();
+        assert!(rendered.contains("numTriples=600000;order=1;"), "unexpected order: {rendered}");
+    }
 
     #[test]
     fn read_info() -> color_eyre::Result<()> {
