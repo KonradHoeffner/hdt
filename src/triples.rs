@@ -545,12 +545,4 @@ mod tests {
         assert_eq!(0, SubjectIter::with_pattern(&triples, [12, 14, 154]).count());
         Ok(())
     }
-
-    /*
-      #[test]
-        fn from_triples() -> color_eyre::Result<()> {
-            //let triples: Vec<TripleId> = vec![[1, 2, 3], TripleId::new(1, 2, 4), TripleId::new(2, 3, 5)]; // TODO: add more or read existing ones from file
-            todo!("not yet implemented");
-        }
-    */
 }
