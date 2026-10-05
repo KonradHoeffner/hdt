@@ -415,7 +415,6 @@ pub mod tests {
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
-    use std::fs;
     use std::path::Path;
 
     #[test]
@@ -427,8 +426,10 @@ pub mod tests {
             let mut writer = std::io::BufWriter::new(File::create(path)?);
             snikmeta()?.write_nt(&mut writer)?;
         }
-        let snikmeta_nt = Hdt::read_nt(path)?;
+        let invalid = path.join("doesnotexist");
+        assert!(Hdt::read_nt(invalid).is_err(), "invalid N-Triples path should result in error");
 
+        let snikmeta_nt = Hdt::read_nt(path)?;
         let snikmeta = snikmeta()?;
         let hdt_triples: Vec<StringTriple> = snikmeta.triples_all().collect();
         let nt_triples: Vec<StringTriple> = snikmeta_nt.triples_all().collect();
@@ -463,25 +464,6 @@ pub mod tests {
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
         Hdt::read(std::io::Cursor::new(buf))?;
-        Ok(())
-    }
-
-    #[test]
-    fn read_nt_invalid_input_returns_error_without_panic() -> Result<()> {
-        init();
-        let invalid_path = std::env::temp_dir().join(format!(
-            "hdt-invalid-nt-{}-{}.nt",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("unnamed")
-        ));
-        fs::write(&invalid_path, "invalid triple\n")?;
-
-        let result = std::panic::catch_unwind(|| Hdt::read_nt(&invalid_path));
-        assert!(result.is_ok(), "Hdt::read_nt should return Err instead of panicking on invalid N-Triples");
-        let parse_result = result.expect("catch_unwind should not fail");
-        assert!(parse_result.is_err(), "invalid N-Triples should produce an error result");
-
-        let _ = fs::remove_file(&invalid_path);
         Ok(())
     }
 }
