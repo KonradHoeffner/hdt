@@ -413,10 +413,18 @@ pub mod tests {
         init();
         let hdt = snikmeta()?;
         snikmeta_check(&hdt)?;
-        let mut buf = Vec::<u8>::new();
+        let mut buf = Vec::new();
         hdt.write(&mut buf)?;
-        let hdt2 = Hdt::read(std::io::Cursor::new(buf))?;
+        const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let crc = CRC.checksum(&buf);
+        let hdt2 = Hdt::read(std::io::Cursor::new(buf.clone()))?;
         snikmeta_check(&hdt2)?;
+        // Regression for #130: the same graph must serialize to the same bytes for archival.
+        for _ in 0..3 {
+            buf.clear();
+            hdt2.write(&mut buf)?;
+            assert_eq!(crc, CRC.checksum(&buf), "checksum differs between serializations");
+        }
         Ok(())
     }
 
@@ -548,23 +556,6 @@ pub mod tests {
         let o = "\"ХОББИ\"@ru";
         let triple_vec = vec![[Arc::from(s), Arc::from(p), Arc::from(o)]];
         assert_eq!(hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), triple_vec);
-        Ok(())
-    }
-
-    /// Regression for #130: the same graph must serialize to the same bytes for archival.
-    #[test]
-    fn deterministic_serialization() -> Result<()> {
-        init();
-        let hdt: Hdt = snikmeta()?;
-        let mut buf = Vec::new();
-        hdt.write(&mut buf)?;
-        const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
-        let expected = CRC.checksum(&buf);
-        for _ in 0..3 {
-            buf.clear();
-            hdt.write(&mut buf)?;
-            assert_eq!(expected, CRC.checksum(&buf), "checksum differs between serializations");
-        }
         Ok(())
     }
 }
