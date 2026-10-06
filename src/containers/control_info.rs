@@ -228,6 +228,27 @@ mod tests {
     use crate::tests::init;
     use std::io::BufReader;
 
+    /// Regression for #130: the same control information has to serialize
+    /// to the same bytes every time. `bitmap_triples` is the only block
+    /// with more than one property and so the only one that could vary.
+    #[test]
+    fn properties_are_written_in_a_fixed_order() {
+        init();
+        let mut previous: Option<Vec<u8>> = None;
+        for _ in 0..8 {
+            // A fresh map each time: with a HashMap each would get its own
+            // RandomState and could iterate in a different order.
+            let mut buf = Vec::new();
+            ControlInfo::bitmap_triples(1, 600_000).write(&mut buf).unwrap();
+            if let Some(first) = &previous {
+                assert_eq!(first, &buf, "control info serialized differently across writes");
+            }
+            previous = Some(buf);
+        }
+        let rendered = String::from_utf8_lossy(previous.as_ref().unwrap()).to_string();
+        assert!(rendered.contains("numTriples=600000;order=1;"), "unexpected order: {rendered}");
+    }
+
     #[test]
     fn read_info() -> color_eyre::Result<()> {
         init();
