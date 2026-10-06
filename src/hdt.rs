@@ -550,4 +550,21 @@ pub mod tests {
         assert_eq!(hdt.triples_with_pattern(Some(s), Some(p), None).collect::<Vec<_>>(), triple_vec);
         Ok(())
     }
+
+    /// Regression for #130: the same graph must serialize to the same bytes for archival.
+    #[test]
+    fn deterministic_serialization() -> Result<()> {
+        init();
+        let hdt: Hdt = snikmeta()?;
+        let mut buf = Vec::new();
+        hdt.write(&mut buf)?;
+        const CRC: crc::Crc<u32> = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
+        let expected = CRC.checksum(&buf);
+        for _ in 0..3 {
+            buf.clear();
+            hdt.write(&mut buf)?;
+            assert_eq!(expected, CRC.checksum(&buf), "checksum differs between serializations");
+        }
+        Ok(())
+    }
 }
