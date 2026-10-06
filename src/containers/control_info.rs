@@ -199,9 +199,7 @@ impl ControlInfo {
 
         // write properties
         let mut properties_string = String::new();
-        // N.B. because properties is a BTreeMap, this iteration has a stable
-        // order which is important so that the same graph serializes
-        // deterministically. (HashMap does not have stable iteration order.)
+        // BTreeMap guarantees stable order for deterministic graph serialization
         for (key, value) in &self.properties {
             properties_string.push_str(key);
             properties_string.push('=');
