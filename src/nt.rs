@@ -453,18 +453,19 @@ pub mod tests {
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
-    use std::io::Write;
+    use pretty_assertions::assert_eq;
+    use std::collections::BTreeSet;
+    use std::io::{Cursor, Write};
     use std::path::Path;
     use std::sync::Arc;
 
-    /// Regression test for #131. Escapes are N-Triples syntax, not part of a
-    /// term's value, so the dictionary must hold the decoded value and each
-    /// serialization must escape it exactly once.
+    /// Regression test for #131. Escapes are N-Triples syntax, not part of a term's value,
+    /// so the dictionary must hold the decoded value and each serialization must escape it exactly once.
     #[test]
     fn read_nt_escapes() -> Result<()> {
         init();
         // tests/resources/escapes.nt in dictionary string format
-        let mut want: Vec<StringTriple> = [
+        let want: BTreeSet<StringTriple> = [
             ["_:b0", "urn:x:bnode", "\"x\""],
             ["urn:x:s", "urn:x:backslash", "\"back\\slash\"^^<urn:x:dt>"],
             ["urn:x:s", "urn:x:cr", "\"carriage\rreturn\""],
@@ -478,18 +479,13 @@ pub mod tests {
         ]
         .map(|t| t.map(Arc::from))
         .into();
-        want.sort();
 
         let from_nt = Hdt::read_nt("tests/resources/escapes.nt")?;
-        let mut got: Vec<StringTriple> = from_nt.triples_all().collect();
-        got.sort();
-        assert_eq!(got, want, "dictionary must hold decoded values");
+        assert_eq!(from_nt.triples_all().collect::<BTreeSet<_>>(), want, "dictionary must hold decoded values");
 
         // the same graph given as decoded strings must build the same HDT
         let from_triples = Hdt::from_triples(want.clone(), "urn:x:escapes")?;
-        let mem_triples: Vec<StringTriple> = from_triples.triples_all().collect();
-        let nt_triples: Vec<StringTriple> = from_nt.triples_all().collect();
-        assert_eq!(mem_triples, nt_triples);
+        assert_eq!(from_triples.triples_all().collect::<BTreeSet<_>>(), want);
         assert_eq!(from_triples.triples.bitmap_y.dict, from_nt.triples.bitmap_y.dict);
 
         // the reported symptom: out to N-Triples and back in must not change a value
@@ -498,21 +494,17 @@ pub mod tests {
         let mut writer = std::io::BufWriter::new(File::create(path)?);
         from_nt.write_nt(&mut writer)?;
         writer.flush()?;
-        let mut again: Vec<StringTriple> = Hdt::read_nt(path)?.triples_all().collect();
-        again.sort();
-        assert_eq!(again, want, "N-Triples round trip must escape exactly once");
+        assert_eq!(Hdt::read_nt(path)?.triples_all().collect::<BTreeSet<_>>(), want, "NT must escape once");
 
         let mut buf = Vec::<u8>::new();
         from_nt.write(&mut buf)?;
-        let mut again: Vec<StringTriple> = Hdt::read(std::io::Cursor::new(buf))?.triples_all().collect();
-        again.sort();
-        assert_eq!(again, want, "HDT round trip must preserve values");
+        let again = Hdt::read(Cursor::new(buf))?.triples_all().collect::<BTreeSet<_>>();
+        assert_eq!(again, want, "HDT must preserve values");
         Ok(())
     }
 
-    /// A nul character (U+0000) would end its nul-terminated dictionary entry
-    /// early and the front-coded neighbour would then be rewritten against the
-    /// truncated bytes, so building the dictionary must refuse it instead.
+    /// A nul character (U+0000) would end its nul-terminated dictionary entry early and the front-coded neighbour would then be
+    /// rewritten against the truncated bytes, so building the dictionary must refuse it instead.
     #[test]
     fn read_nt_nul() -> Result<()> {
         init();
@@ -566,7 +558,7 @@ pub mod tests {
         let hdt_empty = Hdt::read_nt(path)?;
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
-        Hdt::read(std::io::Cursor::new(buf))?;
+        Hdt::read(Cursor::new(buf))?;
         Ok(())
     }
 
@@ -584,11 +576,11 @@ pub mod tests {
         snikmeta_check(&from_triples)?;
         let mut buf = Vec::<u8>::new();
         from_triples.write(&mut buf)?;
-        snikmeta_check(&Hdt::read(std::io::Cursor::new(buf))?)?;
+        snikmeta_check(&Hdt::read(Cursor::new(buf))?)?;
         let hdt_empty = Hdt::from_triples(std::iter::empty::<[&str; 3]>(), "http://example.org/empty")?;
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
-        Hdt::read(std::io::Cursor::new(buf))?;
+        Hdt::read(Cursor::new(buf))?;
         Ok(())
     }
 }
