@@ -46,8 +46,6 @@ pub enum Error {
     DictSectNotPfc(u8),
     #[error("sequence read error")]
     Sequence(#[from] sequence::Error),
-    #[error("term {0:?} contains nul (U+0000)")]
-    NulInTerm(String),
 }
 
 impl fmt::Debug for DictSectPFC {
@@ -350,44 +348,46 @@ impl DictSectPFC {
     }
 
     /// Compress sorted, unique terms from a `BTreeSet` into a PFC section.
-    pub fn compress(terms: &BTreeSet<&str>, block_size: usize) -> Result<Self> {
+    pub fn compress(terms: &BTreeSet<&str>, block_size: usize) -> Self {
         Self::compress_iter(terms.iter().copied(), terms.len(), block_size)
     }
 
     /// Compress pre-sorted, unique terms into a PFC section.
     ///
-    /// The caller must guarantee `terms` yields exactly `num_terms` items in
-    /// ascending lexicographic order with no duplicates. This entry point lets
-    /// callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
-    /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of
-    /// term indices resolved on the fly) — the major memory saver during NT ingest.
+    /// The caller must guarantee `terms` yields exactly `num_terms` items in ascending lexicographic order with no duplicates.
+    /// This entry point lets callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
+    /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of term indices resolved on the fly) — the major memory saver during NT ingest.
     ///
-    /// It is an error for a term to contain a nul character (U+0000): entries
-    /// are nul-terminated, so it would end the entry early.
-    pub fn compress_iter<'a, I>(terms: I, num_terms: usize, block_size: usize) -> Result<Self>
+    /// nul characters (U+0000) in terms and all following characters will be ignored: entries are nul-terminated, so it would end the entry early.
+    pub fn compress_iter<'a, I>(terms: I, num_terms: usize, block_size: usize) -> Self
     where
         I: IntoIterator<Item = &'a str>,
     {
+        use std::borrow::Cow;
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
-        let mut last_term: &[u8] = &[];
+        //let mut last_term: &[u8] = &[];
+        let mut last_term: Cow<[u8]> = Cow::Borrowed(b"");
 
         for (i, term) in terms.into_iter().enumerate() {
             let term_bytes: &[u8] = term.as_bytes();
-            if term_bytes.contains(&0) {
-                return Err(Error::NulInTerm(term.to_owned()));
-            }
+            let bytes = if term_bytes.contains(&0) {
+                log::warn!("ignore unsupported nul characters in term");
+                Cow::Owned(term_bytes.iter().copied().filter(|&b| b != 0).collect())
+            } else {
+                Cow::Borrowed(term_bytes)
+            };
             if i % block_size == 0 {
                 offsets.push(compressed_terms.len());
-                compressed_terms.extend_from_slice(term_bytes);
+                compressed_terms.extend_from_slice(&bytes);
             } else {
-                let common_prefix_len = last_term.iter().zip(term_bytes).take_while(|(a, b)| a == b).count();
+                let common_prefix_len = last_term.iter().zip(bytes.iter()).take_while(|(a, b)| a == b).count();
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-                compressed_terms.extend_from_slice(&term_bytes[common_prefix_len..]);
+                compressed_terms.extend_from_slice(&bytes[common_prefix_len..]);
             }
 
             compressed_terms.push(0); // nul terminator
-            last_term = term_bytes;
+            last_term = bytes;
         }
         if num_terms > 0 {
             offsets.push(compressed_terms.len());
@@ -396,13 +396,13 @@ impl DictSectPFC {
         // offsets are an increasing list of array indices, therefore the last one will be the largest
         // TODO: potential off by 1 in comparison with hdt-cpp implementation?
         //let bits_per_entry = if num_terms == 0 { 0 } else { (offsets.last().unwrap().ilog2() + 1) as usize };
-        Ok(DictSectPFC {
+        DictSectPFC {
             num_strings: num_terms,
             block_size,
             //sequence: Sequence::new(&offsets, bits_per_entry),
             sequence: Sequence::new(&offsets),
             packed_data: Arc::from(compressed_terms),
-        })
+        }
     }
 }
 
@@ -515,7 +515,7 @@ mod tests {
         ];
         let string_vec = Vec::from(strings);
         let set: BTreeSet<&str> = BTreeSet::from(strings);
-        let dict = DictSectPFC::compress(&set, BLOCK_SIZE)?;
+        let dict = DictSectPFC::compress(&set, BLOCK_SIZE);
         // could add this as DictSectPFC::items if required elsewhere
         let sect_items =
             |ds: &DictSectPFC| -> Vec<String> { (1..=ds.num_strings()).map(|i| ds.extract(i).unwrap()).collect() };
@@ -531,11 +531,11 @@ mod tests {
         for (sect, name) in sects.iter().zip(names) {
             let items1 = sect_items(sect);
             let set1: BTreeSet<&str> = items1.iter().map(std::ops::Deref::deref).collect();
-            let sect2 = DictSectPFC::compress(&set1, BLOCK_SIZE)?;
+            let sect2 = DictSectPFC::compress(&set1, BLOCK_SIZE);
             let items2 = sect_items(&sect2);
             assert_eq!(items1, items2, "error compressing {name} section");
         }
-        assert_eq!(0, DictSectPFC::compress(&BTreeSet::new(), BLOCK_SIZE)?.num_strings);
+        assert_eq!(0, DictSectPFC::compress(&BTreeSet::new(), BLOCK_SIZE).num_strings);
         Ok(())
     }
 }
