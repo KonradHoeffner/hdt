@@ -354,40 +354,30 @@ impl DictSectPFC {
 
     /// Compress pre-sorted, unique terms into a PFC section.
     ///
-    /// The caller must guarantee `terms` yields exactly `num_terms` items in ascending lexicographic order with no duplicates.
+    /// The caller must guarantee `terms` yields exactly `num_terms` items, which must not contain nul chars (U+0000), in ascending lexicographic order with no duplicates.
     /// This entry point lets callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
     /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of term indices resolved on the fly) — the major memory saver during NT ingest.
-    ///
-    /// nul characters (U+0000) in terms and all following characters will be ignored: entries are nul-terminated, so it would end the entry early.
     pub fn compress_iter<'a, I>(terms: I, num_terms: usize, block_size: usize) -> Self
     where
         I: IntoIterator<Item = &'a str>,
     {
-        use std::borrow::Cow;
         let mut compressed_terms = Vec::new();
         let mut offsets = Vec::new();
-        //let mut last_term: &[u8] = &[];
-        let mut last_term: Cow<[u8]> = Cow::Borrowed(b"");
+        let mut last_term: &[u8] = &[];
 
         for (i, term) in terms.into_iter().enumerate() {
             let term_bytes: &[u8] = term.as_bytes();
-            let bytes = if term_bytes.contains(&0) {
-                log::warn!("ignore unsupported nul characters in term");
-                Cow::Owned(term_bytes.iter().copied().filter(|&b| b != 0).collect())
-            } else {
-                Cow::Borrowed(term_bytes)
-            };
             if i % block_size == 0 {
                 offsets.push(compressed_terms.len());
-                compressed_terms.extend_from_slice(&bytes);
+                compressed_terms.extend_from_slice(term_bytes);
             } else {
-                let common_prefix_len = last_term.iter().zip(bytes.iter()).take_while(|(a, b)| a == b).count();
+                let common_prefix_len =
+                    last_term.iter().zip(term_bytes.iter()).take_while(|(a, b)| a == b).count();
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
-                compressed_terms.extend_from_slice(&bytes[common_prefix_len..]);
+                compressed_terms.extend_from_slice(&term_bytes[common_prefix_len..]);
             }
-
             compressed_terms.push(0); // nul terminator
-            last_term = bytes;
+            last_term = term_bytes;
         }
         if num_terms > 0 {
             offsets.push(compressed_terms.len());

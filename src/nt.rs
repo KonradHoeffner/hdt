@@ -11,6 +11,7 @@ use oxrdf::{Term, vocab::xsd};
 use oxttl::NTriplesParser;
 use rayon::prelude::*;
 use std::collections::BTreeSet;
+use std::io::{Error, ErrorKind::InvalidData};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -22,7 +23,7 @@ type Indices = Vec<Simd>;
 impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// Literal escapes are decoded, so the dictionary holds term values, not N-Triples syntax.
-    /// All nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are ignored as the dictionary cannot store it.
+    /// All triples including nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are dropped as the dictionary cannot store them.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
@@ -42,7 +43,7 @@ impl Hdt {
     /// literals including quotes, e.g. `"example"@en` or `"123"^^<http://www.w3.org/2001/XMLSchema#integer>`,
     /// and blank nodes as `_:b1`. This is the same format that [`Hdt::triples_all`] returns.
     /// The base IRI denotes the dataset in the header.
-    /// All nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are ignored as the dictionary cannot store it.
+    /// All triples including nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are dropped as the dictionary cannot store them.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
@@ -171,13 +172,24 @@ impl ParsedTerms {
 /// that role. u32 fits: HDT ids are at most `num_strings` ≤ u32::MAX.
 type IdMap = Vec<u32>;
 
+fn is_valid_triple(s: &str, p: &str, o: &str) -> bool {
+    if s.contains('\0') || p.contains('\0') || o.contains('\0') {
+        log::warn!("invalid triple ({s},{p},{o}) with unsupported NUL characters");
+        return false;
+    }
+    true
+}
+
 /// Intern in-memory string triples into a [`ParsedTerms`]. Single-threaded — the
 /// input is one sequential iterator, so there is no parser-level parallelism to
 /// exploit here (dictionary compression below still runs on four threads).
 fn intern_terms<S: AsRef<str>>(triples: impl IntoIterator<Item = [S; 3]>) -> ParsedTerms {
     let interner = Interner::new();
-    let triples: Vec<[u32; 3]> =
-        triples.into_iter().map(|t| t.map(|term| interner.get_or_intern(term.as_ref()))).collect();
+    let triples: Vec<[u32; 3]> = triples
+        .into_iter()
+        .filter(|t| is_valid_triple(t[0].as_ref(), t[1].as_ref(), t[2].as_ref()))
+        .map(|t| t.map(|term| interner.get_or_intern(term.as_ref())))
+        .collect();
     ParsedTerms::new(interner, triples)
 }
 
@@ -282,15 +294,18 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
     let triples: Vec<[u32; 3]> = readers
         .into_par_iter()
         .flat_map_iter(|reader| {
-            reader.map(|q| {
-                let q = q.map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Error reading N-Triples: {e}"))
-                })?;
-                let s = interner.get_or_intern(&dict_string(&q.subject.into()));
-                let p = interner.get_or_intern(q.predicate.as_str());
-                let o = interner.get_or_intern(&dict_string(&q.object));
-
-                Ok([s, p, o])
+            reader.filter_map(|q| {
+                let q = match q.map_err(|e| Error::new(InvalidData, format!("Error reading N-Triples: {e}"))) {
+                    Ok(q) => q,
+                    Err(e) => return Some(Err(e)),
+                };
+                let [ss, ps, os] =
+                    [&dict_string(&q.subject.into()), q.predicate.as_str(), &dict_string(&q.object)];
+                if !is_valid_triple(ss, ps, os) {
+                    return None;
+                }
+                let triple = [interner.get_or_intern(ss), interner.get_or_intern(ps), interner.get_or_intern(os)];
+                Some(Ok(triple))
             })
         })
         .collect::<Result<Vec<[u32; 3]>>>()?;
@@ -444,7 +459,6 @@ pub mod tests {
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::collections::BTreeSet;
     use std::io::{Cursor, Write};
     use std::path::Path;
     use std::sync::Arc;
@@ -455,30 +469,33 @@ pub mod tests {
     fn read_nt_escapes() -> Result<()> {
         init();
         // tests/resources/escapes.nt in dictionary string format
-        let want: BTreeSet<StringTriple> = [
+        let want: Vec<StringTriple> = [
             ["_:b0", "urn:x:bnode", "\"x\""],
             ["urn:x:s", "urn:x:backslash", "\"back\\slash\"^^<urn:x:dt>"],
             ["urn:x:s", "urn:x:cr", "\"carriage\rreturn\""],
             ["urn:x:s", "urn:x:iri", "urn:x:oé"],
             ["urn:x:s", "urn:x:newline", "\"line\nbreak\"@en"],
+            ["urn:x:s", "urn:x:nul1", "\"firsta\""],
+            ["urn:x:s", "urn:x:nul4", "\"aa\""],
+            ["urn:x:s", "urn:x:nul4", "\"ab\""],
             ["urn:x:s", "urn:x:plain", "\"nothing to escape\""],
             ["urn:x:s", "urn:x:quote", "\"say \"hi\"\""],
             ["urn:x:s", "urn:x:raw", "\"café 😀\""],
             ["urn:x:s", "urn:x:tab", "\"tab\there\""],
             ["urn:x:s", "urn:x:unicode", "\"café 😀\""],
-            ["urn:x:s", "urn:x:nul1", "\"firstsecond\""],
-            ["urn:x:s", "urn:x:nul2", "\"firstsecond\""],
-            ["urn:x:s", "urn:x:nul3", "\"firstsecond\""],
         ]
         .map(|t| t.map(Arc::from))
         .into();
 
         let from_nt = Hdt::read_nt("tests/resources/escapes.nt")?;
-        assert_eq!(from_nt.triples_all().collect::<BTreeSet<_>>(), want, "dictionary must hold decoded values");
+        assert_eq!(from_nt.triples_all().collect::<Vec<_>>(), want, "dictionary must hold decoded values");
 
         // the same graph given as decoded strings must build the same HDT
-        let from_triples = Hdt::from_triples(want.clone(), "urn:x:escapes")?;
-        assert_eq!(from_triples.triples_all().collect::<BTreeSet<_>>(), want);
+        let mut wantmore = want.clone();
+        wantmore.push(["urn:x:s", "urn:x:nul4", "\"a\u{0000}\"bc"].map(Arc::from));
+        let from_triples = Hdt::from_triples(wantmore, "urn:x:escapes")?;
+        assert_eq!(from_triples.triple_ids_with_pattern(Some("urn:x:s"), None, Some("\"aa\"")).count(), 1);
+        assert_eq!(from_triples.triples_all().collect::<Vec<_>>(), want);
         assert_eq!(from_triples.triples.bitmap_y.dict, from_nt.triples.bitmap_y.dict);
 
         // the reported symptom: out to N-Triples and back in must not change a value
@@ -487,11 +504,11 @@ pub mod tests {
         let mut writer = std::io::BufWriter::new(File::create(path)?);
         from_nt.write_nt(&mut writer)?;
         writer.flush()?;
-        assert_eq!(Hdt::read_nt(path)?.triples_all().collect::<BTreeSet<_>>(), want, "NT must escape once");
+        assert_eq!(Hdt::read_nt(path)?.triples_all().collect::<Vec<_>>(), want, "NT must escape once");
 
         let mut buf = Vec::<u8>::new();
         from_nt.write(&mut buf)?;
-        let again = Hdt::read(Cursor::new(buf))?.triples_all().collect::<BTreeSet<_>>();
+        let again = Hdt::read(Cursor::new(buf))?.triples_all().collect::<Vec<_>>();
         assert_eq!(again, want, "HDT must preserve values");
         Ok(())
     }
