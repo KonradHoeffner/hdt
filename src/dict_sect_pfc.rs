@@ -354,11 +354,9 @@ impl DictSectPFC {
 
     /// Compress pre-sorted, unique terms into a PFC section.
     ///
-    /// The caller must guarantee `terms` yields exactly `num_terms` items in
-    /// ascending lexicographic order with no duplicates. This entry point lets
-    /// callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
-    /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of
-    /// term indices resolved on the fly) — the major memory saver during NT ingest.
+    /// The caller must guarantee `terms` yields exactly `num_terms` items, which must not contain nul chars (U+0000), in ascending lexicographic order with no duplicates.
+    /// This entry point lets callers avoid materializing an intermediate `BTreeSet` or `Vec<&str>`
+    /// when they already have the sorted sequence (e.g. a sorted `Vec<u32>` of term indices resolved on the fly) — the major memory saver during NT ingest.
     pub fn compress_iter<'a, I>(terms: I, num_terms: usize, block_size: usize) -> Self
     where
         I: IntoIterator<Item = &'a str>,
@@ -377,8 +375,7 @@ impl DictSectPFC {
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
                 compressed_terms.extend_from_slice(&term_bytes[common_prefix_len..]);
             }
-
-            compressed_terms.push(0); // Null separator
+            compressed_terms.push(0); // nul terminator
             last_term = term_bytes;
         }
         if num_terms > 0 {

@@ -7,9 +7,11 @@ use crate::{DictSectPFC, FourSectDict, Hdt};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
 use log::{debug, error};
+use oxrdf::{Term, vocab::xsd};
 use oxttl::NTriplesParser;
 use rayon::prelude::*;
 use std::collections::BTreeSet;
+use std::io::{Error, ErrorKind::InvalidData};
 use std::path::Path;
 use std::sync::Arc;
 use std::thread;
@@ -20,6 +22,8 @@ type Indices = Vec<Simd>;
 
 impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
+    /// Literal escapes are decoded, so the dictionary holds term values, not N-Triples syntax.
+    /// All triples including nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are dropped as the dictionary cannot store them.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
@@ -39,6 +43,7 @@ impl Hdt {
     /// literals including quotes, e.g. `"example"@en` or `"123"^^<http://www.w3.org/2001/XMLSchema#integer>`,
     /// and blank nodes as `_:b1`. This is the same format that [`Hdt::triples_all`] returns.
     /// The base IRI denotes the dataset in the header.
+    /// All triples including nul chars (U+0000), whether written `\u0000`, `\U00000000` or as a raw byte, are dropped as the dictionary cannot store them.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
@@ -167,13 +172,24 @@ impl ParsedTerms {
 /// that role. u32 fits: HDT ids are at most `num_strings` ≤ u32::MAX.
 type IdMap = Vec<u32>;
 
+fn is_valid_triple(s: &str, p: &str, o: &str) -> bool {
+    if s.contains('\0') || p.contains('\0') || o.contains('\0') {
+        log::warn!("invalid triple ({s},{p},{o}) with unsupported NUL characters");
+        return false;
+    }
+    true
+}
+
 /// Intern in-memory string triples into a [`ParsedTerms`]. Single-threaded — the
 /// input is one sequential iterator, so there is no parser-level parallelism to
 /// exploit here (dictionary compression below still runs on four threads).
 fn intern_terms<S: AsRef<str>>(triples: impl IntoIterator<Item = [S; 3]>) -> ParsedTerms {
     let interner = Interner::new();
-    let triples: Vec<[u32; 3]> =
-        triples.into_iter().map(|t| t.map(|term| interner.get_or_intern(term.as_ref()))).collect();
+    let triples: Vec<[u32; 3]> = triples
+        .into_iter()
+        .filter(|t| is_valid_triple(t[0].as_ref(), t[1].as_ref(), t[2].as_ref()))
+        .map(|t| t.map(|term| interner.get_or_intern(term.as_ref())))
+        .collect();
     ParsedTerms::new(interner, triples)
 }
 
@@ -231,6 +247,42 @@ fn dict_triples(pool: ParsedTerms, block_size: usize) -> Result<(FourSectDict, V
     Ok((dict, encoded_triples))
 }
 
+/// Render a parsed term in HDT dictionary form: an IRI unbracketed, a blank
+/// node as `_:id`, a literal quoted with its language tag or datatype.
+///
+/// A literal's body is its *decoded* value. N-Triples escapes are syntax,
+/// not part of the value: `"tab\there"` in a file denotes a string holding
+/// one tab, and that tab is what belongs in the dictionary. Rendering the
+/// term with `to_string()` instead put the escape back in, so serializing
+/// the HDT escaped it a second time and a tab came back out as a backslash
+/// (#131).
+///
+/// The HDT format itself never pins this down, but decoded values are the
+/// de facto convention: hdt-cpp (through serd) and hdt-java (through Jena)
+/// both store them and escape only on serialization, as do
+/// [`Hdt::from_triples`] and the Sophia adapter in this crate.
+fn dict_string(term: &Term) -> String {
+    match term {
+        Term::NamedNode(n) => n.as_str().to_owned(),
+        Term::BlankNode(b) => format!("_:{}", b.as_str()),
+        Term::Literal(l) => {
+            let value = l.value();
+            match l.language() {
+                Some(language) => format!("\"{value}\"@{language}"),
+                // A simple literal is an xsd:string literal; both spell the
+                // same term and the bare form is canonical, which is what
+                // this path has always written.
+                None if l.datatype() == xsd::STRING => format!("\"{value}\""),
+                None => format!("\"{value}\"^^<{}>", l.datatype().as_str()),
+            }
+        }
+        // RDF-star quoted triples: oxrdf only builds these with its rdf-12
+        // feature, which is not enabled here.
+        #[allow(unreachable_patterns)]
+        other => other.to_string(),
+    }
+}
+
 /// Parse N-Triples in parallel and collect terms into the interning pool + role bitsets.
 fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
     let interner: Arc<Interner> = Arc::new(Interner::new());
@@ -242,29 +294,18 @@ fn parse_nt_terms(path: &Path) -> Result<ParsedTerms> {
     let triples: Vec<[u32; 3]> = readers
         .into_par_iter()
         .flat_map_iter(|reader| {
-            reader.map(|q| {
-                let clean = |s: &mut String| {
-                    let mut chars = s.chars();
-                    if chars.next() == Some('<') && chars.nth_back(0) == Some('>') {
-                        s.remove(0);
-                        s.pop();
-                    }
+            reader.filter_map(|q| {
+                let q = match q.map_err(|e| Error::new(InvalidData, format!("Error reading N-Triples: {e}"))) {
+                    Ok(q) => q,
+                    Err(e) => return Some(Err(e)),
                 };
-                let q = q.map_err(|e| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, format!("Error reading N-Triples: {e}"))
-                })?;
-                let mut subj_str = q.subject.to_string();
-                clean(&mut subj_str);
-                let mut pred_str = q.predicate.to_string();
-                clean(&mut pred_str);
-                let mut obj_str = q.object.to_string();
-                clean(&mut obj_str);
-
-                let s = interner.get_or_intern(&subj_str);
-                let p = interner.get_or_intern(&pred_str);
-                let o = interner.get_or_intern(&obj_str);
-
-                Ok([s, p, o])
+                let [ss, ps, os] =
+                    [&dict_string(&q.subject.into()), q.predicate.as_str(), &dict_string(&q.object)];
+                if !is_valid_triple(ss, ps, os) {
+                    return None;
+                }
+                let triple = [interner.get_or_intern(ss), interner.get_or_intern(ps), interner.get_or_intern(os)];
+                Some(Ok(triple))
             })
         })
         .collect::<Result<Vec<[u32; 3]>>>()?;
@@ -417,7 +458,60 @@ pub mod tests {
     use crate::tests::init;
     use color_eyre::Result;
     use fs_err::File;
+    use pretty_assertions::assert_eq;
+    use std::io::{Cursor, Write};
     use std::path::Path;
+    use std::sync::Arc;
+
+    /// Regression test for #131. Escapes are N-Triples syntax, not part of a term's value,
+    /// so the dictionary must hold the decoded value and each serialization must escape it exactly once.
+    #[test]
+    fn read_nt_escapes() -> Result<()> {
+        init();
+        // tests/resources/escapes.nt in dictionary string format
+        let want: Vec<StringTriple> = [
+            ["_:b0", "urn:x:bnode", "\"x\""],
+            ["urn:x:s", "urn:x:backslash", "\"back\\slash\"^^<urn:x:dt>"],
+            ["urn:x:s", "urn:x:cr", "\"carriage\rreturn\""],
+            ["urn:x:s", "urn:x:iri", "urn:x:oé"],
+            ["urn:x:s", "urn:x:newline", "\"line\nbreak\"@en"],
+            ["urn:x:s", "urn:x:nul1", "\"firsta\""],
+            ["urn:x:s", "urn:x:nul4", "\"aa\""],
+            ["urn:x:s", "urn:x:nul4", "\"ab\""],
+            ["urn:x:s", "urn:x:plain", "\"nothing to escape\""],
+            ["urn:x:s", "urn:x:quote", "\"say \"hi\"\""],
+            ["urn:x:s", "urn:x:raw", "\"café 😀\""],
+            ["urn:x:s", "urn:x:tab", "\"tab\there\""],
+            ["urn:x:s", "urn:x:unicode", "\"café 😀\""],
+        ]
+        .map(|t| t.map(Arc::from))
+        .into();
+
+        let from_nt = Hdt::read_nt("tests/resources/escapes.nt")?;
+        assert_eq!(from_nt.triples_all().collect::<Vec<_>>(), want, "dictionary must hold decoded values");
+
+        // the same graph given as decoded strings must build the same HDT
+        let mut wantmore = want.clone();
+        wantmore.push(["urn:x:s", "urn:x:nul4", "\"a\u{0000}\"bc"].map(Arc::from));
+        let from_triples = Hdt::from_triples(wantmore, "urn:x:escapes")?;
+        assert_eq!(from_triples.triple_ids_with_pattern(Some("urn:x:s"), None, Some("\"aa\"")).count(), 1);
+        assert_eq!(from_triples.triples_all().collect::<Vec<_>>(), want);
+        assert_eq!(from_triples.triples.bitmap_y.dict, from_nt.triples.bitmap_y.dict);
+
+        // the reported symptom: out to N-Triples and back in must not change a value
+        fs_err::create_dir_all("tests/resources/generated")?;
+        let path = Path::new("tests/resources/generated/escapes.nt");
+        let mut writer = std::io::BufWriter::new(File::create(path)?);
+        from_nt.write_nt(&mut writer)?;
+        writer.flush()?;
+        assert_eq!(Hdt::read_nt(path)?.triples_all().collect::<Vec<_>>(), want, "NT must escape once");
+
+        let mut buf = Vec::<u8>::new();
+        from_nt.write(&mut buf)?;
+        let again = Hdt::read(Cursor::new(buf))?.triples_all().collect::<Vec<_>>();
+        assert_eq!(again, want, "HDT must preserve values");
+        Ok(())
+    }
 
     #[test]
     fn read_nt() -> Result<()> {
@@ -443,7 +537,7 @@ pub mod tests {
         let hdt_empty = Hdt::read_nt(path)?;
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
-        Hdt::read(std::io::Cursor::new(buf))?;
+        Hdt::read(Cursor::new(buf))?;
         Ok(())
     }
 
@@ -461,11 +555,11 @@ pub mod tests {
         snikmeta_check(&from_triples)?;
         let mut buf = Vec::<u8>::new();
         from_triples.write(&mut buf)?;
-        snikmeta_check(&Hdt::read(std::io::Cursor::new(buf))?)?;
+        snikmeta_check(&Hdt::read(Cursor::new(buf))?)?;
         let hdt_empty = Hdt::from_triples(std::iter::empty::<[&str; 3]>(), "http://example.org/empty")?;
         let mut buf = Vec::<u8>::new();
         hdt_empty.write(&mut buf)?;
-        Hdt::read(std::io::Cursor::new(buf))?;
+        Hdt::read(Cursor::new(buf))?;
         Ok(())
     }
 }
