@@ -371,8 +371,7 @@ impl DictSectPFC {
                 offsets.push(compressed_terms.len());
                 compressed_terms.extend_from_slice(term_bytes);
             } else {
-                let common_prefix_len =
-                    last_term.iter().zip(term_bytes.iter()).take_while(|(a, b)| a == b).count();
+                let common_prefix_len = last_term.iter().zip(term_bytes).take_while(|(a, b)| a == b).count();
                 compressed_terms.extend_from_slice(&encode_vbyte(common_prefix_len));
                 compressed_terms.extend_from_slice(&term_bytes[common_prefix_len..]);
             }
