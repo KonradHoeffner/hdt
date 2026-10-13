@@ -110,6 +110,9 @@ impl Sequence {
     /// Get the integer at the given index, counting from 0.
     /// Panics if the index is out of bounds.
     pub fn get(&self, index: usize) -> usize {
+        if self.bits_per_entry == 0 {
+            return 0;
+        }
         let scaled_index = index * self.bits_per_entry;
         let block_index = scaled_index / USIZE_BITS;
         let bit_index = scaled_index % USIZE_BITS;

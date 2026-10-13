@@ -47,8 +47,9 @@ impl Hdt {
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
-    /// let triples = [["http://example.org/subject", "http://example.org/predicate", "\"object\"@en"]];
+    /// let triples = [["http://ex.org/s", "http://ex.org/p", "http://ex.org/o"]];
     /// let hdt = hdt::Hdt::from_triples(triples, "http://example.org/mydataset").unwrap();
+    /// assert_eq!(hdt.triples_with_pattern(None, None, Some("http://ex.org/o")).count(), 1);
     /// ```
     pub fn from_triples<S: AsRef<str>>(triples: impl IntoIterator<Item = [S; 3]>, base_iri: &str) -> Result<Self> {
         Self::from_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None)
