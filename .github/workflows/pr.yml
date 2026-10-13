@@ -1,6 +1,6 @@
 name: PR Metrics
 on:
-  pull_request:
+  pull_request_target:
   workflow_dispatch:
 
 jobs:
@@ -8,11 +8,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+      issues: write
 
     steps:
       - name: Install cloc
         run: |
-          curl -sL https://github.com/AlDanial/cloc/releases/download/2.10/cloc-2.10.pl -o cloc
+          curl -sL https://raw.githubusercontent.com/AlDanial/cloc/master/cloc -o cloc
           chmod +x cloc
           sudo mv cloc /usr/local/bin/
 
