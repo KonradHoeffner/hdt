@@ -174,6 +174,9 @@ If you cite the repository and mention names (which you don't have to), please d
 Höffner, Konrad, and Tim Baccaert. "hdt-rs: A Rust library for the Header Dictionary Triples binary RDF compression format." *Journal of Open Source Software*, vol. 8, no. 84, 2023, p. 5114, https://doi.org/10.21105/joss.05114.
 
 ### Contribute
-We are happy to receive pull requests.
-Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the stable and nightly toolchain both with and without the "sophia" feature active.
+We are happy to receive pull requests, especially those that simplify or shorten existing code, improve error handling or optimize performance.
+To keep the library lightweight, new features must have a real-world use case and clearly outweigh their maintenance burden.
+
+Please use `cargo fmt` before committing, make sure that `cargo test` succeeds and that the code compiles on the stable and nightly toolchain both with and without affected feature active.
 `cargo clippy` should not report any warnings.
+Performance related PRs should include replicable measurements, for example using the integrated benchmarks.
