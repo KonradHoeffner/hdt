@@ -46,7 +46,7 @@ jobs:
           EOF
 
       - name: Post Sticky Comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         if: github.event.pull_request
         with:
           path: loc.md
