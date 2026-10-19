@@ -27,23 +27,22 @@ jobs:
 
       - name: Checkout Head
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          allow-unsafe-pr-checkout: true
 
       - name: Measure Head & Format
         run: |
-          read B_F B_B B_C B_L <<< "$BASE"
-          read A_F A_B A_C A_L <<< $(cloc . --include-lang=Rust --json | jq -r '.SUM | "\(.nFiles) \(.blank) \(.comment) \(.code)"')
-
-          D_L=$(( A_L - B_L ))
-          SIGN=$([ $D_L -gt 0 ] && echo "+" || echo "")
-
-          cat <<EOF > loc.md
-          ### 📊 Code Metrics (Rust)
-          | State | Files | Blank | Comment | Code |
-          |---|---|---|---|---|
-          | **Before** | $B_F | $B_B | $B_C | $B_L |
-          | **After** | $A_F | $A_B | $A_C | $A_L |
-          | **Diff** | | | | **$SIGN$D_L** |
-          EOF
+          HEAD=$(cloc . --include-lang=Rust --json | jq -r '.SUM | "\(.nFiles) \(.blank) \(.comment) \(.code)"')
+          awk -v b="$BASE" -v a="$HEAD" 'BEGIN {
+            split(b, B); split(a, A);
+            print "### 📊 Code Metrics (Rust)\n| State | Files | Blank | Comment | Code |\n|---|---|---|---|---|\n| **Before** | "B[1]" | "B[2]" | "B[3]" | "B[4]" |\n| **After** | "A[1]" | "A[2]" | "A[3]" | "A[4]" |"
+            printf "| **Diff** |"
+            for(i=1;i<=4;i++) printf " **%s%d** |", (A[i]>B[i]?"+":""), A[i]-B[i]
+            printf "\n| **%% Diff** |"
+            for(i=1;i<=4;i++) printf " **%s%.1f%%** |", (A[i]>B[i]?"+":""), B[i]?((A[i]-B[i])/B[i]*100):0
+          }' > loc.md
 
       - name: Post Sticky Comment
         uses: marocchino/sticky-pull-request-comment@v3
