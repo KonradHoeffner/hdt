@@ -434,7 +434,7 @@ impl TriplesBitmapSource {
         let mut last_y = 0;
         let mut last_z = 0;
 
-        for (i, &[x, y, z]) in triples.iter().enumerate() {
+        for (i, [x, y, z]) in triples.into_iter().enumerate() {
             assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
 
             if i == 0 {
@@ -456,18 +456,12 @@ impl TriplesBitmapSource {
             array_z.push(z);
             [last_x, last_y, last_z] = [x, y, z];
         }
-        // The encoded triples have been fully read into the y/z arrays and bitmaps;
-        // free them (~24 B × num_triples) before the sequences are built, and before the op-index peak of the queryable path.
-        drop(triples);
         y_bitmap.push(true);
         z_bitmap.push(true);
         let bitmap_y = Bitmap::from(y_bitmap);
         let bitmap_z = Bitmap::from(z_bitmap);
-        let sequence_y = Sequence::new(&array_y);
-        drop(array_y);
-        let sequence_z = Sequence::new(&array_z);
-        // The plain usize arrays are now redundant with the bit-packed sequences; free them (~8 B × len each) before returning.
-        drop(array_z);
+        let sequence_y = Sequence::new(array_y);
+        let sequence_z = Sequence::new(array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Self { order: Order::SPO, bitmap_y, sequence_y, adjlist_z }
     }

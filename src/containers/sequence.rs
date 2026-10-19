@@ -282,7 +282,9 @@ impl Sequence {
 
     // could also determine bits per entry using max of numbers but that would take time
     // pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
-    pub fn new(numbers: &[usize]) -> Sequence {
+    /// Pack borrowed or owned integers, releasing owned input on return.
+    pub fn new(numbers: impl AsRef<[usize]>) -> Sequence {
+        let numbers = numbers.as_ref();
         let entries = numbers.len();
         if entries == 0 {
             return Sequence { entries, bits_per_entry: 0, data: vec![] };
@@ -439,7 +441,7 @@ mod tests {
         assert_eq!(cursor.position(), buf.len() as u64);
         // new and pack_bits
         let s3 = Sequence::new(&numbers);
-        //let s3 = Sequence::new(&numbers, 4);
+        assert_eq!(s3, Sequence::new(numbers.clone()));
         let mut buf3 = Vec::<u8>::new();
         s3.write(&mut buf3)?;
         //assert_eq!(s, s3);
