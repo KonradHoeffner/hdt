@@ -18,7 +18,7 @@ jobs:
           sudo mv cloc /usr/local/bin/
 
       - name: Checkout Base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.base_ref || github.event.repository.default_branch }}
 
@@ -26,7 +26,7 @@ jobs:
         run: echo "BASE=$(cloc . --include-lang=Rust --json | jq -r '.SUM | "\(.nFiles) \(.blank) \(.comment) \(.code)"')" >> $GITHUB_ENV
 
       - name: Checkout Head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Measure Head & Format
         run: |
