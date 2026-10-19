@@ -56,48 +56,23 @@ impl Hdt {
         Self::from_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None)
     }
 
-    /// Convert triples to an HDT file, writing them straight to `dest`
-    /// without building the query indexes.
-    ///
-    /// Equivalent to [`Hdt::from_triples`] followed by [`Hdt::write`], but
-    /// it never constructs the `op_index` or the `wavelet_y` that a
-    /// queryable [`Hdt`] carries. Neither is part of the HDT file, so the
-    /// output is identical except for the `hdt:hdtSize` header statistic,
-    /// which reports the size of what was written rather than the size of
-    /// an in-memory `Hdt` including its indexes.
-    ///
-    /// Use this when converting; use [`Hdt::from_triples`] when the result
-    /// will be queried.
+    /// Convert an N-Triples file to HDT without building query indexes.
+    /// Equivalent to [`Hdt::read_nt`] followed by [`Hdt::write`], except
+    /// `hdt:hdtSize` excludes the query indexes, which are never written.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
-    /// let triples = [["http://example.org/s", "http://example.org/p", "\"o\"@en"]];
     /// let mut out = Vec::new();
-    /// hdt::Hdt::write_triples(triples, "http://example.org/mydataset", &mut out).unwrap();
+    /// hdt::Hdt::convert_nt("tests/resources/empty.nt", &mut out).unwrap();
     /// assert!(out.starts_with(b"$HDT"));
     /// ```
-    pub fn write_triples<S: AsRef<str>>(
-        triples: impl IntoIterator<Item = [S; 3]>, base_iri: &str, dest: &mut impl std::io::Write,
-    ) -> Result<()> {
-        Self::write_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None, dest)
-    }
-
-    /// Convert an N-Triples file to an HDT file without building the query
-    /// indexes. The file counterpart of [`Hdt::write_triples`]; see there
-    /// for what differs from [`Hdt::read_nt`] followed by [`Hdt::write`].
-    /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> Result<()> {
+        const BLOCK_SIZE: usize = 16;
+
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
         let original_size = std::fs::File::open(f)?.metadata()?.len();
         let pool = parse_nt_terms(f)?;
-        Self::write_parsed_terms(pool, &base, Some(original_size), dest)
-    }
-
-    fn write_parsed_terms(
-        pool: ParsedTerms, base: &Id, original_size: Option<u64>, dest: &mut impl std::io::Write,
-    ) -> Result<()> {
-        const BLOCK_SIZE: usize = 16;
 
         let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
@@ -106,7 +81,7 @@ impl Hdt {
         let triples = TriplesBitmapSource::from_triples(encoded_triples);
 
         let hdt_size = dict.size_in_bytes() + triples.size_in_bytes();
-        let header = build_header(&dict, base, BLOCK_SIZE, num_triples, original_size, hdt_size);
+        let header = build_header(&dict, &base, BLOCK_SIZE, num_triples, Some(original_size), hdt_size);
         debug!("HDT size {}, written without query indexes", ByteSize(hdt_size as u64));
 
         ControlInfo::global().write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
@@ -149,7 +124,7 @@ impl Hdt {
 ///
 /// `hdt_size` is what `hdt:hdtSize` reports. It is passed in rather than
 /// measured here because the write-only path
-/// ([`Hdt::write_triples`]) never materializes the query indexes that
+/// ([`Hdt::convert_nt`]) never materializes the query indexes that
 /// [`Hdt::size_in_bytes`] counts.
 fn build_header(
     dict: &FourSectDict, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>,
@@ -599,24 +574,27 @@ pub mod tests {
         (0..buf.len().saturating_sub(4)).filter(|&i| &buf[i..i + 4] == b"$HDT").collect()
     }
 
-    /// `write_triples` must produce the same HDT as `from_triples` + `write`.
+    /// `convert_nt` must produce the same HDT as `read_nt` + `write`.
     /// The query indexes it skips are not part of the file, so the only
     /// permitted difference is the `hdt:hdtSize` header statistic, which
     /// counts them in the full path.
     #[test]
-    fn write_triples_matches_from_triples_apart_from_the_size_statistic() -> Result<()> {
+    fn convert_nt_matches_read_nt_apart_from_the_size_statistic() -> Result<()> {
         init();
-        let base = "http://www.snik.eu/ontology/meta";
-        let triples: Vec<StringTriple> = snikmeta()?.triples_all().collect();
+        fs_err::create_dir_all("tests/resources/generated")?;
+        let path = Path::new("tests/resources/generated/convert.nt");
+        let original = snikmeta()?;
+        original.write_nt(&mut File::create(path)?)?;
+        let triples: Vec<StringTriple> = original.triples_all().collect();
 
         let mut full = Vec::new();
-        Hdt::from_triples(triples.clone(), base)?.write(&mut full)?;
+        Hdt::read_nt(path)?.write(&mut full)?;
         let mut lean = Vec::new();
-        Hdt::write_triples(triples.clone(), base, &mut lean)?;
+        Hdt::convert_nt(path, &mut lean)?;
 
         // Same graph.
         let from_lean: Vec<StringTriple> = Hdt::read(std::io::Cursor::new(lean.clone()))?.triples_all().collect();
-        assert_eq!(from_lean, triples, "write_triples lost or changed a triple");
+        assert_eq!(from_lean, triples, "convert_nt lost or changed a triple");
         snikmeta_check(&Hdt::read(std::io::Cursor::new(lean.clone()))?)?;
 
         // Dictionary and triples sections byte-identical.
