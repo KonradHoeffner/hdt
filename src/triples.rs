@@ -411,15 +411,11 @@ pub type Id = usize;
 //#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub type TripleId = [Id; 3];
 
-/// Everything [`TriplesBitmap::write`] serializes, and nothing that exists
-/// only to answer queries.
+/// Everything [`TriplesBitmap::write`] serializes, and nothing that exists only to answer queries.
 ///
 /// [`TriplesBitmap`] additionally carries an `op_index` and a `wavelet_y`.
-/// Neither reaches the HDT file: `op_index` is never written at all, and
-/// `wavelet_y` is used by `TriplesBitmap::write` only to regenerate the y
-/// sequence this type already holds. Building them is pure overhead for a
-/// conversion that writes an HDT and discards it, which is what
-/// `rdf2hdt`-style tools do.
+/// Neither reaches the HDT file: `op_index` is never written at all, and `wavelet_y` is used by `TriplesBitmap::write` only to regenerate the y sequence this type already holds.
+/// Building them is pure overhead for a conversion that writes an HDT and discards it, which is what `rdf2hdt`-style tools do.
 pub(crate) struct TriplesBitmapSource {
     order: Order,
     bitmap_y: Bitmap,
@@ -470,18 +466,13 @@ impl TriplesBitmapSource {
         // free them (~24 B × num_triples) before the sequences are built, and before the op-index peak of the queryable path.
         drop(triples);
         y_bitmap.push(true);
-        let n = y_bitmap.len();
-        // pad to the next multiple of 64 so our comparisons match
-        // TODO: can we just improve the comparisons instead?
-        y_bitmap.extend_with_zeros(n.div_ceil(64) * 64 - n);
         z_bitmap.push(true);
         let bitmap_y = Bitmap::from(y_bitmap);
         let bitmap_z = Bitmap::from(z_bitmap);
         let sequence_y = Sequence::new(&array_y);
-        let sequence_z = Sequence::new(&array_z);
-        // The plain usize arrays are now redundant with the bit-packed
-        // sequences; free them (~8 B × len each) before returning.
         drop(array_y);
+        let sequence_z = Sequence::new(&array_z);
+        // The plain usize arrays are now redundant with the bit-packed sequences; free them (~8 B × len each) before returning.
         drop(array_z);
         let adjlist_z = AdjList::new(sequence_z, bitmap_z);
         Self { order: Order::SPO, bitmap_y, sequence_y, adjlist_z }
@@ -493,10 +484,8 @@ impl TriplesBitmapSource {
     }
 
     #[cfg(feature = "nt")]
-    /// Write the triples section, byte for byte as [`TriplesBitmap::write`]
-    /// does. The y sequence goes out straight from `sequence_y`, where
-    /// `TriplesBitmap::write` has to rebuild an equivalent one by iterating
-    /// its wavelet matrix.
+    /// Write the triples section, byte for byte as [`TriplesBitmap::write`] does.
+    /// The y sequence goes out straight from `sequence_y`, where `TriplesBitmap::write` has to rebuild an equivalent one by iterating its wavelet matrix.
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
         ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
         self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;

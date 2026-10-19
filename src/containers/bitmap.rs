@@ -46,7 +46,8 @@ impl From<BitVector> for Bitmap {
 }
 
 impl From<BitVectorMut> for Bitmap {
-    fn from(bv: BitVectorMut) -> Self {
+    fn from(mut bv: BitVectorMut) -> Self {
+        bv.extend_with_zeros(bv.len().next_multiple_of(64) - bv.len());
         Bitmap { dict: <BitVectorMut as Into<BitVector>>::into(bv).into() }
     }
 }
