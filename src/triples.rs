@@ -350,14 +350,8 @@ impl TriplesBitmap {
     }
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
-        self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
-        Sequence::new(&y).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
-        //Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
-        self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
-        Ok(())
+        write_triples_section(&self.order, &self.bitmap_y, &Sequence::new(&y), &self.adjlist_z, write)
     }
 
     /// Transform the given IDs of the layers in triple section order to a triple ID.
@@ -487,12 +481,7 @@ impl TriplesBitmapSource {
     /// Write the triples section, byte for byte as [`TriplesBitmap::write`] does.
     /// The y sequence goes out straight from `sequence_y`, where `TriplesBitmap::write` has to rebuild an equivalent one by iterating its wavelet matrix.
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
-        self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
-        self.sequence_y.write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
-        self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
-        Ok(())
+        write_triples_section(&self.order, &self.bitmap_y, &self.sequence_y, &self.adjlist_z, write)
     }
 
     #[cfg(feature = "nt")]
@@ -500,6 +489,18 @@ impl TriplesBitmapSource {
     pub fn size_in_bytes(&self) -> usize {
         self.adjlist_z.size_in_bytes() + self.sequence_y.size_in_bytes() + self.bitmap_y.size_in_bytes()
     }
+}
+
+/// Shared on-disk layout for queryable and conversion-only triples.
+fn write_triples_section(
+    order: &Order, bitmap_y: &Bitmap, sequence_y: &Sequence, adjlist_z: &AdjList, write: &mut impl std::io::Write,
+) -> Result<()> {
+    ControlInfo::bitmap_triples(order.clone() as u32, adjlist_z.len() as u32).write(write)?;
+    bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
+    adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
+    sequence_y.write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+    adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
+    Ok(())
 }
 
 #[cfg(test)]
