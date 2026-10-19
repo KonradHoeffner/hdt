@@ -1,4 +1,6 @@
 use crate::Hdt;
+use crate::IdKind;
+use crate::triples::Id;
 use spareval::{InternalQuad, QueryEvaluationError, QueryEvaluator, QueryableDataset};
 use spargebra::SparqlParser;
 use spargebra::term::{BlankNode, NamedNode, Term};
@@ -42,13 +44,55 @@ fn term_to_hdt_bgp_str(term: Term) -> String {
     }
 }
 
+// TODO: save space using 32 bit
+type DictIds = [Id; 3];
+
+/// Internal term representation that can be either:
+/// - An ID-based term found in the HDT dictionary (optimized path)
+/// - A computed term not in the dictionary (fallback to Term)
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
+pub enum InternalTerm {
+    /// Term found in dictionary: [subject_id, predicate_id, object_id]
+    /// Non-zero values indicate valid IDs for that position
+    DictIds([Id; 3]),
+    /// Computed term not in dictionary (e.g., CONCAT results)
+    Computed(Term),
+}
+
+fn term_ids(hdt: &Hdt, id: Id, kind: IdKind) -> DictIds {
+    // is there a more efficient way than going around strings again?
+    //let s = hdt.dict.id_to_string(id, kind).expect("error with id_to_string");
+    // for testing, later optimize for each case preventing the extra roundtrip for the given component
+    //IdKind::KINDS.map(|kind| hdt.dict.string_to_id(&s, kind))
+    use IdKind::*;
+    // in the unlikely case of a join involving the same variable in predicate and another position this will fail
+    // TODO: map predicates to other IDs, as they are usually not that many this can be cached
+    match kind {
+        Subject => {
+            if id <= hdt.dict.shared.num_strings {
+                [id, 0, id]
+            } else {
+                [id, 0, 0]
+            }
+        }
+        Object => {
+            if id <= hdt.dict.shared.num_strings {
+                [id, 0, id]
+            } else {
+                [0, 0, id]
+            }
+        }
+        Predicate => [0, id, 0],
+    }
+}
+
 impl<'a> QueryableDataset<'a> for &'a Hdt {
-    type InternalTerm = String;
+    type InternalTerm = InternalTerm;
     type Error = Error;
 
     fn internal_quads_for_pattern(
-        &self, subject: Option<&String>, predicate: Option<&String>, object: Option<&String>,
-        graph_name: Option<Option<&String>>,
+        &self, subject: Option<&Self::InternalTerm>, predicate: Option<&Self::InternalTerm>,
+        object: Option<&Self::InternalTerm>, graph_name: Option<Option<&Self::InternalTerm>>,
     ) -> impl Iterator<Item = Result<InternalQuad<Self::InternalTerm>, Error>> + use<'a> {
         if let Some(Some(graph_name)) = graph_name {
             return vec![Err(Error::new(
@@ -57,22 +101,66 @@ impl<'a> QueryableDataset<'a> for &'a Hdt {
             ))]
             .into_iter();
         }
-        let [ps, pp, po] = [subject, predicate, object].map(|x| x.map(String::as_str));
+        // computed terms should never be used for pattern queries
+        let [subject, predicate, object]: [Option<&DictIds>; 3] = [subject, predicate, object].map(|x| {
+            x.map(|y| {
+                // we can't do this, it gets actually used
+                // let InternalTerm::DictIds(v) = y else { panic!("computed term used in pattern!") };
+                let InternalTerm::DictIds(v) = y else {
+                    return &[0usize, 0, 0];
+                };
+                v
+            })
+        });
+        // no results, one of the constants does not exist
+        if [subject, predicate, object].into_iter().any(|x| x == Some(&[0, 0, 0])) {
+            return vec![].into_iter();
+        }
+        let [ps, pp, po]: [Id; 3] = [subject, predicate, object]
+            .iter()
+            .enumerate()
+            .map(|(i, x)| x.map(|x| x[i] as usize))
+            .inspect(|&x| assert_ne!(x, Some(0), "Term ID invalid for that position!"))
+            // now 0 is OK because it means variable in the pattern
+            .map(|x| x.unwrap_or(0))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        /*self.triple_ids_with_id_pattern(ps,pp,po)
+        .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))*/
         // Query HDT for BGP by string values.
+        // can we avoid collecting to save memory?
         let v: Vec<_> = self
-            .triples_with_pattern(ps, pp, po)
-            .map(|at| at.map(|a| a.to_string()))
+            .triple_ids_with_id_pattern(ps, pp, po)
+            // todo: shorten with enumerate, map, ...
+            .map(|[s,p,o]| [term_ids(self,s,IdKind::Subject),term_ids(self,p,IdKind::Predicate),term_ids(self,o,IdKind::Object)])
+            .map(|x| x.map(InternalTerm::DictIds))
             .map(|[subject, predicate, object]| Ok(InternalQuad { subject, predicate, object, graph_name: None }))
             .collect();
         v.into_iter()
     }
 
-    fn internalize_term(&self, term: Term) -> Result<String, Error> {
-        Ok(term_to_hdt_bgp_str(term))
+    fn internalize_term(&self, term: Term) -> Result<Self::InternalTerm, Error> {
+        //let message = format!("term {term} not found in any dictionary section");
+        let s = term_to_hdt_bgp_str(term.clone());
+        let ids = IdKind::KINDS.map(|kind| self.dict.string_to_id(&s, kind));
+        if ids.iter().all(|x| *x == 0) {
+            return Ok(InternalTerm::Computed(term));
+        }
+        Ok(InternalTerm::DictIds(ids))
     }
 
-    fn externalize_term(&self, term: String) -> Result<Term, Error> {
-        hdt_bgp_str_to_term(&term)
+    fn externalize_term(&self, term: Self::InternalTerm) -> Result<Term, Error> {
+        match term {
+            InternalTerm::Computed(term) => Ok(term),
+            InternalTerm::DictIds(term) => {
+                let s = match term.into_iter().enumerate().find(|(_, id)| *id > 0) {
+                    Some((i, id)) => self.dict.id_to_string(id, IdKind::KINDS[i]).unwrap(),
+                    None => panic!("cannot externalize invalid term"), //None => "\"*$§not found§$*\"".to_owned(), // workaround to signify invalid term
+                };
+                hdt_bgp_str_to_term(&s)
+            }
+        }
     }
 }
 
