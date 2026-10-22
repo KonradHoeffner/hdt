@@ -12,7 +12,7 @@ use sophia::turtle::parser::{nt, turtle};
 use sophia::turtle::serializer::nt::NTriplesSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
 use sophia::{api::graph::Graph, api::prelude::TripleSerializer, api::prelude::TripleSource};
-use std::{ffi::OsStr, io::BufReader, io::BufWriter, path::PathBuf, time::Instant};
+use std::{ffi::OsStr, io::BufReader, io::BufWriter, io::Write, path::Path, path::PathBuf, time::Instant};
 //use std::io::{BufReader, stdin};
 
 /*enum Format {
@@ -55,6 +55,27 @@ enum Command {
         // rdf_output_path: Option<String>,
         output_path: PathBuf,
     },
+}
+
+/// Creates the output file on the first write, so a conversion that fails
+/// before writing anything leaves an existing output file untouched.
+struct CreateOnWrite<'a> {
+    path: &'a Path,
+    file: Option<BufWriter<File>>,
+}
+
+impl Write for CreateOnWrite<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let file = match &mut self.file {
+            Some(file) => file,
+            None => self.file.insert(BufWriter::new(File::create(self.path)?)),
+        };
+        file.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.as_mut().map_or(Ok(()), Write::flush)
+    }
 }
 
 fn main() -> Result<(), Report> {
@@ -112,7 +133,7 @@ fn main() -> Result<(), Report> {
             if extension(&input_path).as_deref() == Some("nt") && extension(&output_path).as_deref() == Some("hdt")
             {
                 // the file can be written without building the query indexes that a loaded Hdt needs
-                let mut writer = BufWriter::new(File::create(&output_path)?);
+                let mut writer = CreateOnWrite { path: &output_path, file: None };
                 Hdt::convert_nt(&input_path, &mut writer)
                     .with_context(|| format!("Error converting N-Triples file {input_path:?} to HDT"))?;
             } else {
