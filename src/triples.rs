@@ -238,62 +238,12 @@ impl TriplesBitmap {
     /// num_triples) can be freed as soon as the y/z arrays and bitmaps are
     /// built, instead of staying resident through the memory-heavy op-index
     /// construction in [`TriplesBitmap::new`].
+    ///
+    /// This also builds the query indexes. To convert N-Triples to an HDT
+    /// file that will not be queried, use `Hdt::convert_nt`, which never
+    /// builds them.
     pub fn from_triples(triples: Vec<TripleId>) -> Self {
-        let mut y_bitmap = BitVectorMut::new();
-        let mut z_bitmap = BitVectorMut::new();
-        // Size both arrays exactly instead of letting `push` grow them: RawVec doubles to the next power of two,
-        // so array_z would reserve 16.8M slots (134 MB) for 10.3M triples where 82 MB is needed, and every doubling briefly holds the old and new buffer at once.
-        // array_z takes one entry per triple; array_y one per distinct (subject, predicate) pair, counted below by a comparison-only pass over the already-sorted triples.
-        let num_y = usize::from(!triples.is_empty())
-            + triples.windows(2).filter(|w| w[0][0] != w[1][0] || w[0][1] != w[1][1]).count();
-        let mut array_y = Vec::with_capacity(num_y);
-        let mut array_z = Vec::with_capacity(triples.len());
-
-        let mut last_x = 0;
-        let mut last_y = 0;
-        let mut last_z = 0;
-
-        for (i, &[x, y, z]) in triples.iter().enumerate() {
-            assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
-
-            if i == 0 {
-                array_y.push(y);
-            } else if x != last_x {
-                assert!(x == last_x + 1, "the subjects must be correlative.");
-                y_bitmap.push(true);
-                array_y.push(y);
-                z_bitmap.push(true);
-            } else if y != last_y {
-                assert!(y > last_y, "the predicates must be in increasing order.");
-                y_bitmap.push(false);
-                array_y.push(y);
-                z_bitmap.push(true);
-            } else {
-                assert!(z > last_z, "the objects must be in increasing order");
-                z_bitmap.push(false);
-            }
-            array_z.push(z);
-            [last_x, last_y, last_z] = [x, y, z];
-        }
-        // The encoded triples have been fully read into the y/z arrays and bitmaps;
-        // free them (~24 B × num_triples) before the op-index build peak in TriplesBitmap::new rather than holding them until return.
-        drop(triples);
-        y_bitmap.push(true);
-        let n = y_bitmap.len();
-        // pad to the next multiple of 64 so our comparisons match
-        // TODO: can we just improve the comparisons instead?
-        y_bitmap.extend_with_zeros(n.div_ceil(64) * 64 - n);
-        z_bitmap.push(true);
-        let bitmap_y = Bitmap::from(y_bitmap);
-        let bitmap_z = Bitmap::from(z_bitmap);
-        let sequence_y = Sequence::new(&array_y);
-        let sequence_z = Sequence::new(&array_z);
-        // The plain usize arrays are now redundant with the bit-packed
-        // sequences; free them (~8 B × len each) before the op-index build.
-        drop(array_y);
-        drop(array_z);
-        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        TriplesBitmap::new(Order::SPO, &sequence_y, bitmap_y, adjlist_z)
+        TriplesBitmapSource::from_triples(triples).into_bitmap()
     }
 
     /// read the whole triple section including control information
@@ -400,14 +350,8 @@ impl TriplesBitmap {
     }
 
     pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        ControlInfo::bitmap_triples(self.order.clone() as u32, self.adjlist_z.len() as u32).write(write)?;
-        self.bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
-        self.adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
         let y = self.wavelet_y.iter().collect::<Vec<_>>();
-        Sequence::new(&y).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
-        //Sequence::new(&y, self.wavelet_y.alph_width()).write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
-        self.adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
-        Ok(())
+        write_triples_section(&self.order, &self.bitmap_y, &Sequence::new(&y), &self.adjlist_z, write)
     }
 
     /// Transform the given IDs of the layers in triple section order to a triple ID.
@@ -460,6 +404,98 @@ pub type Id = usize;
 /// When used as a pattern, 0 values in a position match all values.
 //#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub type TripleId = [Id; 3];
+
+/// Everything [`TriplesBitmap::write`] serializes, and nothing that exists only to answer queries.
+///
+/// [`TriplesBitmap`] additionally carries an `op_index` and a `wavelet_y`.
+/// Neither reaches the HDT file: `op_index` is never written at all, and `wavelet_y` is used by `TriplesBitmap::write` only to regenerate the y sequence this type already holds.
+/// Building them is pure overhead for a conversion that writes an HDT and discards it, which is what `rdf2hdt`-style tools do.
+pub(crate) struct TriplesBitmapSource {
+    order: Order,
+    bitmap_y: Bitmap,
+    sequence_y: Sequence,
+    adjlist_z: AdjList,
+}
+
+impl TriplesBitmapSource {
+    /// Build the serializable triples structures from sorted triple ids.
+    pub fn from_triples(triples: Vec<TripleId>) -> Self {
+        let mut y_bitmap = BitVectorMut::new();
+        let mut z_bitmap = BitVectorMut::new();
+        // Size both arrays exactly instead of letting `push` grow them: RawVec doubles to the next power of two,
+        // so array_z would reserve 16.8M slots (134 MB) for 10.3M triples where 82 MB is needed, and every doubling briefly holds the old and new buffer at once.
+        // array_z takes one entry per triple; array_y one per distinct (subject, predicate) pair, counted below by a comparison-only pass over the already-sorted triples.
+        let num_y = usize::from(!triples.is_empty())
+            + triples.windows(2).filter(|w| w[0][0] != w[1][0] || w[0][1] != w[1][1]).count();
+        let mut array_y = Vec::with_capacity(num_y);
+        let mut array_z = Vec::with_capacity(triples.len());
+
+        let mut last_x = 0;
+        let mut last_y = 0;
+        let mut last_z = 0;
+
+        for (i, [x, y, z]) in triples.into_iter().enumerate() {
+            assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
+
+            if i == 0 {
+                array_y.push(y);
+            } else if x != last_x {
+                assert!(x == last_x + 1, "the subjects must be correlative.");
+                y_bitmap.push(true);
+                array_y.push(y);
+                z_bitmap.push(true);
+            } else if y != last_y {
+                assert!(y > last_y, "the predicates must be in increasing order.");
+                y_bitmap.push(false);
+                array_y.push(y);
+                z_bitmap.push(true);
+            } else {
+                assert!(z > last_z, "the objects must be in increasing order");
+                z_bitmap.push(false);
+            }
+            array_z.push(z);
+            [last_x, last_y, last_z] = [x, y, z];
+        }
+        y_bitmap.push(true);
+        z_bitmap.push(true);
+        let bitmap_y = Bitmap::from(y_bitmap);
+        let bitmap_z = Bitmap::from(z_bitmap);
+        let sequence_y = Sequence::new(array_y);
+        let sequence_z = Sequence::new(array_z);
+        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
+        Self { order: Order::SPO, bitmap_y, sequence_y, adjlist_z }
+    }
+
+    /// Build the query indexes, producing a queryable [`TriplesBitmap`].
+    pub fn into_bitmap(self) -> TriplesBitmap {
+        TriplesBitmap::new(self.order, &self.sequence_y, self.bitmap_y, self.adjlist_z)
+    }
+
+    #[cfg(feature = "nt")]
+    /// Write the triples section, byte for byte as [`TriplesBitmap::write`] does.
+    /// The y sequence goes out straight from `sequence_y`, where `TriplesBitmap::write` has to rebuild an equivalent one by iterating its wavelet matrix.
+    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
+        write_triples_section(&self.order, &self.bitmap_y, &self.sequence_y, &self.adjlist_z, write)
+    }
+
+    #[cfg(feature = "nt")]
+    /// Size of the structures this serializes.
+    pub fn size_in_bytes(&self) -> usize {
+        self.adjlist_z.size_in_bytes() + self.sequence_y.size_in_bytes() + self.bitmap_y.size_in_bytes()
+    }
+}
+
+/// Shared on-disk layout for queryable and conversion-only triples.
+fn write_triples_section(
+    order: &Order, bitmap_y: &Bitmap, sequence_y: &Sequence, adjlist_z: &AdjList, write: &mut impl std::io::Write,
+) -> Result<()> {
+    ControlInfo::bitmap_triples(order.clone() as u32, adjlist_z.len() as u32).write(write)?;
+    bitmap_y.write(write).map_err(|e| Error::Bitmap(Level::Y, e))?;
+    adjlist_z.bitmap.write(write).map_err(|e| Error::Bitmap(Level::Z, e))?;
+    sequence_y.write(write).map_err(|e| Error::Sequence(Level::Y, e))?;
+    adjlist_z.sequence.write(write).map_err(|e| Error::Sequence(Level::Z, e))?;
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {

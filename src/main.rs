@@ -17,8 +17,8 @@ use sophia::turtle::parser::{nt, turtle};
 use sophia::turtle::serializer::nt::NTriplesSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
 use std::ffi::OsStr;
-use std::io::{BufReader, BufWriter};
-use std::path::PathBuf;
+use std::io::{BufReader, BufWriter, Write};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 //use std::io::{BufReader, stdin};
 
@@ -62,6 +62,27 @@ enum Command {
         // rdf_output_path: Option<String>,
         output_path: PathBuf,
     },
+}
+
+/// Creates the output file on the first write, so a conversion that fails
+/// before writing anything leaves an existing output file untouched.
+struct CreateOnWrite<'a> {
+    path: &'a Path,
+    file: Option<BufWriter<File>>,
+}
+
+impl Write for CreateOnWrite<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let file = match &mut self.file {
+            Some(file) => file,
+            None => self.file.insert(BufWriter::new(File::create(self.path)?)),
+        };
+        file.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.as_mut().map_or(Ok(()), Write::flush)
+    }
 }
 
 fn main() -> Result<(), Report> {
@@ -115,56 +136,64 @@ fn main() -> Result<(), Report> {
         }
         Command::Convert { input_path, output_path /* turtle*/ } => {
             let t = Instant::now();
-            let file = File::open(input_path.clone())
-                .with_context(|| format!("Error opening input HDT file {input_path:?}"))?;
-            let reader = BufReader::new(file);
+            let extension = |path: &PathBuf| path.extension().and_then(OsStr::to_str).map(str::to_owned);
+            if extension(&input_path).as_deref() == Some("nt") && extension(&output_path).as_deref() == Some("hdt")
+            {
+                // the file can be written without building the query indexes that a loaded Hdt needs
+                let mut writer = CreateOnWrite { path: &output_path, file: None };
+                Hdt::convert_nt(&input_path, &mut writer)
+                    .with_context(|| format!("Error converting N-Triples file {input_path:?} to HDT"))?;
+            } else {
+                let file = File::open(input_path.clone())
+                    .with_context(|| format!("Error opening input HDT file {input_path:?}"))?;
+                let reader = BufReader::new(file);
 
-            let hdt = match input_path.extension().and_then(OsStr::to_str) {
-                Some("hdt") => {
-                    Hdt::read(reader).with_context(|| format!("Error loading input HDT from {input_path:?}"))?
-                }
-                Some("nt") => Hdt::read_nt(&input_path)
-                    .with_context(|| format!("Error loading input N-Triples file from {input_path:?}"))?,
-                _ => {
-                    panic!(
-                        "Input file has unsupported or no extension, RDF format cannot be determined, aborting."
-                    );
-                }
-            };
-            // let count = hdt.triples.len();
-            /*if args.count {
-                println!("Parsing returned {} triples", count);
-                return Ok(());
-            }*/
-            let output_file = File::create(&output_path)?;
-            let mut writer = BufWriter::new(output_file);
-            match output_path.extension().and_then(OsStr::to_str) {
-                Some("ttl") => {
-                    let config = TurtleConfig::new().with_pretty(true);
-                    //.with_own_prefix_map(prefixes().clone());
-                    //TurtleSerializer::new_stringifier_with_config(config)
-                    TurtleSerializer::new_with_config(writer, config)
-                        .serialize_graph(&hdt)
-                        .wrap_err("error serializing graph as RDF Turtle")?;
-                    //.to_string()
-                }
-                Some("nt") => {
-                    // Default: export the complete graph as N-Triples.
-                    //NtSerializer::new_stringifier()
-                    NTriplesSerializer::new(writer)
-                        .serialize_graph(&hdt)
-                        .wrap_err("error serializing graph as N-Triples")?;
-                    //.to_string()
-                }
-                Some("hdt") => {
-                    hdt.write(&mut writer)?;
-                }
-                _ => {
-                    panic!(
-                        "Output file has no extension or one signifying an unsupported export format, aborting."
-                    );
-                }
-            };
+                let hdt = match input_path.extension().and_then(OsStr::to_str) {
+                    Some("hdt") => Hdt::read(reader)
+                        .with_context(|| format!("Error loading input HDT from {input_path:?}"))?,
+                    Some("nt") => Hdt::read_nt(&input_path)
+                        .with_context(|| format!("Error loading input N-Triples file from {input_path:?}"))?,
+                    _ => {
+                        panic!(
+                            "Input file has unsupported or no extension, RDF format cannot be determined, aborting."
+                        );
+                    }
+                };
+                // let count = hdt.triples.len();
+                /*if args.count {
+                    println!("Parsing returned {} triples", count);
+                    return Ok(());
+                }*/
+                let output_file = File::create(&output_path)?;
+                let mut writer = BufWriter::new(output_file);
+                match output_path.extension().and_then(OsStr::to_str) {
+                    Some("ttl") => {
+                        let config = TurtleConfig::new().with_pretty(true);
+                        //.with_own_prefix_map(prefixes().clone());
+                        //TurtleSerializer::new_stringifier_with_config(config)
+                        TurtleSerializer::new_with_config(writer, config)
+                            .serialize_graph(&hdt)
+                            .wrap_err("error serializing graph as RDF Turtle")?;
+                        //.to_string()
+                    }
+                    Some("nt") => {
+                        // Default: export the complete graph as N-Triples.
+                        //NtSerializer::new_stringifier()
+                        NTriplesSerializer::new(writer)
+                            .serialize_graph(&hdt)
+                            .wrap_err("error serializing graph as N-Triples")?;
+                        //.to_string()
+                    }
+                    Some("hdt") => {
+                        hdt.write(&mut writer)?;
+                    }
+                    _ => {
+                        panic!(
+                            "Output file has no extension or one signifying an unsupported export format, aborting."
+                        );
+                    }
+                };
+            }
             let in_size = ByteSize(metadata(&input_path)?.len());
             let out_size = ByteSize(metadata(&output_path)?.len());
             println!(
