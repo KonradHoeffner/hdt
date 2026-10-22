@@ -239,9 +239,9 @@ impl TriplesBitmap {
     /// built, instead of staying resident through the memory-heavy op-index
     /// construction in [`TriplesBitmap::new`].
     ///
-    /// This also builds the query indexes. To serialize an HDT that will
-    /// never be queried, use `TriplesBitmapSource::from_triples`, which
-    /// stops before they are built.
+    /// This also builds the query indexes. To convert N-Triples to an HDT
+    /// file that will not be queried, use `Hdt::convert_nt`, which never
+    /// builds them.
     pub fn from_triples(triples: Vec<TripleId>) -> Self {
         TriplesBitmapSource::from_triples(triples).into_bitmap()
     }

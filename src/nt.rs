@@ -21,6 +21,8 @@ pub type Result<T> = std::io::Result<T>;
 type Simd = [u64; 4];
 type Indices = Vec<Simd>;
 
+const BLOCK_SIZE: usize = 16;
+
 impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
     /// Literal escapes are decoded, so the dictionary holds term values, not N-Triples syntax.
@@ -67,8 +69,6 @@ impl Hdt {
     /// assert!(out.starts_with(b"$HDT"));
     /// ```
     pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> Result<()> {
-        const BLOCK_SIZE: usize = 16;
-
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
         let original_size = std::fs::File::open(f)?.metadata()?.len();
@@ -93,8 +93,6 @@ impl Hdt {
     }
 
     fn from_parsed_terms(pool: ParsedTerms, base: &Id, original_size: Option<u64>) -> Result<Self> {
-        const BLOCK_SIZE: usize = 16;
-
         let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
