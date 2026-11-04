@@ -55,6 +55,8 @@ impl TryFrom<u8> for SequenceType {
 pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
+    #[error("sequence memory allocation error")]
+    Oom(#[from] std::collections::TryReserveError),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
     InvalidCrc8Checksum(u8, u8),
     #[error("Invalid CRC32C checksum {0}, expected {1}")]
@@ -180,11 +182,13 @@ impl Sequence {
         // read all but the last entry, since the last one is byte aligned
         let total_bits = bits_per_entry * entries;
         let full_byte_amount = (total_bits.div_ceil(USIZE_BITS).saturating_sub(1)) * size_of::<usize>();
-        let mut full_words = vec![0_u8; full_byte_amount];
+        let mut full_words = Vec::new();
+        full_words.try_reserve_exact(full_byte_amount)?;
+        full_words.resize(full_byte_amount, 0);
         reader.read_exact(&mut full_words)?;
-        let mut data: Vec<usize> = Vec::with_capacity(full_byte_amount / size_of::<usize>() + 2);
+        let mut data = Vec::<usize>::new();
+        data.try_reserve_exact(full_byte_amount / size_of::<usize>() + 2)?;
         // read entry body
-
         // turn the raw bytes into usize values
         for word in full_words.as_chunks::<{ size_of::<usize>() }>().0 {
             data.push(usize::from_le_bytes(*word));

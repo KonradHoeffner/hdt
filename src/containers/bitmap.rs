@@ -127,10 +127,10 @@ impl Bitmap {
         let mut full_words = Vec::new();
         full_words.try_reserve_exact(full_byte_amount)?;
         full_words.resize(full_byte_amount, 0);
-        // div_ceil is unstable
-        let mut data = Vec::<u64>::new();
-        data.try_reserve_exact(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0))?;
         reader.read_exact(&mut full_words)?;
+        let mut data = Vec::<u64>::new();
+        // div_ceil is unstable
+        data.try_reserve_exact(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0))?;
 
         for word in full_words.as_chunks::<8>().0 {
             data.push(u64::from_le_bytes(*word));
