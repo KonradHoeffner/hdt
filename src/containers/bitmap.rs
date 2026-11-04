@@ -23,6 +23,8 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub enum Error {
     #[error("IO error")]
     Io(#[from] std::io::Error),
+    #[error("bitmap memory allocation error")]
+    Oom(#[from] std::collections::TryReserveError),
     #[error("Invalid CRC8-CCIT checksum {0}, expected {1}")]
     InvalidCrc8Checksum(u8, u8),
     #[error("Invalid CRC32C checksum {0}, expected {1}")]
@@ -122,9 +124,12 @@ impl Bitmap {
 
         // read all but the last word, last word is byte aligned
         let full_byte_amount = ((num_bits - 1) >> 6) * 8;
-        let mut full_words = vec![0_u8; full_byte_amount];
+        let mut full_words = Vec::new();
+        full_words.try_reserve_exact(full_byte_amount)?;
+        full_words.resize(full_byte_amount, 0);
         // div_ceil is unstable
-        let mut data: Vec<u64> = Vec::with_capacity(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0));
+        let mut data = Vec::<u64>::new();
+        data.try_reserve_exact(full_byte_amount / 8 + usize::from(full_byte_amount % 8 != 0))?;
         reader.read_exact(&mut full_words)?;
 
         for word in full_words.as_chunks::<8>().0 {
