@@ -1,8 +1,9 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
 use super::concurrent_interner::{Interner, Terms};
+use crate::containers::ControlInfo;
 use crate::containers::rdf::Id;
 use crate::header::Header;
-use crate::triples::{Id as HdtId, TripleId, TriplesBitmap};
+use crate::triples::{Id as HdtId, TripleId, TriplesBitmap, TriplesBitmapSource};
 use crate::{DictSectPFC, FourSectDict, Hdt};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
@@ -19,6 +20,8 @@ use std::thread;
 pub type Result<T> = std::io::Result<T>;
 type Simd = [u64; 4];
 type Indices = Vec<Simd>;
+
+const BLOCK_SIZE: usize = 16;
 
 impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
@@ -55,9 +58,41 @@ impl Hdt {
         Self::from_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None)
     }
 
-    fn from_parsed_terms(pool: ParsedTerms, base: &Id, original_size: Option<u64>) -> Result<Self> {
-        const BLOCK_SIZE: usize = 16;
+    /// Convert an N-Triples file to HDT without building query indexes.
+    /// Equivalent to [`Hdt::read_nt`] followed by [`Hdt::write`], except
+    /// `hdt:hdtSize` excludes the query indexes, which are never written.
+    /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
+    /// # Example
+    /// ```
+    /// let mut out = Vec::new();
+    /// hdt::Hdt::convert_nt("tests/resources/empty.nt", &mut out).unwrap();
+    /// assert!(out.starts_with(b"$HDT"));
+    /// ```
+    pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> Result<()> {
+        let f = f.as_ref();
+        let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
+        let original_size = std::fs::File::open(f)?.metadata()?.len();
+        let pool = parse_nt_terms(f)?;
 
+        let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
+        let num_triples = encoded_triples.len();
+        encoded_triples.par_sort_unstable();
+        // Moved in so the ids are freed once the sequences are built, before serializing.
+        let triples = TriplesBitmapSource::from_triples(encoded_triples);
+
+        let hdt_size = dict.size_in_bytes() + triples.size_in_bytes();
+        let header = build_header(&dict, &base, BLOCK_SIZE, num_triples, Some(original_size), hdt_size);
+        debug!("HDT size {}, written without query indexes", ByteSize(hdt_size as u64));
+
+        ControlInfo::global().write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
+        header.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
+        dict.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
+        triples.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
+        dest.flush()?;
+        Ok(())
+    }
+
+    fn from_parsed_terms(pool: ParsedTerms, base: &Id, original_size: Option<u64>) -> Result<Self> {
         let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
         let num_triples = encoded_triples.len();
         // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
@@ -78,6 +113,23 @@ impl Hdt {
     /// Populate HDT header fields.
     /// Some fields may be optional, populating same triples as those in C++ version for now.
     fn fill_header(&mut self, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>) {
+        let hdt_size = self.size_in_bytes();
+        self.header = build_header(&self.dict, base, block_size, num_triples, original_size, hdt_size);
+    }
+}
+
+/// Build the HDT header.
+///
+/// `hdt_size` is what `hdt:hdtSize` reports. It is passed in rather than
+/// measured here because the write-only path
+/// ([`Hdt::convert_nt`]) never materializes the query indexes that
+/// [`Hdt::size_in_bytes`] counts.
+fn build_header(
+    dict: &FourSectDict, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>,
+    hdt_size: usize,
+) -> Header {
+    let mut header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
+    {
         use crate::containers::rdf::Term::Literal as Lit;
         use crate::containers::rdf::{Literal, Term, Triple};
         use crate::vocab::*;
@@ -86,20 +138,19 @@ impl Hdt {
 
         macro_rules! literal {
             ($s:expr, $p:expr, $o:expr) => {
-                self.header.body.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
+                header.body.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
             };
         }
         macro_rules! insert_id {
             ($s:expr, $p:expr, $o:expr) => {
-                self.header.body.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
+                header.body.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
             };
         }
         literal!(base, RDF_TYPE, HDT_CONTAINER);
         literal!(base, RDF_TYPE, VOID_DATASET);
         literal!(base, VOID_TRIPLES, num_triples);
-        literal!(base, VOID_PROPERTIES, self.dict.predicates.num_strings);
-        let [d_s, d_o] =
-            [&self.dict.subjects, &self.dict.objects].map(|s| s.num_strings + self.dict.shared.num_strings);
+        literal!(base, VOID_PROPERTIES, dict.predicates.num_strings);
+        let [d_s, d_o] = [&dict.subjects, &dict.objects].map(|s| s.num_strings + dict.shared.num_strings);
         literal!(base, VOID_DISTINCT_SUBJECTS, d_s);
         literal!(base, VOID_DISTINCT_OBJECTS, d_o);
         // // TODO: Add more VOID Properties. E.g. void:classes
@@ -116,9 +167,9 @@ impl Hdt {
         insert_id!(format_id, HDT_DICTIONARY, dict_id);
         insert_id!(format_id, HDT_TRIPLES, triples_id);
         // DICTIONARY
-        literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
+        literal!(dict_id, HDT_DICT_SHARED_SO, dict.shared.num_strings);
         literal!(dict_id, HDT_DICT_MAPPING, "1");
-        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
+        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(dict.size_in_bytes() as u64));
         literal!(dict_id, HDT_DICT_BLOCK_SIZE, block_size);
         // TRIPLES
         literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
@@ -129,11 +180,12 @@ impl Hdt {
             literal!(stats_id, HDT_ORIGINAL_SIZE, size);
         }
         // a few bytes off because that literal itself is not counted
-        literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
+        literal!(stats_id, HDT_SIZE, ByteSize(hdt_size as u64));
         // exclude for now to skip dependency on chrono
         //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
         //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
     }
+    header
 }
 
 /// Output of [`parse_nt_terms`] (file path) and [`intern_terms`] (in-memory).
@@ -511,6 +563,49 @@ pub mod tests {
         from_nt.write(&mut buf)?;
         let again = Hdt::read(Cursor::new(buf))?.triples_all().collect::<Vec<_>>();
         assert_eq!(again, want, "HDT must preserve values");
+        Ok(())
+    }
+
+    /// Offsets of the four `$HDT` control blocks: global, header,
+    /// dictionary, triples.
+    fn control_block_offsets(buf: &[u8]) -> Vec<usize> {
+        (0..buf.len().saturating_sub(4)).filter(|&i| &buf[i..i + 4] == b"$HDT").collect()
+    }
+
+    /// `convert_nt` must produce the same HDT as `read_nt` + `write`.
+    /// The query indexes it skips are not part of the file, so the only
+    /// permitted difference is the `hdt:hdtSize` header statistic, which
+    /// counts them in the full path.
+    #[test]
+    fn convert_nt_matches_read_nt_apart_from_the_size_statistic() -> Result<()> {
+        init();
+        fs_err::create_dir_all("tests/resources/generated")?;
+        let path = Path::new("tests/resources/generated/convert.nt");
+        let original = snikmeta()?;
+        original.write_nt(&mut File::create(path)?)?;
+        let triples: Vec<StringTriple> = original.triples_all().collect();
+
+        let mut full = Vec::new();
+        Hdt::read_nt(path)?.write(&mut full)?;
+        let mut lean = Vec::new();
+        Hdt::convert_nt(path, &mut lean)?;
+
+        // Same graph.
+        let from_lean: Vec<StringTriple> = Hdt::read(std::io::Cursor::new(lean.clone()))?.triples_all().collect();
+        assert_eq!(from_lean, triples, "convert_nt lost or changed a triple");
+        snikmeta_check(&Hdt::read(std::io::Cursor::new(lean.clone()))?)?;
+
+        // Dictionary and triples sections byte-identical.
+        let (of, ol) = (control_block_offsets(&full), control_block_offsets(&lean));
+        assert!(of.len() >= 4 && ol.len() >= 4, "expected four control blocks");
+        assert_eq!(&full[of[2]..], &lean[ol[2]..], "dictionary and triples sections must be identical");
+
+        // The headers differ only in the hdtSize literal.
+        let head_of = |b: &[u8], o: &[usize]| String::from_utf8_lossy(&b[o[1]..o[2]]).to_string();
+        let (hf, hl) = (head_of(&full, &of), head_of(&lean, &ol));
+        let strip = |h: &str| h.lines().filter(|l| !l.contains("hdtSize")).collect::<Vec<_>>().join("\n");
+        assert_eq!(strip(&hf), strip(&hl), "headers differ beyond hdtSize");
+        assert!(hf.contains("hdtSize") && hl.contains("hdtSize"));
         Ok(())
     }
 
