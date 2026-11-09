@@ -94,7 +94,7 @@ python -m http.server 8000
 
 ## API Documentation
 
-See [docs.rs/latest/hdt](https://docs.rs/hdt) or generate for yourself with `cargo doc --no-deps` without disabling default features.
+See [docs.rs/latest/hdt](https://docs.rs/hdt) or generate for yourself with `cargo doc --no-deps`.
 
 ## Performance
 The performance of a query depends on the size of the graph, the type of triple pattern and the size of the result set.
