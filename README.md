@@ -83,6 +83,7 @@ It is gated behind the wasm32-unknown-unknown target and not a feature but is st
 We don't release the compiled artifacts to NPM yet (please open an issue if you need this or something else) so for now you need to build them yourself.
 Open [test-wasm.html](tests/resources/test-wasm.html) to test it and see the source code for how to load and query HDT with Wasm.
 Due to CORS browser restrictions you may have to run a local server e.g. on port 8000 and then open <http://localhost:8000/tests/resources/test-wasm.html>.
+This test page requires [persondata\_en\_10k.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en_10k.hdt.bz2) placed in `tests/resources`
 
 ```sh
 rustup target add wasm32-unknown-unknown

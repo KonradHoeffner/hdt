@@ -25,16 +25,16 @@ thiserror = "2"
 log = "0.4"
 mownstr = { version = "0.3", optional = true }
 bincode = { version = "2", optional = true, default-features = false, features = ["std", "serde"] }
-rayon = { version = "1.11.0", default-features = false }
+rayon = { version = "1.12.0", default-features = false }
 serde = { version = "1", optional = true, features = ["derive"] }
 spareval = { version = "0.2" , optional = true }
 spargebra = { version = "0.4", optional = true, default-features = false }
 eyre = { version = "0.6", optional = true }
 color-eyre = { version = "0.6", optional = true }
-clap = { version = "4.5", optional = true, features = ["derive"] }
-fs-err = { version = "3.1.0", optional = true }
+clap = { version = "4.6", optional = true, features = ["derive"] }
+fs-err = { version = "3.3.2", optional = true }
 bitset-core = { version = "0.1.1", optional = true }
-oxttl = { version = "0.2.1", optional = true }
+oxttl = { version = "0.2.5", optional = true }
 oxrdf = { version = "0.3", optional = true }
 hashbrown = { version = "0.17", optional = true }
 ahash = { version = "0.8", optional = true }
@@ -51,8 +51,11 @@ nt = ["dep:hashbrown","dep:ahash","dep:oxttl","dep:oxrdf","dep:bitset-core"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
+# manual feature override to compile the transitive dependency of qwt 0.4.0 with wasm
 getrandom_02 = { package="getrandom", version = "0.2", features = ["js"] }
-getrandom = { version = "0.3", features = ["wasm_js"] }
+# manual feature override to compile the transitive dependency of sophia 0.10 with wasm
+# the current wasm example doesn't use Sophia so if this breaks again we may just
+uuid = { version = "1", features = ["js"] }
 console_error_panic_hook = "0.1"
 serde = "1"
 serde_json = "1"
@@ -82,7 +85,7 @@ env_logger = { version = "0.11", default-features = false, features = ["auto-col
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
 gungraun = "0.20"
 color-eyre = "0.6"
-fs-err = "3.1.0"
+fs-err = "3.3.2"
 sparesults = "0.3"
 walkdir = "2.5.0"
 
