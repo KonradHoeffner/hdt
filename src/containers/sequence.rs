@@ -214,13 +214,11 @@ impl Sequence {
         reader.read_exact(&mut crc_code)?;
 
         let crc_code32 = u32::from_le_bytes(crc_code);
-        //let start = std::time::Instant::now();
         // validate entry body CRC32
         let crc32 = crc::Crc::<u32>::new(&crc::CRC_32_ISCSI);
         let mut digest = crc32.digest();
         digest.update(&history);
         let crc_calculated32 = digest.finalize();
-        //println!("Sequence of {} validated in {:?}", ByteSize(history.len() as u64), start.elapsed());
         if crc_calculated32 != crc_code32 {
             return Err(Error::InvalidCrc32Checksum(crc_calculated32, crc_code32));
         }
@@ -262,27 +260,6 @@ impl Sequence {
         dest_writer.flush()?;
         Ok(())
     }
-
-    /*
-        // this is the new one using sucds but we are back to the old manual code + pack_bits with qwt for now
-        /// Pack the given integers., which have to fit into the given number of bits.
-        // pub fn new(nums: &[usize], bits_per_entry: usize) -> Sequence {
-        pub fn new(nums: &[usize]) -> Sequence {
-            let entries = nums.len();
-            if entries == 0 {
-                return Sequence { entries, bits_per_entry: 0, data: vec![] };
-            }
-            let bits_per_entry = nums.iter().max().unwrap().bit_width() as usize; // nightly only
-            let data = Vec::<usize>::new();
-            panic!("manual bit packing not implemented yet");
-            //let mut cv = CompactVector::with_capacity(nums.len(), bits_per_entry).expect("value too large");
-            // let cv = CompactVector::from_slice(nums).unwrap();
-            // let bits_per_entry = cv.width();
-            // let data = cv.into_bit_vector().into_words();
-            Sequence { entries, bits_per_entry, data }
-        }
-    }
-    */
 
     // could also determine bits per entry using max of numbers but that would take time
     // pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {

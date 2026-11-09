@@ -369,14 +369,6 @@ impl TriplesBitmap {
         self.bin_search_y(property_id, self.find_y(subject_id), self.last_y(subject_id) + 1)
     }
 
-    /*
-        /// Get the predicate ID for the given z index position.
-    fn get_p(bitmap_z:  Bitmap, wavelet_y: WaveletMatrix, pos_z: usize) -> Id {
-                let pos_y = bitmap_z.dict.rank(pos_z, true);
-                wavelet_y.get(pos_y as usize) as Id
-    }
-    */
-
     fn read<R: BufRead>(reader: &mut R, triples_ci: &ControlInfo) -> Result<Self> {
         //let order: Order = Order::try_from(triples_ci.get("order").unwrap().parse::<u32>());
         let order: Order;

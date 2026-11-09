@@ -115,7 +115,6 @@ impl ControlInfo {
     // Helper function returning a ControlInfoReadErrorKind that is wrapped by Self::read.
     fn read_kind<R: BufRead>(reader: &mut R) -> core::result::Result<Self, ControlInfoReadErrorKind> {
         use ControlInfoReadErrorKind::*;
-        //use std::io::Error;
 
         // Keep track of what we are reading for computing the CRC afterwards.
         let crc = crc::Crc::<u16>::new(&crc::CRC_16_ARC);
