@@ -195,6 +195,17 @@ mod tests {
         Ok(graph)
     }
 
+    fn simple_term_to_string(t: SimpleTerm) -> String {
+        match t {
+            SimpleTerm::BlankNode(b) => b.to_string(),
+            SimpleTerm::Iri(i) => i.to_string(),
+            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
+            SimpleTerm::Triple(_t) => todo!(),
+            SimpleTerm::Variable(v) => v.to_string(),
+        }
+    }
+
     fn parse_manifest(path: &Path) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
         let g = load_manifest(path)?;
 
@@ -228,42 +239,18 @@ mod tests {
                     let data = g
                         .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("data")?), Any)
                         .next()
-                        .map(|t| {
-                            let obj = t.unwrap().o();
-                            match obj.as_simple() {
-                                SimpleTerm::BlankNode(b) => b.to_string(),
-                                SimpleTerm::Iri(i) => i.to_string(),
-                                SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                                SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
-                                SimpleTerm::Triple(_t) => todo!(),
-                                SimpleTerm::Variable(v) => v.to_string(),
-                            }
-                        });
+                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
 
                     // find qt:query
                     let query = g
                         .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("query")?), Any)
                         .next()
-                        .map(|t| match t.unwrap().o().as_simple() {
-                            SimpleTerm::BlankNode(b) => b.to_string(),
-                            SimpleTerm::Iri(i) => i.to_string(),
-                            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
-                            SimpleTerm::Triple(_t) => todo!(),
-                            SimpleTerm::Variable(v) => v.to_string(),
-                        });
+                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
                     // find mf:result
                     let result = g
                         .triples_matching(Some(&test.as_simple()), Some(&MF.get("result")?), Any)
                         .next()
-                        .map(|t| match t.unwrap().o().as_simple() {
-                            SimpleTerm::BlankNode(b) => b.to_string(),
-                            SimpleTerm::Iri(i) => i.to_string(),
-                            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-                            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
-                            SimpleTerm::Triple(_t) => todo!(),
-                            SimpleTerm::Variable(v) => v.to_string(),
-                        });
+                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
 
                     if let (Some(data), Some(query), Some(result)) = (data, query, result) {
                         cases.push(TestCase {
