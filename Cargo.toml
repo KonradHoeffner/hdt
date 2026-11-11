@@ -42,7 +42,7 @@ qwt = "0.4.0"
 
 
 [features]
-default = ["sophia"]
+default = []
 sophia = ["dep:sophia", "dep:mownstr"]
 cli = ["sophia", "nt", "dep:eyre", "dep:color-eyre", "dep:clap","dep:fs-err"]
 cache = ["dep:serde", "dep:bincode"]
@@ -63,10 +63,12 @@ serde_json = "1"
 [[bench]]
 name = "criterion"
 harness = false
+required-features = ["sophia"]
 
 [[bench]]
 name = "gungraun"
 harness = false
+required-features = ["sophia"]
 
 [lib]
 bench = false
@@ -91,4 +93,3 @@ walkdir = "2.5.0"
 
 [[example]]
 name = "write"
-required-features = ["sophia"]
