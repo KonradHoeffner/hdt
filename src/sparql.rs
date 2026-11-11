@@ -87,19 +87,8 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use color_eyre::Result;
-    use fs_err::{File, OpenOptions, create_dir_all};
-    use sophia::api::graph::Graph;
-    use sophia::api::ns::{Namespace, rdf};
-    use sophia::api::parser::TripleParser;
-    use sophia::api::prelude::{Any, Triple, TripleSerializer, TripleSource};
-    use sophia::api::term::{SimpleTerm, Term};
-    use sophia::inmem::graph::FastGraph;
-    use sophia::iri::resolve::BaseIriRef;
-    use sophia::turtle::parser::turtle::TurtleParser;
-    use sophia::turtle::serializer::nt::NTriplesSerializer;
-    use std::collections::HashMap;
-    use std::io::{BufReader, Write};
-    use std::path::{Path, PathBuf};
+    use fs_err::File;
+    use std::io::BufReader;
 
     #[test]
     fn select() -> Result<()> {
@@ -139,177 +128,164 @@ mod tests {
         Ok(())
     }
 
-    const MF: Namespace<&str> =
-        Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#");
-    const QT: Namespace<&str> =
-        Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-query#");
-
-    #[derive(Debug)]
-    struct TestCase {
-        data: PathBuf,
-        query: PathBuf,
-        _result: PathBuf,
-    }
-
-    fn find_ttl_files<P: AsRef<std::path::Path>>(dir: P) -> Vec<PathBuf> {
-        walkdir::WalkDir::new(dir)
-            .into_iter()
-            .filter_map(std::result::Result::ok)
-            .map(walkdir::DirEntry::into_path)
-            .filter(|e| e.extension().is_some_and(|ext| ext == "ttl"))
-            .collect()
-    }
-
-    fn convert_to_nt(source_rdf: &Path, dest_nt: &Path) -> Result<()> {
-        let rdf_file = File::open(source_rdf)?;
-        let reader = BufReader::new(rdf_file);
-        let nt_file = File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
-        let mut writer = std::io::BufWriter::new(nt_file);
-        let mut graph = sophia::inmem::graph::LightGraph::default();
-        let mut sophia_serializer = NTriplesSerializer::new(writer.by_ref());
-
-        if source_rdf.extension().is_some_and(|ext| ext == ".ttl") {
-            let base_iri_string =
-                format!("file://{}", std::path::Path::new(source_rdf).file_name().unwrap().to_str().unwrap())
-                    .into_boxed_str();
-            let ttl_parser = TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
-
-            ttl_parser.parse(reader).add_to_graph(&mut graph)?;
-        }
-        // TODO .rdf file format?
-
-        sophia_serializer.serialize_graph(&graph)?;
-        writer.flush()?;
-        Ok(())
-    }
-
-    fn load_manifest(path: &Path) -> Result<FastGraph, Box<dyn std::error::Error>> {
-        let file = BufReader::new(File::open(path)?);
-        let mut graph = sophia::inmem::graph::FastGraph::default();
-        let base_iri_string =
-            format!("file://{}/#", std::path::Path::new(path).parent().unwrap().to_str().unwrap())
-                .into_boxed_str();
-        let ttl_parser = TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
-
-        ttl_parser.parse(file).add_to_graph(&mut graph)?;
-        Ok(graph)
-    }
-
-    fn simple_term_to_string(t: SimpleTerm) -> String {
-        match t {
-            SimpleTerm::BlankNode(b) => b.to_string(),
-            SimpleTerm::Iri(i) => i.to_string(),
-            SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
-            SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
-            SimpleTerm::Triple(_t) => todo!(),
-            SimpleTerm::Variable(v) => v.to_string(),
-        }
-    }
-
-    fn parse_manifest(path: &Path) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
-        let g = load_manifest(path)?;
-
-        let mut cases = Vec::new();
-
-        // Find the manifest node
-        let p = MF.get("entries")?;
-        let manifest_nodes: Vec<_> = g.triples_matching(Any, Some(&p), Any).collect();
-        if manifest_nodes.is_empty() {
-            return Ok(cases);
-        }
-
-        // The object of mf:entries is the head of an RDF list
-        let list_head = manifest_nodes[0]?.o();
-
-        // Walk the RDF list
-        let mut current = list_head;
-        while !current.is_iri() || current.iri().unwrap() != rdf::nil.to_iriref() {
-            if let Some(test) = g
-                .triples_matching(Some(&current.as_simple()), [&rdf::first, &MF.get("QueryEvaluationTest")?], Any)
-                .next()
-                .map(|t| t.unwrap().o())
-            {
-                // find mf:action
-                if let Some(action_node) = g
-                    .triples_matching(Some(&test.as_simple()), Some(&MF.get("action")?), Any)
-                    .next()
-                    .map(|t| t.unwrap().o())
-                {
-                    // find qt:data
-                    let data = g
-                        .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("data")?), Any)
-                        .next()
-                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
-
-                    // find qt:query
-                    let query = g
-                        .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("query")?), Any)
-                        .next()
-                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
-                    // find mf:result
-                    let result = g
-                        .triples_matching(Some(&test.as_simple()), Some(&MF.get("result")?), Any)
-                        .next()
-                        .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
-
-                    if let (Some(data), Some(query), Some(result)) = (data, query, result) {
-                        cases.push(TestCase {
-                            data: PathBuf::from(data.replace("file://", "")),
-                            query: PathBuf::from(query.replace("file://", "")),
-                            _result: PathBuf::from(result.replace("file://", "")),
-                        });
-                    }
-                }
-            }
-
-            let s = current;
-            if let Some(next) =
-                g.triples_matching(Some(&s.as_simple()), Some(&rdf::rest), Any).next().map(|t| t.unwrap().o())
-            {
-                current = next;
-            } else {
-                break;
-            }
-        }
-
-        Ok(cases)
-    }
-
-    // fn parse_srx(path: &str, actual: spareval::QueryResults) -> Result<(), Box<dyn std::error::Error>> {
-    //     let file = File::open(path)?;
-    //     let reader = BufReader::new(file);
-    //     let parser = sparesults::QueryResultsParser::from_format(sparesults::QueryResultsFormat::Xml);
-    //     let res = parser.for_reader(reader)?;
-
-    //     match (res, actual) {
-    //         (spareval::QueryResults::Solutions(mut exp), spareval::QueryResults::Solutions(mut act)) => {
-    //             // Canonicalize order, because SPARQL results are a multiset
-    //             exp.sort();
-    //             act.sort();
-
-    //             if exp == act {
-    //                 println!("✅ Results match!");
-    //             } else {
-    //                 println!("❌ Results differ:\nExpected: {:?}\nActual: {:?}", exp, act);
-    //             }
-    //         }
-    //         (spareval::QueryResults::Boolean(exp), spareval::QueryResults::Boolean(act)) => {
-    //             assert_eq!(exp, act, "Boolean results differ!");
-    //         }
-    //         (spareval::QueryResults::Graph(exp), spareval::QueryResults::Graph(act)) => {
-    //             panic!("hdt does not support named graphs")
-    //         }
-    //         _ => {
-    //             panic!("Result kinds differ between actual and expected!");
-    //         }
-    //     }
-    //     Ok(())
-    // }
-
     #[test]
     #[cfg(feature = "sophia")]
     #[cfg(feature = "nt")]
     fn w3c_tests() -> Result<()> {
+        use sophia::api::graph::Graph;
+        use sophia::api::ns::{Namespace, rdf};
+        use sophia::api::parser::TripleParser;
+        use sophia::api::prelude::{Any, Triple, TripleSerializer, TripleSource};
+        use sophia::api::term::{SimpleTerm, Term};
+        use sophia::inmem::graph::FastGraph;
+        use sophia::iri::resolve::BaseIriRef;
+        use sophia::turtle::parser::turtle::TurtleParser;
+        use sophia::turtle::serializer::nt::NTriplesSerializer;
+        use std::path::{Path, PathBuf};
+
+        const MF: Namespace<&str> =
+            Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-manifest#");
+        const QT: Namespace<&str> =
+            Namespace::new_unchecked_const("http://www.w3.org/2001/sw/DataAccess/tests/test-query#");
+
+        #[derive(Debug)]
+        struct TestCase {
+            data: PathBuf,
+            query: PathBuf,
+            _result: PathBuf,
+        }
+
+        fn find_ttl_files<P: AsRef<std::path::Path>>(dir: P) -> Vec<PathBuf> {
+            walkdir::WalkDir::new(dir)
+                .into_iter()
+                .filter_map(std::result::Result::ok)
+                .map(walkdir::DirEntry::into_path)
+                .filter(|e| e.extension().is_some_and(|ext| ext == "ttl"))
+                .collect()
+        }
+
+        fn convert_to_nt(source_rdf: &Path, dest_nt: &Path) -> Result<()> {
+            let rdf_file = File::open(source_rdf)?;
+            let reader = BufReader::new(rdf_file);
+            let nt_file = File::options().read(true).write(true).create(true).truncate(true).open(dest_nt)?;
+            let mut writer = std::io::BufWriter::new(nt_file);
+            let mut graph = sophia::inmem::graph::LightGraph::default();
+            let mut sophia_serializer = NTriplesSerializer::new(writer.by_ref());
+
+            if source_rdf.extension().is_some_and(|ext| ext == ".ttl") {
+                let base_iri_string =
+                    format!("file://{}", std::path::Path::new(source_rdf).file_name().unwrap().to_str().unwrap())
+                        .into_boxed_str();
+                let ttl_parser =
+                    TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
+
+                ttl_parser.parse(reader).add_to_graph(&mut graph)?;
+            }
+            // TODO .rdf file format?
+
+            sophia_serializer.serialize_graph(&graph)?;
+            writer.flush()?;
+            Ok(())
+        }
+
+        fn load_manifest(path: &Path) -> Result<FastGraph, Box<dyn std::error::Error>> {
+            let file = BufReader::new(File::open(path)?);
+            let mut graph = sophia::inmem::graph::FastGraph::default();
+            let base_iri_string =
+                format!("file://{}/#", std::path::Path::new(path).parent().unwrap().to_str().unwrap())
+                    .into_boxed_str();
+            let ttl_parser = TurtleParser { base: Some(BaseIriRef::new(base_iri_string)?), ..Default::default() };
+
+            ttl_parser.parse(file).add_to_graph(&mut graph)?;
+            Ok(graph)
+        }
+
+        fn simple_term_to_string(t: SimpleTerm) -> String {
+            match t {
+                SimpleTerm::BlankNode(b) => b.to_string(),
+                SimpleTerm::Iri(i) => i.to_string(),
+                SimpleTerm::LiteralDatatype(a, _b) => a.to_string(),
+                SimpleTerm::LiteralLanguage(a, _b, _) => a.to_string(),
+                SimpleTerm::Triple(_t) => todo!(),
+                SimpleTerm::Variable(v) => v.to_string(),
+            }
+        }
+
+        fn parse_manifest(path: &Path) -> Result<Vec<TestCase>, Box<dyn std::error::Error>> {
+            let g = load_manifest(path)?;
+
+            let mut cases = Vec::new();
+
+            // Find the manifest node
+            let p = MF.get("entries")?;
+            let manifest_nodes: Vec<_> = g.triples_matching(Any, Some(&p), Any).collect();
+            if manifest_nodes.is_empty() {
+                return Ok(cases);
+            }
+
+            // The object of mf:entries is the head of an RDF list
+            let list_head = manifest_nodes[0]?.o();
+
+            // Walk the RDF list
+            let mut current = list_head;
+            while !current.is_iri() || current.iri().unwrap() != rdf::nil.to_iriref() {
+                if let Some(test) = g
+                    .triples_matching(
+                        Some(&current.as_simple()),
+                        [&rdf::first, &MF.get("QueryEvaluationTest")?],
+                        Any,
+                    )
+                    .next()
+                    .map(|t| t.unwrap().o())
+                {
+                    // find mf:action
+                    if let Some(action_node) = g
+                        .triples_matching(Some(&test.as_simple()), Some(&MF.get("action")?), Any)
+                        .next()
+                        .map(|t| t.unwrap().o())
+                    {
+                        // find qt:data
+                        let data = g
+                            .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("data")?), Any)
+                            .next()
+                            .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
+
+                        // find qt:query
+                        let query = g
+                            .triples_matching(Some(&action_node.as_simple()), Some(&QT.get("query")?), Any)
+                            .next()
+                            .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
+                        // find mf:result
+                        let result = g
+                            .triples_matching(Some(&test.as_simple()), Some(&MF.get("result")?), Any)
+                            .next()
+                            .map(|t| simple_term_to_string(t.unwrap().o().as_simple()));
+
+                        if let (Some(data), Some(query), Some(result)) = (data, query, result) {
+                            cases.push(TestCase {
+                                data: PathBuf::from(data.replace("file://", "")),
+                                query: PathBuf::from(query.replace("file://", "")),
+                                _result: PathBuf::from(result.replace("file://", "")),
+                            });
+                        }
+                    }
+                }
+
+                let s = current;
+                if let Some(next) =
+                    g.triples_matching(Some(&s.as_simple()), Some(&rdf::rest), Any).next().map(|t| t.unwrap().o())
+                {
+                    current = next;
+                } else {
+                    break;
+                }
+            }
+
+            Ok(cases)
+        }
+
+        use fs_err::{OpenOptions, create_dir_all};
+        use std::collections::HashMap;
         use std::io::{BufWriter, Write};
         let mut count = 0;
         let mut skipped = 0;
@@ -365,11 +341,6 @@ mod tests {
                     if case.data.extension().unwrap() != "ttl" {
                         continue;
                     }
-
-                    // changed recently // empty datasets are ignored, an HDT file with no triples is invalid
-                    /*if case.data.ends_with("empty.ttl") {
-                        continue;
-                    }*/
 
                     // println!("{folder}:  {:?}", case);
                     let hdt_name = format!(
