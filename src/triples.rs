@@ -409,50 +409,43 @@ pub(crate) struct TriplesBitmapSource {
 impl TriplesBitmapSource {
     /// Build the serializable triples structures from sorted triple ids.
     pub fn from_triples(triples: Vec<TripleId>) -> Self {
-        let mut y_bitmap = BitVectorMut::new();
-        let mut z_bitmap = BitVectorMut::new();
-        // Size both arrays exactly instead of letting `push` grow them: RawVec doubles to the next power of two,
-        // so array_z would reserve 16.8M slots (134 MB) for 10.3M triples where 82 MB is needed, and every doubling briefly holds the old and new buffer at once.
-        // array_z takes one entry per triple; array_y one per distinct (subject, predicate) pair, counted below by a comparison-only pass over the already-sorted triples.
-        let num_y = usize::from(!triples.is_empty())
-            + triples.windows(2).filter(|w| w[0][0] != w[1][0] || w[0][1] != w[1][1]).count();
+        // Size the arrays exactly, since growing by doubling over-reserves and briefly holds two buffers.
+        // array_y takes one entry per distinct (subject, predicate) pair, array_z one per triple.
+        let num_y =
+            usize::from(!triples.is_empty()) + triples.windows(2).filter(|w| w[0][..2] != w[1][..2]).count();
         let mut array_y = Vec::with_capacity(num_y);
         let mut array_z = Vec::with_capacity(triples.len());
-
-        let mut last_x = 0;
-        let mut last_y = 0;
-        let mut last_z = 0;
-
-        for (i, [x, y, z]) in triples.into_iter().enumerate() {
+        let (mut bitmap_y, mut bitmap_z) = (BitVectorMut::new(), BitVectorMut::new());
+        // IDs are never zero, so a zero subject in `last` means no triple has been seen yet.
+        let mut last = [0; 3];
+        for [x, y, z] in triples {
+            let [lx, ly, lz] = last;
             assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
-
-            if i == 0 {
-                array_y.push(y);
-            } else if x != last_x {
-                assert!(x == last_x + 1, "the subjects must be correlative.");
-                y_bitmap.push(true);
-                array_y.push(y);
-                z_bitmap.push(true);
-            } else if y != last_y {
-                assert!(y > last_y, "the predicates must be in increasing order.");
-                y_bitmap.push(false);
-                array_y.push(y);
-                z_bitmap.push(true);
+            if x != lx {
+                assert!(x == lx + 1, "the subjects must be correlative.");
+            } else if y != ly {
+                assert!(y > ly, "the predicates must be in increasing order.");
             } else {
-                assert!(z > last_z, "the objects must be in increasing order");
-                z_bitmap.push(false);
+                assert!(z > lz, "the objects must be in increasing order");
+            }
+            let new_y = x != lx || y != ly;
+            // Each bit records whether the previous entry ended its list.
+            if lx != 0 {
+                if new_y {
+                    bitmap_y.push(x != lx);
+                }
+                bitmap_z.push(new_y);
+            }
+            if new_y {
+                array_y.push(y);
             }
             array_z.push(z);
-            [last_x, last_y, last_z] = [x, y, z];
+            last = [x, y, z];
         }
-        y_bitmap.push(true);
-        z_bitmap.push(true);
-        let bitmap_y = Bitmap::from(y_bitmap);
-        let bitmap_z = Bitmap::from(z_bitmap);
-        let sequence_y = Sequence::new(array_y);
-        let sequence_z = Sequence::new(array_z);
-        let adjlist_z = AdjList::new(sequence_z, bitmap_z);
-        Self { order: Order::SPO, bitmap_y, sequence_y, adjlist_z }
+        bitmap_y.push(true);
+        bitmap_z.push(true);
+        let adjlist_z = AdjList::new(Sequence::new(array_z), Bitmap::from(bitmap_z));
+        Self { order: Order::SPO, bitmap_y: Bitmap::from(bitmap_y), sequence_y: Sequence::new(array_y), adjlist_z }
     }
 
     /// Build the query indexes, producing a queryable [`TriplesBitmap`].
