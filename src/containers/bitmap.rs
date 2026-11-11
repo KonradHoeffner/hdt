@@ -5,8 +5,7 @@ use qwt::mem_dbg::{MemSize, SizeFlags};
 use qwt::{AccessBin, BitVector, BitVectorMut, RankBin, SelectBin, bitvector::rs_narrow::RSNarrow};
 #[cfg(feature = "cache")]
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::io::BufRead;
+use std::{fmt, io::BufRead};
 
 /// Compact bitmap representation with rank and select support.
 #[derive(Clone)]

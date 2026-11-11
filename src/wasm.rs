@@ -1,5 +1,4 @@
-use crate::Hdt;
-use crate::IdKind;
+use crate::{Hdt, IdKind};
 use std::io::Cursor;
 use wasm_bindgen::prelude::*;
 

@@ -1,6 +1,5 @@
 //! Adjacency list containing an integer sequence and a bitmap with rank and select support.
-use crate::containers::{Bitmap, Sequence};
-use crate::triples::Id;
+use crate::{containers::Bitmap, containers::Sequence, triples::Id};
 use std::cmp::Ordering;
 
 /// Adjacency list including a compact integer sequence and a bitmap for efficient access of that sequence using rank and select queries.

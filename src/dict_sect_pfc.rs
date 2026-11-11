@@ -2,16 +2,11 @@
 /// Dictionary section with plain front coding.
 /// See <https://www.rdfhdt.org/hdt-binary-format/#DictionarySectionPlainFrontCoding>.
 use crate::containers::vbyte::{decode_vbyte_delta, encode_vbyte, read_vbyte};
-use crate::containers::{Sequence, sequence};
-use crate::triples::Id;
+use crate::{containers::Sequence, containers::sequence, triples::Id};
 use bytesize::ByteSize;
-use std::cmp::{Ordering, min};
-use std::collections::BTreeSet;
-use std::io::{BufRead, Write};
-use std::sync::Arc;
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use std::thread::{JoinHandle, spawn};
-use std::{fmt, str};
+use std::{cmp::Ordering, cmp::min, collections::BTreeSet, fmt, io::BufRead, io::Write, str, sync::Arc};
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -398,10 +393,7 @@ impl DictSectPFC {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ControlInfo;
-    use crate::hdt::tests::snikmeta;
-    use crate::header::Header;
-    use crate::tests::init;
+    use crate::{ControlInfo, hdt::tests::snikmeta, header::Header, tests::init};
     use fs_err::File;
     use pretty_assertions::assert_eq;
     use std::io::BufReader;

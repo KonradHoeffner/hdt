@@ -1,12 +1,10 @@
-use std::io;
-use std::io::BufRead;
+use std::io::{self, BufRead};
 
 const MAX_VBYTE_BYTES: usize = usize::BITS as usize / 7 + 1;
 
 /// little endian
 pub fn read_vbyte<R: BufRead>(reader: &mut R) -> io::Result<(usize, Vec<u8>)> {
-    use io::Error;
-    use io::ErrorKind::InvalidData;
+    use io::{Error, ErrorKind::InvalidData};
 
     let mut n: u128 = 0;
     let mut shift = 0;

@@ -1,7 +1,5 @@
-use io::ErrorKind::UnexpectedEof;
-use std::collections::BTreeMap;
-use std::io::{self, BufRead, Write};
-use std::str;
+use std::io::{BufRead, ErrorKind::UnexpectedEof, Write};
+use std::{collections::BTreeMap, str};
 
 pub type Result<T> = core::result::Result<T, Error>;
 

@@ -1,15 +1,10 @@
 // //! *This module is available only if HDT is built with the `"sophia"` feature, included by default.*
-use crate::four_sect_dict::IdKind;
-use crate::hdt::Hdt;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter};
+use crate::{four_sect_dict::IdKind, hdt::Hdt};
 use log::debug;
-use sophia::api::graph::Graph;
-use sophia::api::term::matcher::TermMatcher;
 use sophia::api::term::{BnodeId, IriRef, LanguageTag, Term};
-use std::convert::Infallible;
-use std::io::{self, Error, ErrorKind};
-use std::iter;
-use std::sync::Arc;
+use sophia::{api::graph::Graph, api::term::matcher::TermMatcher};
+use std::{convert::Infallible, io, io::Error, io::ErrorKind, iter, sync::Arc};
 
 mod term;
 pub use term::HdtTerm;
@@ -208,8 +203,7 @@ mod tests {
     use super::*;
     use crate::tests::init;
     use fs_err::File;
-    use sophia::api::prelude::Triple;
-    use sophia::api::term::matcher::Any;
+    use sophia::{api::prelude::Triple, api::term::matcher::Any};
 
     #[test]
     fn test_graph() -> color_eyre::Result<()> {

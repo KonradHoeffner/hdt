@@ -1,19 +1,11 @@
-use crate::containers::{ControlInfo, control_info};
 use crate::four_sect_dict::{self, IdKind};
-use crate::header::Header;
 use crate::triples::{Id, ObjectIter, PredicateIter, PredicateObjectIter, SubjectIter, TripleId, TriplesBitmap};
-use crate::{FourSectDict, header};
+use crate::{FourSectDict, containers::ControlInfo, containers::control_info, header, header::Header};
 use bytesize::ByteSize;
 use log::{debug, error};
 #[cfg(feature = "cache")]
-use std::fs::File;
-use std::io::{BufRead, Write};
-#[cfg(feature = "cache")]
-use std::io::{Seek, SeekFrom};
-use std::iter;
-#[cfg(feature = "cache")]
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::{fs::File, io::Seek, io::SeekFrom, path::Path, path::PathBuf};
+use std::{io::BufRead, io::Write, iter, sync::Arc};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -102,8 +94,7 @@ impl Hdt {
     /// Write as N-Triples
     #[cfg(feature = "sophia")]
     pub fn write_nt(&self, write: &mut impl Write) -> std::io::Result<()> {
-        use sophia::api::prelude::TripleSerializer;
-        use sophia::turtle::serializer::nt::NTriplesSerializer;
+        use sophia::{api::prelude::TripleSerializer, turtle::serializer::nt::NTriplesSerializer};
         NTriplesSerializer::new(write).serialize_graph(self).map_err(|e| std::io::Error::other(format!("{e}")))?;
         Ok(())
     }

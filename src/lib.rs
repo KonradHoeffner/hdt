@@ -115,9 +115,7 @@ pub mod vocab;
 pub mod wasm;
 
 pub use crate::hdt::Hdt;
-use containers::ControlInfo;
-use dict_sect_pfc::DictSectPFC;
-use four_sect_dict::FourSectDict;
+use crate::{containers::ControlInfo, dict_sect_pfc::DictSectPFC, four_sect_dict::FourSectDict};
 pub use four_sect_dict::IdKind;
 
 #[cfg(test)]

@@ -1,11 +1,8 @@
-use super::vbyte::encode_vbyte;
-use crate::containers::vbyte::read_vbyte;
+use super::vbyte::{encode_vbyte, read_vbyte};
 use bytesize::ByteSize;
 #[cfg(feature = "cache")]
 use serde::{self, Deserialize, Serialize};
-use std::fmt;
-use std::io::{BufRead, Write};
-use std::mem::size_of;
+use std::{fmt, io::BufRead, io::Write, mem::size_of};
 
 const USIZE_BITS: usize = usize::BITS as usize;
 

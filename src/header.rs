@@ -1,9 +1,6 @@
-use crate::containers::ControlInfo;
-use crate::containers::rdf::{Id, Literal, Term, Triple};
+use crate::containers::{ControlInfo, rdf::Id, rdf::Literal, rdf::Term, rdf::Triple};
 use ntriple::parser::triple_line;
-use std::collections::BTreeSet;
-use std::io::{BufRead, Write};
-use std::str;
+use std::{collections::BTreeSet, io::BufRead, io::Write, str};
 
 pub type Result<T> = core::result::Result<T, Error>;
 

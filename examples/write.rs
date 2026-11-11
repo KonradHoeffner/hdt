@@ -1,8 +1,7 @@
 use hdt::Hdt;
 use sophia::api::prelude::{Stringifier, TripleSerializer};
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
-use std::fs::File;
-use std::io::Write;
+use std::{fs::File, io::Write};
 
 fn main() -> color_eyre::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();

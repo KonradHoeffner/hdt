@@ -1,8 +1,6 @@
 //! I define [`HdtTerm`], an implementation of [`sophia::api::term::Term`].
-use sophia::api::MownStr;
-use sophia::api::ns::{rdf, xsd};
 use sophia::api::term::{BaseDirection, BnodeId, LanguageTag, Term, TermKind};
-use sophia::iri::IriRef;
+use sophia::{api::MownStr, api::ns::rdf, api::ns::xsd, iri::IriRef};
 use std::sync::{Arc, LazyLock};
 
 pub static XSD_STRING: LazyLock<IriRef<Arc<str>>> =

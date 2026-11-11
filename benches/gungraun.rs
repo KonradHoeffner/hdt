@@ -2,9 +2,7 @@ use color_eyre::eyre::WrapErr;
 use fs_err::File;
 use gungraun::{library_benchmark, library_benchmark_group, main};
 use hdt::Hdt;
-use sophia::api::graph::Graph;
-use sophia::api::term::matcher::Any;
-use sophia::api::term::{IriRef, SimpleTerm};
+use sophia::{api::graph::Graph, api::term::IriRef, api::term::SimpleTerm, api::term::matcher::Any};
 
 const TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 const PERSON: &str = "http://dbpedia.org/ontology/Person";
