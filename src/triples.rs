@@ -400,10 +400,10 @@ pub type TripleId = [Id; 3];
 /// Neither reaches the HDT file: `op_index` is never written at all, and `wavelet_y` is used by `TriplesBitmap::write` only to regenerate the y sequence this type already holds.
 /// Building them is pure overhead for a conversion that writes an HDT and discards it, which is what `rdf2hdt`-style tools do.
 pub(crate) struct TriplesBitmapSource {
-    order: Order,
-    bitmap_y: Bitmap,
-    sequence_y: Sequence,
-    adjlist_z: AdjList,
+    pub(crate) order: Order,
+    pub(crate) bitmap_y: Bitmap,
+    pub(crate) sequence_y: Sequence,
+    pub(crate) adjlist_z: AdjList,
 }
 
 impl TriplesBitmapSource {
@@ -459,23 +459,10 @@ impl TriplesBitmapSource {
     pub fn into_bitmap(self) -> TriplesBitmap {
         TriplesBitmap::new(self.order, &self.sequence_y, self.bitmap_y, self.adjlist_z)
     }
-
-    #[cfg(feature = "nt")]
-    /// Write the triples section, byte for byte as [`TriplesBitmap::write`] does.
-    /// The y sequence goes out straight from `sequence_y`, where `TriplesBitmap::write` has to rebuild an equivalent one by iterating its wavelet matrix.
-    pub fn write(&self, write: &mut impl std::io::Write) -> Result<()> {
-        write_triples_section(&self.order, &self.bitmap_y, &self.sequence_y, &self.adjlist_z, write)
-    }
-
-    #[cfg(feature = "nt")]
-    /// Size of the structures this serializes.
-    pub fn size_in_bytes(&self) -> usize {
-        self.adjlist_z.size_in_bytes() + self.sequence_y.size_in_bytes() + self.bitmap_y.size_in_bytes()
-    }
 }
 
 /// Shared on-disk layout for queryable and conversion-only triples.
-fn write_triples_section(
+pub(crate) fn write_triples_section(
     order: &Order, bitmap_y: &Bitmap, sequence_y: &Sequence, adjlist_z: &AdjList, write: &mut impl std::io::Write,
 ) -> Result<()> {
     ControlInfo::bitmap_triples(order.clone() as u32, adjlist_z.len() as u32).write(write)?;

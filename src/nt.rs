@@ -1,6 +1,6 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
 use super::concurrent_interner::{Interner, Terms};
-use crate::triples::{Id as HdtId, TripleId, TriplesBitmap, TriplesBitmapSource};
+use crate::triples::{Id as HdtId, TripleId, TriplesBitmap, TriplesBitmapSource, write_triples_section};
 use crate::{DictSectPFC, FourSectDict, Hdt, containers::ControlInfo, containers::rdf::Id, header::Header};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
@@ -108,6 +108,19 @@ impl Hdt {
     fn fill_header(&mut self, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>) {
         let hdt_size = self.size_in_bytes();
         self.header = build_header(&self.dict, base, block_size, num_triples, original_size, hdt_size);
+    }
+}
+
+impl TriplesBitmapSource {
+    /// Write the triples section, byte for byte as [`TriplesBitmap::write`] does.
+    /// The y sequence goes out straight from `sequence_y`, where `TriplesBitmap::write` has to rebuild an equivalent one by iterating its wavelet matrix.
+    fn write(&self, write: &mut impl std::io::Write) -> crate::triples::Result<()> {
+        write_triples_section(&self.order, &self.bitmap_y, &self.sequence_y, &self.adjlist_z, write)
+    }
+
+    /// Size of the structures this serializes.
+    fn size_in_bytes(&self) -> usize {
+        self.adjlist_z.size_in_bytes() + self.sequence_y.size_in_bytes() + self.bitmap_y.size_in_bytes()
     }
 }
 
