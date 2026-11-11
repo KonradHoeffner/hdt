@@ -94,57 +94,32 @@ impl FourSectDict {
     /// Get the string value of a given ID of a given type.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
     pub fn id_to_string(&self, id: Id, id_kind: IdKind) -> core::result::Result<String, ExtractError> {
-        use SectKind::*;
         let shared_size = self.shared.num_strings() as Id;
-        let d = id.saturating_sub(shared_size);
-        match id_kind {
-            IdKind::Subject => {
-                if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Shared })
-                } else {
-                    self.subjects.extract(d).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Subject })
-                }
-            }
-            IdKind::Predicate => {
-                self.predicates.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Predicate })
-            }
-            IdKind::Object => {
-                if id <= shared_size {
-                    self.shared.extract(id).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Shared })
-                } else {
-                    self.objects.extract(d).map_err(|e| ExtractError { e, id, id_kind, sect_kind: Object })
-                }
-            }
-        }
+        let (sect, sect_kind, sect_id) = match id_kind {
+            IdKind::Predicate => (&self.predicates, SectKind::Predicate, id),
+            IdKind::Subject | IdKind::Object if id <= shared_size => (&self.shared, SectKind::Shared, id),
+            IdKind::Subject => (&self.subjects, SectKind::Subject, id.saturating_sub(shared_size)),
+            IdKind::Object => (&self.objects, SectKind::Object, id.saturating_sub(shared_size)),
+        };
+        sect.extract(sect_id).map_err(|e| ExtractError { e, id, id_kind, sect_kind })
     }
 
     /// Get the ID for a given string or 0 if not found.
     /// String representation of URIs, literals and blank nodes is defined in <https://www.w3.org/Submission/2011/SUBM-HDT-20110330/#dictionaryEncoding>>..
     pub fn string_to_id(&self, s: &str, id_kind: IdKind) -> Id {
-        let shared_size = self.shared.num_strings();
-        match id_kind {
-            IdKind::Subject => {
-                let mut id = self.shared.string_to_id(s);
-                if id == 0 {
-                    id = self.subjects.string_to_id(s);
-                    if id > 0 {
-                        id += shared_size as Id;
-                    }
-                }
-                id
-            }
-            IdKind::Predicate => self.predicates.string_to_id(s),
-            IdKind::Object => {
-                let mut id = self.shared.string_to_id(s);
-                if id == 0 {
-                    id = self.objects.string_to_id(s);
-                    if id > 0 {
-                        id += shared_size as Id;
-                    }
-                }
-                id
+        let sect = match id_kind {
+            IdKind::Predicate => return self.predicates.string_to_id(s),
+            IdKind::Subject => &self.subjects,
+            IdKind::Object => &self.objects,
+        };
+        let mut id = self.shared.string_to_id(s);
+        if id == 0 {
+            id = sect.string_to_id(s);
+            if id > 0 {
+                id += self.shared.num_strings() as Id;
             }
         }
+        id
     }
 
     /// read the whole dictionary section including control information
