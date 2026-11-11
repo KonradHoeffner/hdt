@@ -400,43 +400,21 @@ fn build_dict_and_id_maps(
 
     // Compress the four sections concurrently. Each thread pulls its strings
     // straight from the term arena (no intermediate `Vec<&str>` or `BTreeSet`).
-    let shared_ref = &shared_keys;
-    let unique_subj_ref = &unique_subj_keys;
-    let pred_ref = &pred_keys;
-    let unique_obj_ref = &unique_obj_keys;
+    let sections = [
+        ("shared", &shared_keys),
+        ("unique subjects", &unique_subj_keys),
+        ("predicates", &pred_keys),
+        ("unique objects", &unique_obj_keys),
+    ];
     let (shared, subjects, predicates, objects) = thread::scope(|s| {
-        let h_shared = thread::Builder::new()
-            .name("shared".into())
-            .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(shared_ref.iter().map(|&k| terms.get(k)), shared_ref.len(), block_size)
-            })
-            .unwrap();
-        let h_subj = thread::Builder::new()
-            .name("unique subjects".into())
-            .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(
-                    unique_subj_ref.iter().map(|&k| terms.get(k)),
-                    unique_subj_ref.len(),
-                    block_size,
-                )
-            })
-            .unwrap();
-        let h_pred = thread::Builder::new()
-            .name("predicates".into())
-            .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(pred_ref.iter().map(|&k| terms.get(k)), pred_ref.len(), block_size)
-            })
-            .unwrap();
-        let h_obj = thread::Builder::new()
-            .name("unique objects".into())
-            .spawn_scoped(s, || {
-                DictSectPFC::compress_iter(
-                    unique_obj_ref.iter().map(|&k| terms.get(k)),
-                    unique_obj_ref.len(),
-                    block_size,
-                )
-            })
-            .unwrap();
+        let [h_shared, h_subj, h_pred, h_obj] = sections.map(|(name, keys)| {
+            thread::Builder::new()
+                .name(name.into())
+                .spawn_scoped(s, move || {
+                    DictSectPFC::compress_iter(keys.iter().map(|&k| terms.get(k)), keys.len(), block_size)
+                })
+                .unwrap()
+        });
         (h_shared.join().unwrap(), h_subj.join().unwrap(), h_pred.join().unwrap(), h_obj.join().unwrap())
     });
 
