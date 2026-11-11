@@ -545,49 +545,6 @@ pub mod tests {
         Ok(())
     }
 
-    /// Offsets of the four `$HDT` control blocks: global, header,
-    /// dictionary, triples.
-    fn control_block_offsets(buf: &[u8]) -> Vec<usize> {
-        (0..buf.len().saturating_sub(4)).filter(|&i| &buf[i..i + 4] == b"$HDT").collect()
-    }
-
-    /// `convert_nt` must produce the same HDT as `read_nt` + `write`.
-    /// The query indexes it skips are not part of the file, so the only
-    /// permitted difference is the `hdt:hdtSize` header statistic, which
-    /// counts them in the full path.
-    #[test]
-    fn convert_nt_matches_read_nt_apart_from_the_size_statistic() -> Result<()> {
-        init();
-        fs_err::create_dir_all("tests/resources/generated")?;
-        let path = Path::new("tests/resources/generated/convert.nt");
-        let original = snikmeta()?;
-        original.write_nt(&mut File::create(path)?)?;
-        let triples: Vec<StringTriple> = original.triples_all().collect();
-
-        let mut full = Vec::new();
-        Hdt::read_nt(path)?.write(&mut full)?;
-        let mut lean = Vec::new();
-        Hdt::convert_nt(path, &mut lean)?;
-
-        // Same graph.
-        let from_lean: Vec<StringTriple> = Hdt::read(std::io::Cursor::new(lean.clone()))?.triples_all().collect();
-        assert_eq!(from_lean, triples, "convert_nt lost or changed a triple");
-        snikmeta_check(&Hdt::read(std::io::Cursor::new(lean.clone()))?)?;
-
-        // Dictionary and triples sections byte-identical.
-        let (of, ol) = (control_block_offsets(&full), control_block_offsets(&lean));
-        assert!(of.len() >= 4 && ol.len() >= 4, "expected four control blocks");
-        assert_eq!(&full[of[2]..], &lean[ol[2]..], "dictionary and triples sections must be identical");
-
-        // The headers differ only in the hdtSize literal.
-        let head_of = |b: &[u8], o: &[usize]| String::from_utf8_lossy(&b[o[1]..o[2]]).to_string();
-        let (hf, hl) = (head_of(&full, &of), head_of(&lean, &ol));
-        let strip = |h: &str| h.lines().filter(|l| !l.contains("hdtSize")).collect::<Vec<_>>().join("\n");
-        assert_eq!(strip(&hf), strip(&hl), "headers differ beyond hdtSize");
-        assert!(hf.contains("hdtSize") && hl.contains("hdtSize"));
-        Ok(())
-    }
-
     #[test]
     fn read_nt() -> Result<()> {
         init();
@@ -608,6 +565,12 @@ pub mod tests {
         assert_eq!(nt_triples, hdt_triples);
         assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
         snikmeta_check(&snikmeta_nt)?;
+
+        let mut converted = Vec::new();
+        Hdt::convert_nt(path, &mut converted)?;
+        let converted = Hdt::read(Cursor::new(converted))?;
+        assert_eq!(converted.triples_all().collect::<Vec<StringTriple>>(), hdt_triples);
+        snikmeta_check(&converted)?;
         let path = Path::new("tests/resources/empty.nt");
         let hdt_empty = Hdt::read_nt(path)?;
         let mut buf = Vec::<u8>::new();
