@@ -120,21 +120,23 @@ Then go to <https://profiler.firefox.com/> and open `/tmp/test.perf`.
 ## Criterion benchmark
 
 ```sh
-$ cargo bench --bench criterion
+$ cargo bench --features sophia --bench criterion
 ```
 
+* requires the "sophia" feature as the benchmarks compare the Sophia, string and ID APIs
 * requires [persondata\_en.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en.hdt.bz2) placed in `tests/resources`
 * with the "nt" feature it also requires the file above converted to [persondata\_en.nt] in the same directory
 
 ## Gungraun benchmark
 
 ```sh
-cargo bench --bench gungraun
+cargo bench --features sophia --bench gungraun
 ```
 
+* requires the "sophia" feature as the benchmarks compare the Sophia and string APIs
 * requires [persondata\_en\_10k.hdt](https://github.com/KonradHoeffner/hdt/releases/download/benchmarkdata/persondata_en_10k.hdt.bz2) placed in `tests/resources`
 * requires [Valgrind](https://valgrind.org/) and [gungraun-runner](https://gungraun.github.io/gungraun/latest/html/installation/gungraun.html) to be installed
-* may require a conservative target CPU like `RUSTFLAGS="-C target-cpu=skylake" cargo bench --bench gungraun`
+* may require a conservative target CPU like `RUSTFLAGS="-C target-cpu=skylake" cargo bench --features sophia --bench gungraun`
 
 ## Comparative benchmark suite
 
