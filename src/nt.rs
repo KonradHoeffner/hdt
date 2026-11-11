@@ -52,8 +52,8 @@ impl Hdt {
     }
 
     /// Convert an N-Triples file to HDT without building query indexes.
-    /// Equivalent to [`Hdt::read_nt`] followed by [`Hdt::write`], except
-    /// `hdt:hdtSize` excludes the query indexes, which are never written.
+    /// Equivalent to [`Hdt::read_nt`] followed by [`Hdt::write`], except `hdt:hdtSize` excludes the query indexes,
+    /// which are never written.
     /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
     /// # Example
     /// ```
@@ -126,10 +126,8 @@ impl TriplesBitmapSource {
 
 /// Build the HDT header.
 ///
-/// `hdt_size` is what `hdt:hdtSize` reports. It is passed in rather than
-/// measured here because the write-only path
-/// ([`Hdt::convert_nt`]) never materializes the query indexes that
-/// [`Hdt::size_in_bytes`] counts.
+/// `hdt_size` is what `hdt:hdtSize` reports. It is passed in rather than measured here because the write-only path
+/// ([`Hdt::convert_nt`]) never materializes the query indexes that [`Hdt::size_in_bytes`] counts.
 fn build_header(
     dict: &FourSectDict, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>,
     hdt_size: usize,

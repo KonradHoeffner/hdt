@@ -57,8 +57,8 @@ enum Command {
     },
 }
 
-/// Creates the output file on the first write, so a conversion that fails
-/// before writing anything leaves an existing output file untouched.
+/// Creates the output file on the first write, so a conversion that fails before writing anything leaves an
+/// existing output file untouched.
 struct CreateOnWrite<'a> {
     path: &'a Path,
     file: Option<BufWriter<File>>,
