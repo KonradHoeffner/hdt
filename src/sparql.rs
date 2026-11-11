@@ -1,9 +1,7 @@
 use crate::Hdt;
 use spareval::{InternalQuad, QueryEvaluationError, QueryEvaluator, QueryableDataset};
-use spargebra::SparqlParser;
-use spargebra::term::{BlankNode, NamedNode, Term};
-use std::io::{Error, ErrorKind};
-use std::str::FromStr;
+use spargebra::{SparqlParser, term::BlankNode, term::NamedNode, term::Term};
+use std::{io::Error, io::ErrorKind, str::FromStr};
 
 /// Create the correct term for a given resource string.
 /// Slow, use the appropriate method if you know which type (Literal, URI, or blank node) the string has.
@@ -132,15 +130,11 @@ mod tests {
     #[cfg(feature = "sophia")]
     #[cfg(feature = "nt")]
     fn w3c_tests() -> Result<()> {
-        use sophia::api::graph::Graph;
         use sophia::api::ns::{Namespace, rdf};
-        use sophia::api::parser::TripleParser;
         use sophia::api::prelude::{Any, Triple, TripleSerializer, TripleSource};
-        use sophia::api::term::{SimpleTerm, Term};
-        use sophia::inmem::graph::FastGraph;
-        use sophia::iri::resolve::BaseIriRef;
-        use sophia::turtle::parser::turtle::TurtleParser;
-        use sophia::turtle::serializer::nt::NTriplesSerializer;
+        use sophia::{api::graph::Graph, api::parser::TripleParser, api::term::SimpleTerm, api::term::Term};
+        use sophia::{inmem::graph::FastGraph, iri::resolve::BaseIriRef};
+        use sophia::{turtle::parser::turtle::TurtleParser, turtle::serializer::nt::NTriplesSerializer};
         use std::path::{Path, PathBuf};
 
         const MF: Namespace<&str> =
@@ -285,8 +279,7 @@ mod tests {
         }
 
         use fs_err::{OpenOptions, create_dir_all};
-        use std::collections::HashMap;
-        use std::io::{BufWriter, Write};
+        use std::{collections::HashMap, io::BufWriter, io::Write};
         let mut count = 0;
         let mut skipped = 0;
         for sparql_test_version in ["sparql10", "sparql11", "sparql12"] {

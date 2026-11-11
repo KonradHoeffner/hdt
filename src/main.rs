@@ -2,24 +2,17 @@
 /// Under development, parameters may change.
 use bytesize::ByteSize;
 use clap::{Parser, Subcommand};
-use color_eyre::config::HookBuilder;
-use color_eyre::eyre::{Report, WrapErr};
+use color_eyre::{config::HookBuilder, eyre::Report, eyre::WrapErr};
 //use log::info;
 use fs_err::{File, metadata};
-use hdt::Hdt;
-use hdt::containers::ControlInfo;
-use hdt::header::Header;
-use sophia::api::graph::Graph;
-use sophia::api::prelude::{TripleSerializer, TripleSource};
+use hdt::{Hdt, containers::ControlInfo, header::Header};
 //use sophia::api::prelude::Stringifier;
 use sophia::inmem::graph::LightGraph;
 use sophia::turtle::parser::{nt, turtle};
 use sophia::turtle::serializer::nt::NTriplesSerializer;
 use sophia::turtle::serializer::turtle::{TurtleConfig, TurtleSerializer};
-use std::ffi::OsStr;
-use std::io::{BufReader, BufWriter};
-use std::path::PathBuf;
-use std::time::Instant;
+use sophia::{api::graph::Graph, api::prelude::TripleSerializer, api::prelude::TripleSource};
+use std::{ffi::OsStr, io::BufReader, io::BufWriter, path::PathBuf, time::Instant};
 //use std::io::{BufReader, stdin};
 
 /*enum Format {

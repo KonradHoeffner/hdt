@@ -2,12 +2,9 @@ use crate::ControlInfo;
 use crate::containers::{AdjList, Bitmap, Sequence, bitmap, control_info, sequence};
 use bytesize::ByteSize;
 use log::error;
-use qwt::QWT512;
-use qwt::mem_dbg::{MemSize, SizeFlags};
-use qwt::{AccessUnsigned, BitVector, BitVectorMut, bitvector::rs_narrow::RSNarrow};
-use std::cmp::Ordering;
-use std::fmt;
-use std::io::BufRead;
+use qwt::{AccessUnsigned, BitVector, BitVectorMut, QWT512, bitvector::rs_narrow::RSNarrow};
+use qwt::{mem_dbg::MemSize, mem_dbg::SizeFlags};
+use std::{cmp::Ordering, fmt, io::BufRead};
 
 mod subject_iter;
 pub use subject_iter::SubjectIter;
@@ -456,9 +453,7 @@ pub type TripleId = [Id; 3];
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::header::Header;
-    use crate::tests::init;
-    use crate::{FourSectDict, IdKind};
+    use crate::{FourSectDict, IdKind, header::Header, tests::init};
     use fs_err::File;
     use pretty_assertions::assert_eq;
     use std::io::BufReader;

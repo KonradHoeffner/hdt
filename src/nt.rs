@@ -1,20 +1,14 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
 use super::concurrent_interner::{Interner, Terms};
-use crate::containers::rdf::Id;
-use crate::header::Header;
 use crate::triples::{Id as HdtId, TripleId, TriplesBitmap};
-use crate::{DictSectPFC, FourSectDict, Hdt};
+use crate::{DictSectPFC, FourSectDict, Hdt, containers::rdf::Id, header::Header};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
 use log::{debug, error};
 use oxrdf::{Term, vocab::xsd};
 use oxttl::NTriplesParser;
 use rayon::prelude::*;
-use std::collections::BTreeSet;
-use std::io::{Error, ErrorKind::InvalidData};
-use std::path::Path;
-use std::sync::Arc;
-use std::thread;
+use std::{collections::BTreeSet, io::Error, io::ErrorKind::InvalidData, path::Path, sync::Arc, thread};
 
 pub type Result<T> = std::io::Result<T>;
 type Simd = [u64; 4];
@@ -78,8 +72,7 @@ impl Hdt {
     /// Populate HDT header fields.
     /// Some fields may be optional, populating same triples as those in C++ version for now.
     fn fill_header(&mut self, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>) {
-        use crate::containers::rdf::Term::Literal as Lit;
-        use crate::containers::rdf::{Literal, Term, Triple};
+        use crate::containers::rdf::{Literal, Term, Term::Literal as Lit, Triple};
         use crate::vocab::*;
 
         const ORDER: &str = "SPO";
@@ -452,17 +445,13 @@ fn build_dict_and_id_maps(
 
 #[cfg(test)]
 pub mod tests {
-    use super::super::StringTriple;
-    use super::super::tests::snikmeta_check;
+    use super::super::{StringTriple, tests::snikmeta_check};
     use super::Hdt;
-    use crate::hdt::tests::snikmeta;
-    use crate::tests::init;
+    use crate::{hdt::tests::snikmeta, tests::init};
     use color_eyre::Result;
     use fs_err::File;
     use pretty_assertions::assert_eq;
-    use std::io::{Cursor, Write};
-    use std::path::Path;
-    use std::sync::Arc;
+    use std::{io::Cursor, io::Write, path::Path, sync::Arc};
 
     /// Regression test for #131. Escapes are N-Triples syntax, not part of a term's value,
     /// so the dictionary must hold the decoded value and each serialization must escape it exactly once.

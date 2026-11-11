@@ -20,9 +20,7 @@
 //! contention the same way `dashmap` does internally.
 use ahash::RandomState;
 use hashbrown::HashTable;
-use std::str;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::{str, sync::Mutex, sync::atomic::AtomicU32, sync::atomic::Ordering};
 
 /// Number of lock shards. Power of two so the shard index is a mask of the hash.
 const SHARD_COUNT: usize = 64;
@@ -208,8 +206,7 @@ mod tests {
     /// every returned index still round-trips.
     #[test]
     fn concurrent_growth_bounded() {
-        use std::sync::{Arc, Barrier};
-        use std::thread;
+        use std::{sync::Arc, sync::Barrier, thread};
 
         const THREADS: usize = 64;
         const STRINGS_PER_THREAD: usize = 200;

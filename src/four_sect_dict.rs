@@ -1,9 +1,7 @@
 #![allow(missing_docs)]
 // temporary while we figure out what should be public in the end
 /// Four section dictionary.
-use crate::dict_sect_pfc;
-use crate::triples::Id;
-use crate::{ControlInfo, DictSectPFC};
+use crate::{ControlInfo, DictSectPFC, dict_sect_pfc, triples::Id};
 use std::io::BufRead;
 #[cfg(not(any(target_arch = "wasm32", target_arch = "wasm64")))]
 use std::thread::JoinHandle;
@@ -214,8 +212,7 @@ impl UnvalidatedFourSectDict {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::header::Header;
-    use crate::tests::init;
+    use crate::{header::Header, tests::init};
     use fs_err::File;
     use pretty_assertions::assert_eq;
     use std::io::BufReader;
