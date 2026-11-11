@@ -261,16 +261,31 @@ impl Sequence {
     // could also determine bits per entry using max of numbers but that would take time
     // pub fn new(numbers: &[usize], bits_per_entry: usize) -> Sequence {
     pub fn new(numbers: &[usize]) -> Sequence {
+        Self::build(numbers)
+    }
+
+    /// Common implementation of [`Self::new`] and [`Self::new_from_u32`].
+    /// Determines the bits per entry from the maximum value and bit-packs the widened values.
+    /// Widening via `TryInto<usize>` keeps the u32 path intermediate-free, as each value is widened during packing.
+    /// The conversion is lossless on all supported targets, so the `unwrap`s never fail in practice.
+    fn build<T: Copy + TryInto<usize>>(numbers: &[T]) -> Sequence
+    where
+        <T as TryInto<usize>>::Error: std::fmt::Debug,
+    {
         let entries = numbers.len();
         if entries == 0 {
             return Sequence { entries, bits_per_entry: 0, data: vec![] };
         }
-        //let bits_per_entry = numbers.iter().max().unwrap().bit_width() as usize; // nightly only
-        let bits_per_entry = (usize::BITS - numbers.iter().max().unwrap().leading_zeros()) as usize; // emulate bit_width using stable API
+        // emulate bit_width using the stable API: bits per entry from the number of leading zeros of the maximum
+        let bits_per_entry = (usize::BITS
+            - numbers.iter().map(|&v| -> usize { v.try_into().unwrap() }).max().unwrap().leading_zeros())
+            as usize;
         // reuse pack_bits by Greg Hanson, which is designed for writing directly, and put it
         // into usize chunks, could also rewrite pack_bits for usize later but first get a functioning prototype
-        let numbers8 = Self::pack_bits(numbers.iter().copied(), bits_per_entry);
-        let data = Self::bytes_to_words(&numbers8);
+        let data = Self::bytes_to_words(&Self::pack_bits(
+            numbers.iter().map(|&v| -> usize { v.try_into().unwrap() }),
+            bits_per_entry,
+        ));
         Sequence { entries, bits_per_entry, data }
     }
 
@@ -333,15 +348,7 @@ impl Sequence {
     /// Used by the op-index builder where every value fits in `u32` (they
     /// are Y-level positions capped at ~2^28 for any realistic HDT).
     pub fn new_from_u32(numbers: &[u32]) -> Sequence {
-        let entries = numbers.len();
-        if entries == 0 {
-            return Sequence { entries, bits_per_entry: 0, data: vec![] };
-        }
-        let bits_per_entry = (u32::BITS - numbers.iter().max().unwrap().leading_zeros()) as usize;
-        // Widen u32→usize in the iterator while bit-packing, so no Vec<usize> intermediate is ever allocated.
-        let output = Self::pack_bits(numbers.iter().map(|&value| value as usize), bits_per_entry);
-        let data = Self::bytes_to_words(&output);
-        Sequence { entries, bits_per_entry, data }
+        Self::build(numbers)
     }
 }
 
