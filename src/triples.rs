@@ -229,19 +229,6 @@ impl TriplesBitmap {
         Self { order, bitmap_y, adjlist_z, op_index, wavelet_y }
     }
 
-    /// Creates a new TriplesBitmap from a list of sorted RDF triples.
-    ///
-    /// Takes the triples by value so the encoded-triple buffer (24 B ×
-    /// num_triples) can be freed as soon as the y/z arrays and bitmaps are
-    /// built, instead of staying resident through the memory-heavy op-index
-    /// construction in [`TriplesBitmap::new`].
-    ///
-    /// This also builds the query indexes. To convert N-Triples to an HDT file that will not be queried, use
-    /// `Hdt::convert_nt`, which never builds them.
-    pub fn from_triples(triples: Vec<TripleId>) -> Self {
-        TriplesBitmapSource::from_triples(triples).into_bitmap()
-    }
-
     /// read the whole triple section including control information
     // TODO: rename to "read" for consistency with the other components and rename existing read function accordingly
     pub fn read_sect<R: BufRead>(reader: &mut R) -> Result<Self> {
@@ -392,66 +379,6 @@ pub type Id = usize;
 /// When used as a pattern, 0 values in a position match all values.
 //#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub type TripleId = [Id; 3];
-
-/// Everything [`TriplesBitmap::write`] serializes, and nothing that exists only to answer queries.
-///
-/// [`TriplesBitmap`] additionally carries an `op_index` and a `wavelet_y`.
-/// Neither reaches the HDT file: `op_index` is never written at all, and `wavelet_y` is used by `TriplesBitmap::write` only to regenerate the y sequence this type already holds.
-/// Building them is pure overhead for a conversion that writes an HDT and discards it, which is what `rdf2hdt`-style tools do.
-pub(crate) struct TriplesBitmapSource {
-    pub(crate) order: Order,
-    pub(crate) bitmap_y: Bitmap,
-    pub(crate) sequence_y: Sequence,
-    pub(crate) adjlist_z: AdjList,
-}
-
-impl TriplesBitmapSource {
-    /// Build the serializable triples structures from sorted triple ids.
-    pub fn from_triples(triples: Vec<TripleId>) -> Self {
-        // Size the arrays exactly, since growing by doubling over-reserves and briefly holds two buffers.
-        // array_y takes one entry per distinct (subject, predicate) pair, array_z one per triple.
-        let num_y =
-            usize::from(!triples.is_empty()) + triples.windows(2).filter(|w| w[0][..2] != w[1][..2]).count();
-        let mut array_y = Vec::with_capacity(num_y);
-        let mut array_z = Vec::with_capacity(triples.len());
-        let (mut bitmap_y, mut bitmap_z) = (BitVectorMut::new(), BitVectorMut::new());
-        // IDs are never zero, so a zero subject in `last` means no triple has been seen yet.
-        let mut last = [0; 3];
-        for [x, y, z] in triples {
-            let [lx, ly, lz] = last;
-            assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
-            if x != lx {
-                assert!(x == lx + 1, "the subjects must be correlative.");
-            } else if y != ly {
-                assert!(y > ly, "the predicates must be in increasing order.");
-            } else {
-                assert!(z > lz, "the objects must be in increasing order");
-            }
-            let new_y = x != lx || y != ly;
-            // Each bit records whether the previous entry ended its list.
-            if lx != 0 {
-                if new_y {
-                    bitmap_y.push(x != lx);
-                }
-                bitmap_z.push(new_y);
-            }
-            if new_y {
-                array_y.push(y);
-            }
-            array_z.push(z);
-            last = [x, y, z];
-        }
-        bitmap_y.push(true);
-        bitmap_z.push(true);
-        let adjlist_z = AdjList::new(Sequence::new(array_z), Bitmap::from(bitmap_z));
-        Self { order: Order::SPO, bitmap_y: Bitmap::from(bitmap_y), sequence_y: Sequence::new(array_y), adjlist_z }
-    }
-
-    /// Build the query indexes, producing a queryable [`TriplesBitmap`].
-    pub fn into_bitmap(self) -> TriplesBitmap {
-        TriplesBitmap::new(self.order, &self.sequence_y, self.bitmap_y, self.adjlist_z)
-    }
-}
 
 /// Shared on-disk layout for queryable and conversion-only triples.
 pub(crate) fn write_triples_section(
