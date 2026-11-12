@@ -129,8 +129,8 @@ fn main() -> Result<(), Report> {
         }
         Command::Convert { input_path, output_path /* turtle*/ } => {
             let t = Instant::now();
-            let extension = |path: &PathBuf| path.extension().and_then(OsStr::to_str).map(str::to_owned);
-            if extension(&input_path).as_deref() == Some("nt") && extension(&output_path).as_deref() == Some("hdt")
+            if input_path.extension() == Some(OsStr::new("nt"))
+                && output_path.extension() == Some(OsStr::new("hdt"))
             {
                 // the file can be written without building the query indexes that a loaded Hdt needs
                 let mut writer = CreateOnWrite { path: &output_path, file: None };

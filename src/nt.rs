@@ -30,7 +30,7 @@ impl Hdt {
     pub fn read_nt(f: impl AsRef<Path>) -> Result<Self> {
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
-        let original_size = std::fs::File::open(f)?.metadata()?.len();
+        let original_size = std::fs::metadata(f)?.len();
         let pool = parse_nt_terms(f)?;
         Self::from_parsed_terms(pool, &base, Some(original_size))
     }
@@ -66,7 +66,7 @@ impl Hdt {
     pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> crate::hdt::Result<()> {
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
-        let original_size = std::fs::File::open(f)?.metadata()?.len();
+        let original_size = std::fs::metadata(f)?.len();
         let (dict, triples, num_triples) = build_sections(parse_nt_terms(f)?, BLOCK_SIZE)?;
         let hdt_size = dict.size_in_bytes()
             + triples.adjlist_z.size_in_bytes()
@@ -128,13 +128,10 @@ impl TriplesBitmapSource {
         for [x, y, z] in triples {
             let [lx, ly, lz] = last;
             assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
-            if x != lx {
-                assert!(x == lx + 1, "the subjects must be correlative.");
-            } else if y != ly {
-                assert!(y > ly, "the predicates must be in increasing order.");
-            } else {
-                assert!(z > lz, "the objects must be in increasing order");
-            }
+            assert!(
+                x == lx + 1 || (x == lx && y >= ly && (y > ly || z > lz)),
+                "triples must be sorted with consecutive subjects"
+            );
             let new_y = x != lx || y != ly;
             // Each bit records whether the previous entry ended its list.
             if lx != 0 {
