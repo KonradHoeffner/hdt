@@ -1,18 +1,22 @@
 // //! *This module is available only if HDT is built with the experimental `"nt"` feature.*
 use super::concurrent_interner::{Interner, Terms};
-use crate::triples::{Id as HdtId, TripleId, TriplesBitmap};
-use crate::{DictSectPFC, FourSectDict, Hdt, containers::rdf::Id, header::Header};
+use crate::containers::{AdjList, Bitmap, Sequence};
+use crate::triples::{Id as HdtId, Order, TripleId, TriplesBitmap, write_triples_section};
+use crate::{DictSectPFC, FourSectDict, Hdt, containers::ControlInfo, containers::rdf::Id, header::Header};
 use bitset_core::BitSet;
 use bytesize::ByteSize;
 use log::{debug, error};
 use oxrdf::{Term, vocab::xsd};
 use oxttl::NTriplesParser;
+use qwt::BitVectorMut;
 use rayon::prelude::*;
 use std::{collections::BTreeSet, io::Error, io::ErrorKind::InvalidData, path::Path, sync::Arc, thread};
 
 pub type Result<T> = std::io::Result<T>;
 type Simd = [u64; 4];
 type Indices = Vec<Simd>;
+
+const BLOCK_SIZE: usize = 16;
 
 impl Hdt {
     /// Converts RDF N-Triples to HDT with a FourSectionDictionary with DictionarySectionPlainFrontCoding and SPO order.
@@ -26,7 +30,7 @@ impl Hdt {
     pub fn read_nt(f: impl AsRef<Path>) -> Result<Self> {
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
-        let original_size = std::fs::File::open(f)?.metadata()?.len();
+        let original_size = std::fs::metadata(f)?.len();
         let pool = parse_nt_terms(f)?;
         Self::from_parsed_terms(pool, &base, Some(original_size))
     }
@@ -49,19 +53,40 @@ impl Hdt {
         Self::from_parsed_terms(intern_terms(triples), &Id::Named(base_iri.to_owned()), None)
     }
 
+    /// Convert an N-Triples file to HDT without building query indexes.
+    /// Equivalent to [`Hdt::read_nt`] followed by [`Hdt::write`], except `hdt:hdtSize` excludes the query indexes,
+    /// which are never written.
+    /// *This function is available only if HDT is built with the experimental `"nt"` feature.*
+    /// # Example
+    /// ```
+    /// let mut out = Vec::new();
+    /// hdt::Hdt::convert_nt("tests/resources/empty.nt", &mut out).unwrap();
+    /// assert!(out.starts_with(b"$HDT"));
+    /// ```
+    pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> crate::hdt::Result<()> {
+        let f = f.as_ref();
+        let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
+        let original_size = std::fs::metadata(f)?.len();
+        let (dict, triples, num_triples) = build_sections(parse_nt_terms(f)?, BLOCK_SIZE)?;
+        let hdt_size = dict.size_in_bytes()
+            + triples.adjlist_z.size_in_bytes()
+            + triples.sequence_y.size_in_bytes()
+            + triples.bitmap_y.size_in_bytes();
+        let header = build_header(&dict, &base, BLOCK_SIZE, num_triples, Some(original_size), hdt_size);
+        debug!("HDT size {}, written without query indexes", ByteSize(hdt_size as u64));
+
+        ControlInfo::global().write(dest)?;
+        header.write(dest)?;
+        dict.write(dest)?;
+        write_triples_section(&triples.order, &triples.bitmap_y, &triples.sequence_y, &triples.adjlist_z, dest)?;
+        dest.flush()?;
+        Ok(())
+    }
+
     fn from_parsed_terms(pool: ParsedTerms, base: &Id, original_size: Option<u64>) -> Result<Self> {
-        const BLOCK_SIZE: usize = 16;
-
-        let (dict, mut encoded_triples) = dict_triples(pool, BLOCK_SIZE)?;
-        let num_triples = encoded_triples.len();
-        // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
-        encoded_triples.par_sort_unstable();
-        // Move (don't borrow) the encoded triples in so TriplesBitmap can free
-        // them after its build loop, before its op-index peak.
-        let triples = TriplesBitmap::from_triples(encoded_triples);
-
+        let (dict, triples, num_triples) = build_sections(pool, BLOCK_SIZE)?;
         let header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
-        let mut hdt = Hdt { header, dict, triples };
+        let mut hdt = Hdt { header, dict, triples: triples.into_bitmap() };
         hdt.fill_header(base, BLOCK_SIZE, num_triples, original_size);
 
         debug!("HDT size in memory {}, details:", ByteSize(hdt.size_in_bytes() as u64));
@@ -72,6 +97,88 @@ impl Hdt {
     /// Populate HDT header fields.
     /// Some fields may be optional, populating same triples as those in C++ version for now.
     fn fill_header(&mut self, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>) {
+        let hdt_size = self.size_in_bytes();
+        self.header = build_header(&self.dict, base, block_size, num_triples, original_size, hdt_size);
+    }
+}
+
+/// Everything the HDT triples section serializes, and nothing that exists only to answer queries.
+/// Unlike [`TriplesBitmap`], building this type skips the `op_index` and `wavelet_y` query indexes,
+/// which never reach the HDT file.
+struct TriplesBitmapSource {
+    order: Order,
+    bitmap_y: Bitmap,
+    sequence_y: Sequence,
+    adjlist_z: AdjList,
+}
+
+impl TriplesBitmapSource {
+    /// Build the serializable triples structures from sorted triple ids.
+    /// Takes the triples by value so the encoded-triple buffer is freed once the sequences are built.
+    fn from_triples(triples: Vec<TripleId>) -> Self {
+        // Size the arrays exactly, since growing by doubling over-reserves and briefly holds two buffers.
+        // array_y takes one entry per distinct (subject, predicate) pair, array_z one per triple.
+        let num_y =
+            usize::from(!triples.is_empty()) + triples.windows(2).filter(|w| w[0][..2] != w[1][..2]).count();
+        let mut array_y = Vec::with_capacity(num_y);
+        let mut array_z = Vec::with_capacity(triples.len());
+        let (mut bitmap_y, mut bitmap_z) = (BitVectorMut::new(), BitVectorMut::new());
+        // IDs are never zero, so a zero subject in `last` means no triple has been seen yet.
+        let mut last = [0; 3];
+        for [x, y, z] in triples {
+            let [lx, ly, lz] = last;
+            assert!(x != 0 && y != 0 && z != 0, "triple IDs should never be zero");
+            assert!(
+                x == lx + 1 || (x == lx && y >= ly && (y > ly || z > lz)),
+                "triples must be sorted with consecutive subjects"
+            );
+            let new_y = x != lx || y != ly;
+            // Each bit records whether the previous entry ended its list.
+            if lx != 0 {
+                if new_y {
+                    bitmap_y.push(x != lx);
+                }
+                bitmap_z.push(new_y);
+            }
+            if new_y {
+                array_y.push(y);
+            }
+            array_z.push(z);
+            last = [x, y, z];
+        }
+        bitmap_y.push(true);
+        bitmap_z.push(true);
+        let adjlist_z = AdjList::new(Sequence::new(array_z), Bitmap::from(bitmap_z));
+        Self { order: Order::SPO, bitmap_y: Bitmap::from(bitmap_y), sequence_y: Sequence::new(array_y), adjlist_z }
+    }
+
+    /// Build the query indexes, producing a queryable [`TriplesBitmap`].
+    fn into_bitmap(self) -> TriplesBitmap {
+        TriplesBitmap::new(self.order, &self.sequence_y, self.bitmap_y, self.adjlist_z)
+    }
+}
+
+/// Build the dictionary and sorted, encoded triples, shared by [`Hdt::read_nt`], [`Hdt::from_triples`] and [`Hdt::convert_nt`].
+fn build_sections(pool: ParsedTerms, block_size: usize) -> Result<(FourSectDict, TriplesBitmapSource, usize)> {
+    let (dict, mut encoded_triples) = dict_triples(pool, block_size)?;
+    let num_triples = encoded_triples.len();
+    // Sort by final HDT ID (SPO order) before feeding into TriplesBitmap.
+    encoded_triples.par_sort_unstable();
+    // Moved in so the ids are freed once the sequences are built, before serializing.
+    let triples = TriplesBitmapSource::from_triples(encoded_triples);
+    Ok((dict, triples, num_triples))
+}
+
+/// Build the HDT header.
+///
+/// `hdt_size` is what `hdt:hdtSize` reports. It is passed in rather than measured here because the write-only path
+/// ([`Hdt::convert_nt`]) never materializes the query indexes that [`Hdt::size_in_bytes`] counts.
+fn build_header(
+    dict: &FourSectDict, base: &Id, block_size: usize, num_triples: usize, original_size: Option<u64>,
+    hdt_size: usize,
+) -> Header {
+    let mut header = Header { format: "ntriples".to_owned(), length: 0, body: BTreeSet::new() };
+    {
         use crate::containers::rdf::{Literal, Term, Term::Literal as Lit, Triple};
         use crate::vocab::*;
 
@@ -79,20 +186,19 @@ impl Hdt {
 
         macro_rules! literal {
             ($s:expr, $p:expr, $o:expr) => {
-                self.header.body.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
+                header.body.insert(Triple::new($s.clone(), $p.to_owned(), Lit(Literal::new($o.to_string()))));
             };
         }
         macro_rules! insert_id {
             ($s:expr, $p:expr, $o:expr) => {
-                self.header.body.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
+                header.body.insert(Triple::new($s.clone(), $p.to_owned(), Term::Id($o.clone())));
             };
         }
         literal!(base, RDF_TYPE, HDT_CONTAINER);
         literal!(base, RDF_TYPE, VOID_DATASET);
         literal!(base, VOID_TRIPLES, num_triples);
-        literal!(base, VOID_PROPERTIES, self.dict.predicates.num_strings);
-        let [d_s, d_o] =
-            [&self.dict.subjects, &self.dict.objects].map(|s| s.num_strings + self.dict.shared.num_strings);
+        literal!(base, VOID_PROPERTIES, dict.predicates.num_strings);
+        let [d_s, d_o] = [&dict.subjects, &dict.objects].map(|s| s.num_strings + dict.shared.num_strings);
         literal!(base, VOID_DISTINCT_SUBJECTS, d_s);
         literal!(base, VOID_DISTINCT_OBJECTS, d_o);
         // // TODO: Add more VOID Properties. E.g. void:classes
@@ -109,9 +215,9 @@ impl Hdt {
         insert_id!(format_id, HDT_DICTIONARY, dict_id);
         insert_id!(format_id, HDT_TRIPLES, triples_id);
         // DICTIONARY
-        literal!(dict_id, HDT_DICT_SHARED_SO, self.dict.shared.num_strings);
+        literal!(dict_id, HDT_DICT_SHARED_SO, dict.shared.num_strings);
         literal!(dict_id, HDT_DICT_MAPPING, "1");
-        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(self.dict.size_in_bytes() as u64));
+        literal!(dict_id, HDT_DICT_SIZE_STRINGS, ByteSize(dict.size_in_bytes() as u64));
         literal!(dict_id, HDT_DICT_BLOCK_SIZE, block_size);
         // TRIPLES
         literal!(triples_id, DC_TERMS_FORMAT, HDT_TYPE_BITMAP);
@@ -122,11 +228,12 @@ impl Hdt {
             literal!(stats_id, HDT_ORIGINAL_SIZE, size);
         }
         // a few bytes off because that literal itself is not counted
-        literal!(stats_id, HDT_SIZE, ByteSize(self.size_in_bytes() as u64));
+        literal!(stats_id, HDT_SIZE, ByteSize(hdt_size as u64));
         // exclude for now to skip dependency on chrono
         //let datetime_str = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%z").to_string();
         //literal!(pub_id,DC_TERMS_ISSUED,datetime_str);
     }
+    header
 }
 
 /// Output of [`parse_nt_terms`] (file path) and [`intern_terms`] (in-memory).
@@ -219,7 +326,7 @@ fn dict_triples(pool: ParsedTerms, block_size: usize) -> Result<(FourSectDict, V
     // Drain the sorted index triples directly into HDT-id triples via the ID
     // maps. `into_par_iter` consumes the Vec so the index triples are freed
     // before this function returns — only `Vec<TripleId>` survives into
-    // `TriplesBitmap::from_triples`.
+    // `TriplesBitmapSource::from_triples`.
     let sorted_triples = sorter.join().expect("NT sorter thread panicked");
     let encoded_triples: Vec<TripleId> = sorted_triples
         .into_par_iter()
@@ -501,6 +608,12 @@ pub mod tests {
         assert_eq!(nt_triples, hdt_triples);
         assert_eq!(snikmeta.triples.bitmap_y.dict, snikmeta_nt.triples.bitmap_y.dict);
         snikmeta_check(&snikmeta_nt)?;
+
+        let mut converted = Vec::new();
+        Hdt::convert_nt(path, &mut converted)?;
+        let converted = Hdt::read(Cursor::new(converted))?;
+        assert_eq!(converted.triples_all().collect::<Vec<StringTriple>>(), hdt_triples);
+        snikmeta_check(&converted)?;
         let path = Path::new("tests/resources/empty.nt");
         let hdt_empty = Hdt::read_nt(path)?;
         let mut buf = Vec::<u8>::new();
