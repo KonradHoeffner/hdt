@@ -61,7 +61,7 @@ impl Hdt {
     /// hdt::Hdt::convert_nt("tests/resources/empty.nt", &mut out).unwrap();
     /// assert!(out.starts_with(b"$HDT"));
     /// ```
-    pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> Result<()> {
+    pub fn convert_nt(f: impl AsRef<Path>, dest: &mut impl std::io::Write) -> crate::hdt::Result<()> {
         let f = f.as_ref();
         let base = Id::Named(format!("file://{}", f.canonicalize()?.display()));
         let original_size = std::fs::File::open(f)?.metadata()?.len();
@@ -77,10 +77,10 @@ impl Hdt {
         let header = build_header(&dict, &base, BLOCK_SIZE, num_triples, Some(original_size), hdt_size);
         debug!("HDT size {}, written without query indexes", ByteSize(hdt_size as u64));
 
-        ControlInfo::global().write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
-        header.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
-        dict.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
-        triples.write(dest).map_err(|e| std::io::Error::other(e.to_string()))?;
+        ControlInfo::global().write(dest)?;
+        header.write(dest)?;
+        dict.write(dest)?;
+        triples.write(dest)?;
         dest.flush()?;
         Ok(())
     }
