@@ -99,7 +99,7 @@ fn term_string(t: &HdtTerm) -> String {
 
 impl Graph for Hdt {
     type Triple<'a> = [HdtTerm; 3];
-    type Error = Infallible; // infallible for now, figure out what to put here later
+    type Error = Infallible; // alias of `!` since Rust 1.100; iteration is infallible
 
     /// # Example
     /// ```
