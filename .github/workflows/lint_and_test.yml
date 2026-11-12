@@ -46,3 +46,16 @@ jobs:
         run: cargo build
       - name: test
         run: cargo test --all-features
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'true'
+      - name: Install MSRV Rust
+        uses: dtolnay/rust-toolchain@1.100.0
+      - name: build
+        run: cargo build
+      - name: test
+        run: cargo test --features nt
